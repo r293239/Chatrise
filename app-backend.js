@@ -5,20 +5,31 @@ let currentChatUser = null;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async function() {
-    showLoading(true);
-    
-    // Initialize backend
-    const initResult = await ChatRiseBackend.init();
-    
-    if (initResult.success && initResult.user) {
-        // User is logged in
-        await loadApp(initResult.user);
-    } else {
-        // Redirect to login
+    try {
+        showLoading(true);
+        
+        // Initialize Parse SDK first
+        Parse.initialize('z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT', 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV');
+        Parse.serverURL = 'https://parseapi.back4app.com';
+        
+        // Check if user is logged in
+        const currentUser = Parse.User.current();
+        
+        if (currentUser) {
+            // User is logged in, load the app
+            await loadApp(currentUser);
+        } else {
+            // No user logged in, redirect to login
+            window.location.href = 'login.html';
+            return;
+        }
+        
+        showLoading(false);
+    } catch (error) {
+        console.error('App initialization error:', error);
+        showLoading(false);
         window.location.href = 'login.html';
     }
-    
-    showLoading(false);
 });
 
 // Load main app
@@ -51,13 +62,57 @@ async function loadApp(user) {
 // Load user's chats
 async function loadChats() {
     try {
-        const result = await ChatRiseChat.getChatList();
+        const currentUser = Parse.User.current();
+        if (!currentUser) return;
         
-        if (result.success) {
-            displayChats(result.chats);
-        } else {
-            console.error('Error loading chats:', result.error);
-        }
+        const Message = Parse.Object.extend('Message');
+        const query = new Parse.Query(Message);
+        
+        // Get messages where current user is sender or recipient
+        const query1 = new Parse.Query(Message);
+        query1.equalTo('sender', currentUser);
+        
+        const query2 = new Parse.Query(Message);
+        query2.equalTo('recipientId', currentUser.id);
+        
+        const mainQuery = Parse.Query.or(query1, query2);
+        mainQuery.descending('timestamp');
+        mainQuery.limit(50);
+        mainQuery.include('sender');
+        
+        const messages = await mainQuery.find();
+        
+        // Group messages by chat partner
+        const chatMap = new Map();
+        
+        messages.forEach(msg => {
+            const sender = msg.get('sender');
+            const recipientId = msg.get('recipientId');
+            
+            let partnerId, partnerName;
+            
+            if (sender.id === currentUser.id) {
+                // Message sent by current user
+                partnerId = recipientId;
+                partnerName = 'Unknown User'; // We'll need to fetch this
+            } else {
+                // Message received by current user
+                partnerId = sender.id;
+                partnerName = sender.get('username');
+            }
+            
+            if (!chatMap.has(partnerId) || 
+                msg.get('timestamp') > chatMap.get(partnerId).timestamp) {
+                chatMap.set(partnerId, {
+                    id: partnerId,
+                    name: partnerName,
+                    lastMessage: msg.get('message'),
+                    timestamp: msg.get('timestamp')
+                });
+            }
+        });
+        
+        displayChats(Array.from(chatMap.values()));
     } catch (error) {
         console.error('Error loading chats:', error);
     }
@@ -89,22 +144,21 @@ function displayChats(chats) {
 function createChatItem(chat) {
     const chatDiv = document.createElement('div');
     chatDiv.className = 'chat-item';
-    chatDiv.setAttribute('data-chat-id', chat.get('recipientId'));
+    chatDiv.setAttribute('data-chat-id', chat.id);
     
-    const sender = chat.get('sender');
-    const timestamp = formatTime(chat.get('timestamp'));
+    const timestamp = formatTime(chat.timestamp);
     
     chatDiv.innerHTML = `
         <img src="https://via.placeholder.com/50" alt="User" class="chat-avatar">
         <div class="chat-info">
-            <div class="chat-name">${sender.get('username')}</div>
-            <div class="chat-preview">${chat.get('message').substring(0, 30)}...</div>
+            <div class="chat-name">${chat.name}</div>
+            <div class="chat-preview">${chat.lastMessage.substring(0, 30)}...</div>
         </div>
         <div class="chat-time">${timestamp}</div>
     `;
     
     chatDiv.addEventListener('click', () => {
-        selectChat(chat.get('recipientId'), sender.get('username'));
+        selectChat(chat.id, chat.name);
     });
     
     return chatDiv;
