@@ -6,19 +6,33 @@
     <title>ChatRise - Messenger</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Parse SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
 </head>
 <body>
-    <div class="app-container">
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-spinner">
+            <i class="fas fa-comments"></i>
+            <h2>ChatRise</h2>
+            <div class="spinner"></div>
+            <p>Connecting...</p>
+        </div>
+    </div>
+
+    <div class="app-container" id="appContainer" style="display: none;">
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
                 <div class="user-info">
-                    <img src="https://via.placeholder.com/40" alt="Profile" class="profile-pic">
+                    <img src="https://via.placeholder.com/40" alt="Profile" class="profile-pic" id="userProfilePic">
                     <span id="username">User</span>
                 </div>
                 <div class="header-actions">
-                    <i class="fas fa-ellipsis-v"></i>
-                    <button onclick="logout()" class="logout-btn">
+                    <button onclick="showUserSearch()" class="action-btn" title="Add Contact">
+                        <i class="fas fa-user-plus"></i>
+                    </button>
+                    <button onclick="logout()" class="logout-btn" title="Logout">
                         <i class="fas fa-sign-out-alt"></i>
                     </button>
                 </div>
@@ -30,85 +44,89 @@
             </div>
             
             <div class="chat-list" id="chatList">
-                <div class="chat-item active" data-chat="john">
-                    <img src="https://via.placeholder.com/50" alt="John" class="chat-avatar">
-                    <div class="chat-info">
-                        <div class="chat-name">John Doe</div>
-                        <div class="chat-preview">Hey there! How are you?</div>
-                    </div>
-                    <div class="chat-time">12:30</div>
-                </div>
-                
-                <div class="chat-item" data-chat="jane">
-                    <img src="https://via.placeholder.com/50" alt="Jane" class="chat-avatar">
-                    <div class="chat-info">
-                        <div class="chat-name">Jane Smith</div>
-                        <div class="chat-preview">See you later!</div>
-                    </div>
-                    <div class="chat-time">11:45</div>
-                </div>
-                
-                <div class="chat-item" data-chat="group">
-                    <img src="https://via.placeholder.com/50" alt="Group" class="chat-avatar">
-                    <div class="chat-info">
-                        <div class="chat-name">Team Group</div>
-                        <div class="chat-preview">Meeting at 3 PM</div>
-                    </div>
-                    <div class="chat-time">10:15</div>
+                <!-- Chats will be loaded here -->
+                <div class="no-chats" id="noChats">
+                    <i class="fas fa-comments"></i>
+                    <p>No chats yet</p>
+                    <button onclick="showUserSearch()" class="start-chat-btn">
+                        <i class="fas fa-plus"></i> Start New Chat
+                    </button>
                 </div>
             </div>
         </div>
         
         <!-- Chat Area -->
         <div class="chat-area">
-            <div class="chat-header">
-                <div class="chat-header-info">
-                    <img src="https://via.placeholder.com/40" alt="Contact" class="header-avatar">
-                    <div class="header-details">
-                        <div class="header-name" id="currentChatName">John Doe</div>
-                        <div class="header-status">online</div>
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-content">
+                    <i class="fas fa-comments"></i>
+                    <h2>Welcome to ChatRise</h2>
+                    <p>Select a chat to start messaging</p>
+                </div>
+            </div>
+            
+            <div class="chat-content" id="chatContent" style="display: none;">
+                <div class="chat-header">
+                    <div class="chat-header-info">
+                        <img src="https://via.placeholder.com/40" alt="Contact" class="header-avatar" id="chatAvatar">
+                        <div class="header-details">
+                            <div class="header-name" id="currentChatName">Select a chat</div>
+                            <div class="header-status" id="chatStatus">offline</div>
+                        </div>
+                    </div>
+                    <div class="chat-header-actions">
+                        <button onclick="refreshMessages()" class="action-btn" title="Refresh">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="action-btn" title="More options">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
                     </div>
                 </div>
-                <div class="chat-header-actions">
-                    <i class="fas fa-search"></i>
-                    <i class="fas fa-ellipsis-v"></i>
-                </div>
-            </div>
-            
-            <div class="messages-container" id="messagesContainer">
-                <div class="message received">
-                    <div class="message-content">Hey there! How are you?</div>
-                    <div class="message-time">12:30</div>
+                
+                <div class="messages-container" id="messagesContainer">
+                    <!-- Messages will be loaded here -->
                 </div>
                 
-                <div class="message sent">
-                    <div class="message-content">I'm doing great, thanks! How about you?</div>
-                    <div class="message-time">12:32</div>
-                </div>
-                
-                <div class="message received">
-                    <div class="message-content">Pretty good! Working on a new project.</div>
-                    <div class="message-time">12:35</div>
-                </div>
-            </div>
-            
-            <div class="message-input-area">
-                <button class="attach-btn">
-                    <i class="fas fa-paperclip"></i>
-                </button>
-                <div class="input-container">
-                    <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
-                    <button class="emoji-btn">
-                        <i class="fas fa-smile"></i>
+                <div class="message-input-area">
+                    <button class="attach-btn" onclick="selectFile()" title="Attach file">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <input type="file" id="fileInput" style="display: none;" onchange="handleFileUpload(event)">
+                    <div class="input-container">
+                        <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)" disabled>
+                        <button class="emoji-btn" title="Emoji">
+                            <i class="fas fa-smile"></i>
+                        </button>
+                    </div>
+                    <button class="send-btn" onclick="sendMessage()" disabled title="Send message">
+                        <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
-                <button class="send-btn" onclick="sendMessage()">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
             </div>
         </div>
     </div>
     
-    <script src="app.js"></script>
+    <!-- User Search Modal -->
+    <div class="modal" id="userSearchModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Contact</h3>
+                <span class="close" onclick="hideUserSearch()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="search-users">
+                    <input type="text" id="userSearchInput" placeholder="Search users..." oninput="searchUsers()">
+                </div>
+                <div class="user-results" id="userResults">
+                    <!-- Search results will appear here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="backend.js"></script>
+    <script src="app-backend.js"></script>
 </body>
 </html>
