@@ -6,6 +6,9 @@
     <title>ChatRise - Login</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Parse SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
 </head>
 <body>
     <div class="login-container">
@@ -13,7 +16,7 @@
             <div class="login-header">
                 <i class="fas fa-comments"></i>
                 <h1>ChatRise</h1>
-                <p>Welcome back! Sign in to continue chatting.</p>
+                <p>Connect with friends and family instantly</p>
             </div>
             
             <form class="login-form" onsubmit="handleLogin(event)">
@@ -33,12 +36,11 @@
                         <span class="checkmark"></span>
                         Remember me
                     </label>
-                    <a href="#" class="forgot-link">Forgot password?</a>
                 </div>
                 
-                <button type="submit" class="login-btn">
+                <button type="submit" class="login-btn" id="loginBtn">
                     <i class="fas fa-sign-in-alt"></i>
-                    Sign In
+                    <span id="loginBtnText">Sign In</span>
                 </button>
                 
                 <div class="divider">
@@ -47,7 +49,7 @@
                 
                 <button type="button" class="demo-btn" onclick="demoLogin()">
                     <i class="fas fa-play"></i>
-                    Try Demo
+                    Try Demo Account
                 </button>
             </form>
             
@@ -57,7 +59,7 @@
         </div>
     </div>
     
-    <!-- Registration Modal (hidden by default) -->
+    <!-- Registration Modal -->
     <div class="modal" id="registerModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -67,7 +69,7 @@
             <form class="register-form" onsubmit="handleRegister(event)">
                 <div class="form-group">
                     <i class="fas fa-user"></i>
-                    <input type="text" id="regUsername" placeholder="Username" required>
+                    <input type="text" id="regUsername" placeholder="Username" required minlength="3">
                 </div>
                 
                 <div class="form-group">
@@ -77,17 +79,33 @@
                 
                 <div class="form-group">
                     <i class="fas fa-lock"></i>
-                    <input type="password" id="regPassword" placeholder="Password" required>
+                    <input type="password" id="regPassword" placeholder="Password" required minlength="6">
+                    <div class="password-strength" id="passwordStrength"></div>
                 </div>
                 
-                <button type="submit" class="register-btn">
+                <div class="form-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="confirmPassword" placeholder="Confirm Password" required>
+                </div>
+                
+                <button type="submit" class="register-btn" id="registerBtn">
                     <i class="fas fa-user-plus"></i>
-                    Create Account
+                    <span id="registerBtnText">Create Account</span>
                 </button>
             </form>
         </div>
     </div>
     
-    <script src="auth.js"></script>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p id="loadingText">Signing in...</p>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="backend.js"></script>
+    <script src="auth-backend.js"></script>
 </body>
 </html>
