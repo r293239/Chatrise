@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatRise - Messenger</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="user-info">
+                    <img src="https://via.placeholder.com/40" alt="Profile" class="profile-pic">
+                    <span id="username">Loading...</span>
+                </div>
+                <div class="header-actions">
+                    <button onclick="showUsers()" class="action-btn" title="Find Users">
+                        <i class="fas fa-user-plus"></i>
+                    </button>
+                    <button onclick="logout()" class="logout-btn" title="Logout">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Search..." id="searchInput">
+            </div>
+            
+            <div class="chat-list" id="chatList">
+                <div class="no-chats" id="noChats">
+                    <i class="fas fa-comments"></i>
+                    <p>No chats yet</p>
+                    <button onclick="showUsers()" class="start-chat-btn">
+                        <i class="fas fa-plus"></i> Start Chat
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-content">
+                    <i class="fas fa-comments"></i>
+                    <h2>Welcome to ChatRise</h2>
+                    <p>Select a chat or find users to start messaging</p>
+                </div>
+            </div>
+            
+            <div class="chat-content" id="chatContent" style="display: none;">
+                <div class="chat-header">
+                    <div class="chat-header-info">
+                        <img src="https://via.placeholder.com/40" alt="Contact" class="header-avatar">
+                        <div class="header-details">
+                            <div class="header-name" id="currentChatName">Chat</div>
+                            <div class="header-status">online</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="messages-container" id="messagesContainer">
+                    <!-- Messages appear here -->
+                </div>
+                
+                <div class="message-input-area">
+                    <div class="input-container">
+                        <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleEnter(event)">
+                        <button class="emoji-btn">😊</button>
+                    </div>
+                    <button class="send-btn" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Users Modal -->
+    <div class="modal" id="usersModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Find Users</h3>
+                <span class="close" onclick="hideUsers()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="usersList">Loading users...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="simple-backend.js"></script>
+    <script>
+        let currentChatId = null;
+        let currentChatName = '';
+        
+        // Initialize app
+        window.addEventListener('load', async function() {
+            const user = SimpleAuth.getCurrentUser();
+            
+            if (!user) {
+                window.location.href = 'login-fast.html';
+                return;
+            }
+            
+            // Show username
+            document.getElementById('username').textContent = user.get('username');
+            
+            // Load initial data
+            loadUsers();
+        });
+        
+        // Show users modal
+        async function showUsers() {
+            document.getElementById('usersModal').style.display = 'block';
+            
+            const result = await SimpleUsers.getAllUsers();
+            const usersList = document.getElementById('usersList');
+            
+            if (result.success) {
+                const currentUser = SimpleAuth.getCurrentUser();
+                usersList.innerHTML = '';
+                
+                result.users.forEach(user => {
+                    if (user.id !== currentUser.id) {
+                        const userDiv = document.createElement('div');
+                        userDiv.className = 'user-result';
+                        userDiv.innerHTML = `
+                            <img src="https://via.placeholder.com/40" alt="${user.get('username')}" class="user-avatar">
+                            <div class="user-info">
+                                <div class="user-name">${user.get('username')}</div>
+                                <div class="user-status">Click to chat</div>
+                            </div>
+                            <button onclick="startChat('${user.id}', '${user.get('username')}')" class="start-chat-btn">
+                                <i class="fas fa-comment"></i>
+                            </button>
+                        `;
+                        usersList.appendChild(userDiv);
+                    }
+                });
+                
+                if (result.users.length <= 1) {
+                    usersList.innerHTML = '<div class="no-results">No other users found. Try the demo account!</div>';
+                }
+            } else {
+                usersList.innerHTML = '<div class="no-results">Error loading users</div>';
+            }
+        }
+        
+        // Hide users modal
+        function hideUsers() {
+            document.getElementById('usersModal').style.display = 'none';
+        }
+        
+        // Start chat with user
+        async function startChat(userId, username) {
+            currentChatId = userId;
+            currentChatName = username;
+            
+            // Update UI
+            document.getElementById('currentChatName').textContent = username;
+            document.getElementById('welcomeScreen').style.display = 'none';
+            document.getElementById('chatContent').style.display = 'flex';
+            
+            // Load messages
+            await loadMessages();
+            
+            // Hide users modal
+            hideUsers();
+            
+            // Add to chat list if not exists
+            addToChatList(userId, username);
+        }
+        
+        // Add to chat list
+        function addToChatList(userId, username) {
+            const chatList = document.getElementById('chatList');
+            const noChats = document.getElementById('noChats');
+            
+            // Check if already exists
+            if (document.querySelector(`[data-chat-id="${userId}"]`)) {
+                return;
+            }
+            
+            noChats.style.display = 'none';
+            
+            const chatDiv = document.createElement('div');
+            chatDiv.className = 'chat-item';
+            chatDiv.setAttribute('data-chat-id', userId);
+            chatDiv.innerHTML = `
+                <img src="https://via.placeholder.com/50" alt="${username}" class="chat-avatar">
+                <div class="chat-info">
+                    <div class="chat-name">${username}</div>
+                    <div class="chat-preview">Click to start chatting</div>
+                </div>
+                <div class="chat-time">now</div>
+            `;
+            
+            chatDiv.onclick = () => startChat(userId, username);
+            chatList.appendChild(chatDiv);
+        }
+        
+        // Load messages
+        async function loadMessages() {
+            if (!currentChatId) return;
+            
+            const result = await SimpleChat.getMessages(currentChatId);
+            const container = document.getElementById('messagesContainer');
+            
+            if (result.success) {
+                container.innerHTML = '';
+                const currentUser = SimpleAuth.getCurrentUser();
+                
+                result.messages.forEach(msg => {
+                    const isOwn = msg.get('sender').id === currentUser.id;
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+                    messageDiv.innerHTML = `
+                        <div class="message-content">${msg.get('message')}</div>
+                        <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
+                    `;
+                    container.appendChild(messageDiv);
+                });
+                
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+        
+        // Send message
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentChatId) return;
+            
+            // Add to UI immediately
+            const container = document.getElementById('messagesContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message sent';
+            messageDiv.innerHTML = `
+                <div class="message-content">${message}</div>
+                <div class="message-time">${formatTime(new Date())}</div>
+            `;
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+            
+            // Clear input
+            input.value = '';
+            
+            // Send to backend
+            await SimpleChat.sendMessage(currentChatId, message);
+        }
+        
+        // Handle enter key
+        function handleEnter(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        // Logout
+        async function logout() {
+            if (confirm('Logout?')) {
+                await SimpleAuth.logout();
+                window.location.href = 'login-fast.html';
+            }
+        }
+        
+        // Format time
+        function formatTime(date) {
+            return new Date(date).toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+            });
+        }
+        
+        // Load users on start
+        async function loadUsers() {
+            // Auto-populate with demo users for testing
+            const demoUsers = [
+                { id: 'demo1', name: 'Demo User 1' },
+                { id: 'demo2', name: 'Demo User 2' }
+            ];
+            
+            // Add demo chats if no real chats exist
+            setTimeout(() => {
+                const chatList = document.getElementById('chatList');
+                if (chatList.children.length <= 1) { // Only noChats div
+                    demoUsers.forEach(user => {
+                        addToChatList(user.id, user.name);
+                    });
+                }
+            }, 1000);
+        }
+        
+        // Close modals on outside click
+        window.onclick = function(event) {
+            const modal = document.getElementById('usersModal');
+            if (event.target === modal) {
+                hideUsers();
+            }
+        }
+        
+        // Auto-refresh messages every 5 seconds
+        setInterval(() => {
+            if (currentChatId) {
+                loadMessages();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
