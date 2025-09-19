@@ -110,12 +110,12 @@
                         window.location.href = 'index-fast.html';
                     }, 500);
                 } else {
-                    alert('Login failed: ' + result.error);
+                    showNotification('Login failed: ' + result.error, 'error');
                     btn.disabled = false;
                     text.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showNotification('Error: ' + error.message, 'error');
                 btn.disabled = false;
                 text.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
             }
@@ -160,10 +160,12 @@
             const result = await SimpleAuth.register(username, email, password);
             
             if (result.success) {
-                alert('Account created! Redirecting...');
-                window.location.href = 'index-fast.html';
+                showNotification('Account created! Redirecting...', 'success');
+                setTimeout(() => {
+                    window.location.href = 'index-fast.html';
+                }, 1000);
             } else {
-                alert('Registration failed: ' + result.error);
+                showNotification('Registration failed: ' + result.error, 'error');
             }
         }
         
@@ -173,6 +175,30 @@
             if (event.target === modal) {
                 hideRegister();
             }
+        }
+        
+        // Simple notification function  
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#00a884' : type === 'error' ? '#dc3545' : '#17a2b8'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                z-index: 1000;
+                font-size: 14px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
         }
     </script>
 </body>
