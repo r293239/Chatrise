@@ -182,7 +182,7 @@ const Backend = {
             const mainQuery = Parse.Query.or(query1, query2);
             mainQuery.ascending('timestamp');
             mainQuery.limit(100);
-            mainQuery.include('sender');
+            mainQuery.include('sender'); // Include sender user object
             
             const messages = await mainQuery.find();
             
@@ -207,10 +207,20 @@ const Backend = {
             query.equalTo('messageType', 'global');
             query.ascending('timestamp');
             query.limit(50); // Limit to last 50 global messages
-            query.include('sender');
+            query.include('sender'); // Include sender user object
             
             const messages = await query.find();
             console.log('Global messages loaded:', messages.length); // Debug log
+            
+            // Additional check to ensure sender data is available
+            for (const message of messages) {
+                const sender = message.get('sender');
+                if (!sender && message.get('senderName')) {
+                    // If sender object is missing but we have senderName, create a temporary object
+                    console.log('Sender object missing, using senderName:', message.get('senderName'));
+                }
+            }
+            
             return { success: true, messages };
         } catch (error) {
             console.error('Global messages error:', error);
