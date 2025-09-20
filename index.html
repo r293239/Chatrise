@@ -12,6 +12,7 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             height: 100vh;
+            height: calc(var(--vh, 1vh) * 100); /* Mobile viewport fix */
             background: #f0f2f5;
             overflow: hidden;
         }
@@ -19,6 +20,7 @@
         .app-container {
             display: flex;
             height: 100vh;
+            height: calc(var(--vh, 1vh) * 100); /* Mobile viewport fix */
         }
         
         /* Sidebar */
@@ -667,22 +669,97 @@
             margin-bottom: 16px;
         }
         
-        /* Responsive */
+        /* Mobile viewport fix */
         @media (max-width: 768px) {
+            body {
+                height: 100vh;
+                height: -webkit-fill-available; /* iOS Safari fix */
+            }
+            
+            .app-container {
+                height: 100vh;
+                height: -webkit-fill-available; /* iOS Safari fix */
+            }
+            
             .sidebar {
                 width: 100%;
                 position: absolute;
                 z-index: 100;
                 transform: translateX(-100%);
                 transition: transform 0.3s;
+                height: 100vh;
+                height: -webkit-fill-available;
             }
             
             .sidebar.show {
                 transform: translateX(0);
             }
             
+            .chat-area {
+                width: 100%;
+                position: relative;
+            }
+            
             .message {
                 max-width: 85%;
+            }
+            
+            /* Fix mobile keyboard viewport issue */
+            .message-input-area {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: white;
+                border-top: 1px solid #e1e5e9;
+                z-index: 10;
+                padding: 15px;
+            }
+            
+            .messages-container {
+                padding-bottom: 90px; /* Space for fixed input */
+            }
+            
+            /* Mobile header stays fixed */
+            .chat-header {
+                position: sticky;
+                top: 0;
+                z-index: 5;
+                background: white;
+            }
+            
+            /* Add mobile menu toggle */
+            .mobile-menu-toggle {
+                display: block;
+                position: absolute;
+                left: 15px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: none;
+                border: none;
+                color: #333;
+                font-size: 20px;
+                cursor: pointer;
+                z-index: 11;
+            }
+        }
+        
+        .mobile-menu-toggle {
+            display: none;
+        }
+        
+        /* Desktop - ensure sidebar is always visible */
+        @media (min-width: 769px) {
+            .sidebar {
+                transform: translateX(0) !important;
+            }
+            
+            .message-input-area {
+                position: relative;
+            }
+            
+            .messages-container {
+                padding-bottom: 20px;
             }
         }
     </style>
@@ -752,6 +829,9 @@
             
             <div id="chatContent" class="hidden">
                 <div class="chat-header">
+                    <button class="mobile-menu-toggle" onclick="toggleSidebar()" title="Menu">
+                        <i class="fas fa-bars"></i>
+                    </button>
                     <div class="chat-header-info">
                         <div class="chat-header-avatar" id="chatHeaderAvatar">
                             <div class="online-indicator" id="chatOnlineIndicator" class="hidden"></div>
@@ -1161,6 +1241,10 @@
         async function showUsers() {
             document.getElementById('usersModal').style.display = 'block';
             document.getElementById('userSearchInput').value = '';
+            
+            // Show loading first
+            document.getElementById('usersList').innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
+            
             await loadUsers();
             setTimeout(() => {
                 document.getElementById('userSearchInput').focus();
@@ -1173,12 +1257,15 @@
         
         async function loadUsers(searchTerm = '') {
             const usersList = document.getElementById('usersList');
-            usersList.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
             
             try {
-                const result = searchTerm ? 
+                console.log('Loading users with search term:', searchTerm);
+                
+                const result = searchTerm && searchTerm.length >= 2 ? 
                     await Backend.searchUsers(searchTerm) : 
                     await Backend.getUsers();
+                
+                console.log('Users loaded:', result);
                 
                 if (result.success) {
                     const currentUser = Backend.getCurrentUser();
@@ -1191,7 +1278,7 @@
                             <div class="empty-state">
                                 <i class="fas fa-user-slash"></i>
                                 <h3>No users found</h3>
-                                <p>Try a different search</p>
+                                <p>${searchTerm ? 'Try a different search' : 'No other users online right now'}</p>
                             </div>
                         `;
                         return;
@@ -1200,6 +1287,26 @@
                     filteredUsers.forEach(user => {
                         const isOnline = user.get('isOnline');
                         const username = user.get('username') || 'Unknown';
+                        const lastSeen = user.get('lastSeen');
+                        
+                        // Format last seen time
+                        let statusText = isOnline ? 'Online now' : 'Offline';
+                        if (!isOnline && lastSeen) {
+                            const timeDiff = new Date() - new Date(lastSeen);
+                            const minutes = Math.floor(timeDiff / (1000 * 60));
+                            const hours = Math.floor(minutes / 60);
+                            const days = Math.floor(hours / 24);
+                            
+                            if (minutes < 60) {
+                                statusText = `Last seen ${minutes}m ago`;
+                            } else if (hours < 24) {
+                                statusText = `Last seen ${hours}h ago`;
+                            } else if (days < 7) {
+                                statusText = `Last seen ${days}d ago`;
+                            } else {
+                                statusText = 'Last seen long ago';
+                            }
+                        }
                         
                         const userDiv = document.createElement('div');
                         userDiv.className = 'user-result';
@@ -1213,7 +1320,7 @@
                             <div class="user-result-info">
                                 <div class="user-result-name">${username}</div>
                                 <div class="user-result-status ${isOnline ? 'online' : ''}">
-                                    ${isOnline ? '🟢 Online now' : '⚫ Offline'}
+                                    ${isOnline ? '🟢' : '⚫'} ${statusText}
                                 </div>
                             </div>
                             <div style="color: #25d366; font-size: 20px;">
@@ -1223,14 +1330,25 @@
                         
                         usersList.appendChild(userDiv);
                     });
+                    
+                    console.log('Users list populated with', filteredUsers.length, 'users');
+                } else {
+                    console.error('Failed to load users:', result.error);
+                    usersList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Error loading users</h3>
+                            <p>${result.error || 'Please try again'}</p>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 console.error('Error loading users:', error);
                 usersList.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <h3>Error loading users</h3>
-                        <p>Please try again</p>
+                        <h3>Connection Error</h3>
+                        <p>Please check your connection and try again</p>
                     </div>
                 `;
             }
@@ -1238,6 +1356,7 @@
         
         async function searchUsers() {
             const searchTerm = document.getElementById('userSearchInput').value.trim();
+            console.log('Searching users:', searchTerm);
             await loadUsers(searchTerm);
         }
         
@@ -1246,6 +1365,44 @@
             selectChat(userId, username);
             showNotification(`Started chat with ${username}! 💬`, 'success');
         }
+        
+        // Mobile sidebar toggle
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('show');
+        }
+        
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggleBtn = document.querySelector('.mobile-menu-toggle');
+            
+            if (window.innerWidth <= 768) {
+                if (!sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
+                    sidebar.classList.remove('show');
+                }
+            }
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('show');
+            }
+        });
+        
+        // Fix mobile viewport height
+        function setViewportHeight() {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        }
+        
+        setViewportHeight();
+        window.addEventListener('resize', setViewportHeight);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(setViewportHeight, 100);
+        });
         
         function searchChats() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
