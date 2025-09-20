@@ -308,6 +308,26 @@
             overflow-y: auto;
             background: #efeae2;
             background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="25" cy="25" r="1" fill="%23ffffff" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="%23ffffff" opacity="0.1"/></svg>');
+            scroll-behavior: smooth;
+        }
+        
+        /* Add scroll indicator */
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .messages-container::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+            border-radius: 3px;
+        }
+        
+        .messages-container::-webkit-scrollbar-thumb {
+            background: rgba(37, 211, 102, 0.3);
+            border-radius: 3px;
+        }
+        
+        .messages-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(37, 211, 102, 0.5);
         }
         
         .message {
@@ -835,10 +855,14 @@
             
             messageRefreshInterval = setInterval(async () => {
                 if (!document.hidden && currentChatId) {
+                    // Only refresh messages if user is near the bottom or new messages arrived
+                    const container = document.getElementById('messagesContainer');
+                    const wasAtBottom = isScrolledToBottom(container);
+                    
                     if (isGlobalChat) {
                         await loadGlobalMessages();
                     } else {
-                        await loadMessages(false);
+                        await loadMessages(wasAtBottom); // Only auto-scroll if user was at bottom
                     }
                 }
             }, 5000);
@@ -944,6 +968,9 @@
                 const result = await Backend.getMessages(currentChatId);
                 const container = document.getElementById('messagesContainer');
                 
+                // Remember scroll position before loading
+                const wasAtBottom = isScrolledToBottom(container);
+                
                 if (result.success) {
                     container.innerHTML = '';
                     const currentUser = Backend.getCurrentUser();
@@ -982,7 +1009,8 @@
                             container.appendChild(messageDiv);
                         });
                         
-                        if (scrollToBottom) {
+                        // Only auto-scroll if user was at bottom or it's the initial load
+                        if (scrollToBottom || wasAtBottom) {
                             container.scrollTop = container.scrollHeight;
                         }
                     }
@@ -999,6 +1027,9 @@
             try {
                 const result = await Backend.getGlobalMessages();
                 const container = document.getElementById('messagesContainer');
+                
+                // Remember scroll position before loading
+                const wasAtBottom = isScrolledToBottom(container);
                 
                 console.log('Global messages result:', result);
                 
@@ -1047,7 +1078,10 @@
                             container.appendChild(messageDiv);
                         });
                         
-                        container.scrollTop = container.scrollHeight;
+                        // Only auto-scroll if user was at bottom or it's the initial load
+                        if (wasAtBottom || result.messages.length <= 5) {
+                            container.scrollTop = container.scrollHeight;
+                        }
                     }
                 } else {
                     console.error('Failed to load global messages:', result.error);
@@ -1057,6 +1091,13 @@
                 console.error('Error loading global messages:', error);
                 showNotification('Failed to load global chat', 'error');
             }
+        }
+        
+        // Helper function to check if user is scrolled to bottom
+        function isScrolledToBottom(container) {
+            if (!container) return true;
+            const threshold = 100; // pixels from bottom
+            return container.scrollTop >= (container.scrollHeight - container.clientHeight - threshold);
         }
         
         async function sendMessage() {
@@ -1088,11 +1129,16 @@
                     input.value = '';
                     adjustTextareaHeight(input);
                     
-                    // Reload messages immediately
+                    // After sending, always scroll to bottom and reload messages
                     if (isGlobalChat) {
                         await loadGlobalMessages();
+                        // Force scroll to bottom after sending
+                        const container = document.getElementById('messagesContainer');
+                        setTimeout(() => {
+                            container.scrollTop = container.scrollHeight;
+                        }, 100);
                     } else {
-                        await loadMessages();
+                        await loadMessages(true); // Force scroll to bottom when sending
                     }
                     
                     // Reload chats after a short delay
