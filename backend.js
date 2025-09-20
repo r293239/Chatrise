@@ -125,11 +125,12 @@ const Backend = {
         }
     },
     
-    // Send global message
+    // Send global message - FIXED VERSION
     async sendGlobalMessage(message) {
         try {
-            const GlobalMessage = Parse.Object.extend('GlobalMessage');
-            const msg = new GlobalMessage();
+            // Use the same Message class but with a special flag for global messages
+            const Message = Parse.Object.extend('Message');
+            const msg = new Message();
             
             const currentUser = Parse.User.current();
             if (!currentUser) {
@@ -138,13 +139,17 @@ const Backend = {
             
             msg.set('sender', currentUser);
             msg.set('senderName', currentUser.get('username'));
+            msg.set('recipientId', 'GLOBAL_CHAT'); // Special identifier for global messages
             msg.set('message', message);
             msg.set('timestamp', new Date());
+            msg.set('isRead', true); // Global messages are always "read"
             msg.set('messageType', 'global');
+            msg.set('isGlobal', true); // Additional flag to easily identify global messages
             
             const result = await msg.save();
             return { success: true, message: result };
         } catch (error) {
+            console.error('Global message send error:', error);
             return { success: false, error: error.message };
         }
     },
@@ -163,9 +168,11 @@ const Backend = {
             const query1 = new Parse.Query(Message);
             query1.equalTo('sender', currentUser);
             query1.equalTo('recipientId', userId);
+            query1.notEqualTo('messageType', 'global'); // Exclude global messages
             
             const query2 = new Parse.Query(Message);
             query2.equalTo('recipientId', currentUser.id);
+            query2.notEqualTo('messageType', 'global'); // Exclude global messages
             
             // Create a user pointer for the sender query
             const senderUser = new Parse.User();
@@ -189,19 +196,24 @@ const Backend = {
         }
     },
     
-    // Get global messages
+    // Get global messages - FIXED VERSION
     async getGlobalMessages() {
         try {
-            const GlobalMessage = Parse.Object.extend('GlobalMessage');
-            const query = new Parse.Query(GlobalMessage);
+            const Message = Parse.Object.extend('Message');
+            const query = new Parse.Query(Message);
             
+            // Query for global messages using the special identifier
+            query.equalTo('recipientId', 'GLOBAL_CHAT');
+            query.equalTo('messageType', 'global');
             query.ascending('timestamp');
-            query.limit(100);
+            query.limit(50); // Limit to last 50 global messages
             query.include('sender');
             
             const messages = await query.find();
+            console.log('Global messages loaded:', messages.length); // Debug log
             return { success: true, messages };
         } catch (error) {
+            console.error('Global messages error:', error);
             return { success: false, error: error.message };
         }
     },
@@ -231,7 +243,7 @@ const Backend = {
         }
     },
     
-    // Get recent chats
+    // Get recent chats - UPDATED to exclude global messages
     async getChats() {
         try {
             const currentUser = Parse.User.current();
@@ -241,12 +253,14 @@ const Backend = {
             
             const Message = Parse.Object.extend('Message');
             
-            // Get messages where user is involved
+            // Get messages where user is involved (excluding global messages)
             const query1 = new Parse.Query(Message);
             query1.equalTo('sender', currentUser);
+            query1.notEqualTo('messageType', 'global'); // Exclude global messages
             
             const query2 = new Parse.Query(Message);
             query2.equalTo('recipientId', currentUser.id);
+            query2.notEqualTo('messageType', 'global'); // Exclude global messages
             
             const mainQuery = Parse.Query.or(query1, query2);
             mainQuery.descending('timestamp');
@@ -341,6 +355,7 @@ const Backend = {
             query.equalTo('recipientId', currentUser.id);
             query.equalTo('sender', { __type: 'Pointer', className: '_User', objectId: senderId });
             query.equalTo('isRead', false);
+            query.notEqualTo('messageType', 'global'); // Exclude global messages from unread count
             
             return await query.count();
         } catch (error) {
@@ -388,11 +403,13 @@ const Backend = {
         }
     },
     
-    // Subscribe to global messages
+    // Subscribe to global messages - FIXED VERSION
     async subscribeToGlobalMessages(callback) {
         try {
-            const GlobalMessage = Parse.Object.extend('GlobalMessage');
-            const query = new Parse.Query(GlobalMessage);
+            const Message = Parse.Object.extend('Message');
+            const query = new Parse.Query(Message);
+            query.equalTo('recipientId', 'GLOBAL_CHAT');
+            query.equalTo('messageType', 'global');
             
             const subscription = await query.subscribe();
             subscription.on('create', callback);
