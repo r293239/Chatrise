@@ -800,6 +800,8 @@
         
         // Initialize app
         window.addEventListener('load', async function() {
+            console.log('App initializing...');
+            
             if (!Backend.isLoggedIn()) {
                 window.location.href = 'login.html';
                 return;
@@ -819,6 +821,8 @@
             messageInput.addEventListener('input', function() {
                 adjustTextareaHeight(this);
             });
+            
+            console.log('App initialized successfully');
         });
         
         function startAutoRefresh() {
@@ -888,10 +892,13 @@
         }
         
         async function selectGlobalChat() {
+            console.log('Selecting global chat...');
+            
             currentChatId = 'global';
             currentChatName = 'Global Chat';
             isGlobalChat = true;
             
+            // Update UI
             document.querySelectorAll('.chat-item, .global-chat-item').forEach(item => {
                 item.classList.remove('active');
             });
@@ -906,6 +913,8 @@
             
             await loadGlobalMessages();
             document.getElementById('messageInput').focus();
+            
+            console.log('Global chat selected successfully');
         }
         
         async function selectChat(userId, username) {
@@ -976,9 +985,13 @@
         }
         
         async function loadGlobalMessages() {
+            console.log('Loading global messages...');
+            
             try {
                 const result = await Backend.getGlobalMessages();
                 const container = document.getElementById('messagesContainer');
+                
+                console.log('Global messages result:', result);
                 
                 if (result.success) {
                     container.innerHTML = '';
@@ -1001,7 +1014,7 @@
                             messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
                             
                             messageDiv.innerHTML = `
-                                ${!isOwn ? `<div class="message-header">${sender.get('username')}</div>` : ''}
+                                ${!isOwn ? `<div class="message-header">${sender ? sender.get('username') : 'Unknown User'}</div>` : ''}
                                 <div class="message-content">${msg.get('message')}</div>
                                 <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
                             `;
@@ -1011,6 +1024,9 @@
                         
                         container.scrollTop = container.scrollHeight;
                     }
+                } else {
+                    console.error('Failed to load global messages:', result.error);
+                    showNotification('Failed to load global chat', 'error');
                 }
             } catch (error) {
                 console.error('Error loading global messages:', error);
@@ -1027,6 +1043,8 @@
                 return;
             }
             
+            console.log('Sending message:', { message, currentChatId, isGlobalChat });
+            
             const sendBtn = document.getElementById('sendBtn');
             sendBtn.disabled = true;
             sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -1036,6 +1054,7 @@
                 
                 if (isGlobalChat) {
                     result = await Backend.sendGlobalMessage(message);
+                    console.log('Global message send result:', result);
                 } else {
                     result = await Backend.sendMessage(currentChatId, message);
                 }
@@ -1044,16 +1063,18 @@
                     input.value = '';
                     adjustTextareaHeight(input);
                     
-                    // Reload messages
+                    // Reload messages immediately
                     if (isGlobalChat) {
                         await loadGlobalMessages();
                     } else {
                         await loadMessages();
                     }
                     
+                    // Reload chats after a short delay
                     setTimeout(loadChats, 500);
                     showNotification('Message sent! ✓', 'success', 2000);
                 } else {
+                    console.error('Message send failed:', result.error);
                     showNotification('Failed to send: ' + result.error, 'error');
                 }
             } catch (error) {
