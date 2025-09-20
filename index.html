@@ -1,4 +1,64 @@
-<!DOCTYPE html>
+// Mobile sidebar toggle
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('show');
+        }        // Load private messages with better error handling
+        async function loadMessages(scrollToBottom = true) {
+            if (!currentChatId || currentChatId === 'global') return;
+            
+            try {
+                console.log('Loading messages for user:', currentChatId);
+                const result = await Backend.getMessages(currentChatId);
+                const container = document.getElementById('messagesContainer');
+                const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
+                
+                if (result.success) {
+                    console.log('Loaded messages:', result.messages.length);
+                    container.innerHTML = '';
+                    const currentUser = Backend.getCurrentUser();
+                    
+                    if (result.messages.length === 0) {
+                        const emptyState = document.createElement('div');
+                        emptyState.className = 'empty-state';
+                        emptyState.innerHTML = `
+                            <i class="fas fa-comments"></i>
+                            <h3>No messages yet</h3>
+                            <p>Start the conversation by sending a message below</p>
+                        `;
+                        container.appendChild(emptyState);
+                    } else {
+                        result.messages.forEach(msg => {
+                            const sender = msg.get('sender');
+                            const isOwn = sender && sender.id === currentUser.id;
+                            const senderName = sender ? sender.get('username') : 'Unknown';
+                            
+                            const messageDiv = document.createElement('div');
+                            messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+                            
+                            messageDiv.innerHTML = `
+                                ${!isOwn ? `<div class="message-header">${senderName}</div>` : ''}
+                                <div class="message-content">${formatMessage(msg.get('message') || '')}</div>
+                                <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
+                            `;
+                            
+                            container.appendChild(messageDiv);
+                        });
+                    }
+                    
+                    // Scroll to bottom only if user was already at bottom or if it's the first load
+                    if (scrollToBottom || wasAtBottom) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                } else {
+                    console.error('Failed to load messages:', result.error);
+                    showNotification('Failed to load messages: ' + result.error, 'error');
+                    
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Error loading messages</h3>
+                            <p>${result.error}</p>
+                            <button onclick="loadMessages()" style="background: #<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -914,6 +974,9 @@
                         </div>
                     </div>
                     <div class="header-actions">
+                        <button class="action-btn" onclick="testMessage()" title="Test Message (Debug)" style="background: rgba(255,165,0,0.2);">
+                            <i class="fas fa-bug"></i>
+                        </button>
                         <button class="action-btn" onclick="refreshMessages()" title="Refresh Messages">
                             <i class="fas fa-sync-alt"></i>
                         </button>
@@ -1193,16 +1256,18 @@
             document.getElementById('messageInput').focus();
         }
         
-        // Load private messages
+        // Load private messages with better error handling
         async function loadMessages(scrollToBottom = true) {
             if (!currentChatId || currentChatId === 'global') return;
             
             try {
+                console.log('Loading messages for user:', currentChatId);
                 const result = await Backend.getMessages(currentChatId);
                 const container = document.getElementById('messagesContainer');
                 const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
                 
                 if (result.success) {
+                    console.log('Loaded messages:', result.messages.length);
                     container.innerHTML = '';
                     const currentUser = Backend.getCurrentUser();
                     
@@ -1212,18 +1277,21 @@
                         emptyState.innerHTML = `
                             <i class="fas fa-comments"></i>
                             <h3>No messages yet</h3>
-                            <p>Start the conversation by sending a message</p>
+                            <p>Start the conversation by sending a message below</p>
                         `;
                         container.appendChild(emptyState);
                     } else {
                         result.messages.forEach(msg => {
-                            const isOwn = msg.get('sender').id === currentUser.id;
+                            const sender = msg.get('sender');
+                            const isOwn = sender && sender.id === currentUser.id;
+                            const senderName = sender ? sender.get('username') : 'Unknown';
+                            
                             const messageDiv = document.createElement('div');
                             messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
                             
                             messageDiv.innerHTML = `
-                                ${!isOwn ? `<div class="message-header">${msg.get('senderName')}</div>` : ''}
-                                <div class="message-content">${formatMessage(msg.get('message'))}</div>
+                                ${!isOwn ? `<div class="message-header">${senderName}</div>` : ''}
+                                <div class="message-content">${formatMessage(msg.get('message') || '')}</div>
                                 <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
                             `;
                             
@@ -1235,20 +1303,48 @@
                     if (scrollToBottom || wasAtBottom) {
                         container.scrollTop = container.scrollHeight;
                     }
+                } else {
+                    console.error('Failed to load messages:', result.error);
+                    showNotification('Failed to load messages: ' + result.error, 'error');
+                    
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Error loading messages</h3>
+                            <p>${result.error}</p>
+                            <button onclick="loadMessages()" style="background: #25d366; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px;">
+                                <i class="fas fa-redo"></i> Try Again
+                            </button>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 console.error('Error loading messages:', error);
-                showNotification('Failed to load messages', 'error');
+                showNotification('Network error loading messages', 'error');
+                
+                const container = document.getElementById('messagesContainer');
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-wifi"></i>
+                        <h3>Connection error</h3>
+                        <p>Please check your internet connection</p>
+                        <button onclick="loadMessages()" style="background: #25d366; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px;">
+                            <i class="fas fa-redo"></i> Retry
+                        </button>
+                    </div>
+                `;
             }
         }
         
-        // Load global messages
+        // Load global messages with better error handling
         async function loadGlobalMessages() {
             try {
+                console.log('Loading global messages...');
                 const result = await Backend.getGlobalMessages();
                 const container = document.getElementById('messagesContainer');
                 
                 if (result.success) {
+                    console.log('Loaded global messages:', result.messages.length);
                     container.innerHTML = '';
                     const currentUser = Backend.getCurrentUser();
                     
@@ -1257,19 +1353,22 @@
                         emptyState.className = 'empty-state';
                         emptyState.innerHTML = `
                             <i class="fas fa-globe"></i>
-                            <h3>Welcome to Global Chat!</h3>
-                            <p>Be the first to start the conversation</p>
+                            <h3>Welcome to Global Chat! 🌍</h3>
+                            <p>Be the first to start the worldwide conversation</p>
                         `;
                         container.appendChild(emptyState);
                     } else {
                         result.messages.forEach(msg => {
-                            const isOwn = msg.get('sender').id === currentUser.id;
+                            const sender = msg.get('sender');
+                            const isOwn = sender && sender.id === currentUser.id;
+                            const senderName = sender ? sender.get('username') : 'Unknown';
+                            
                             const messageDiv = document.createElement('div');
                             messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
                             
                             messageDiv.innerHTML = `
-                                ${!isOwn ? `<div class="message-header">${msg.get('senderName')}</div>` : ''}
-                                <div class="message-content">${formatMessage(msg.get('message'))}</div>
+                                ${!isOwn ? `<div class="message-header">${senderName}</div>` : ''}
+                                <div class="message-content">${formatMessage(msg.get('message') || '')}</div>
                                 <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
                             `;
                             
@@ -1279,10 +1378,36 @@
                     
                     // Scroll to bottom
                     container.scrollTop = container.scrollHeight;
+                } else {
+                    console.error('Failed to load global messages:', result.error);
+                    showNotification('Failed to load global chat: ' + result.error, 'error');
+                    
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Error loading global chat</h3>
+                            <p>${result.error}</p>
+                            <button onclick="loadGlobalMessages()" style="background: #25d366; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px;">
+                                <i class="fas fa-redo"></i> Try Again
+                            </button>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 console.error('Error loading global messages:', error);
-                showNotification('Failed to load global messages', 'error');
+                showNotification('Network error loading global chat', 'error');
+                
+                const container = document.getElementById('messagesContainer');
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-wifi"></i>
+                        <h3>Connection error</h3>
+                        <p>Please check your internet connection</p>
+                        <button onclick="loadGlobalMessages()" style="background: #25d366; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px;">
+                            <i class="fas fa-redo"></i> Retry
+                        </button>
+                    </div>
+                `;
             }
         }
         
@@ -1291,11 +1416,16 @@
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
-            if (!message || !currentChatId) return;
+            if (!message || !currentChatId) {
+                showNotification('Please enter a message', 'error');
+                return;
+            }
             
             // Disable send button temporarily
             const sendBtn = document.getElementById('sendBtn');
+            const originalContent = sendBtn.innerHTML;
             sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             
             try {
                 let result;
@@ -1307,35 +1437,74 @@
                 }
                 
                 if (result.success) {
-                    // Clear input
+                    // Clear input immediately for better UX
                     input.value = '';
                     adjustTextareaHeight(input);
                     
-                    // Reload messages to show new message
-                    if (isGlobalChat) {
-                        await loadGlobalMessages();
-                    } else {
-                        await loadMessages();
-                    }
+                    // Add message to UI immediately (optimistic update)
+                    addMessageToUI(message, true);
                     
                     // Refresh chats list to update preview
                     setTimeout(loadChats, 500);
+                    
+                    showNotification('Message sent! ✓', 'success', 2000);
                 } else {
-                    showNotification('Failed to send message', 'error');
+                    showNotification('Failed to send message: ' + (result.error || 'Unknown error'), 'error');
+                    console.error('Send message error:', result.error);
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
-                showNotification('Failed to send message', 'error');
+                showNotification('Network error. Please check your connection.', 'error');
             }
             
             // Re-enable send button
             sendBtn.disabled = false;
+            sendBtn.innerHTML = originalContent;
+            
+            // Focus back to input
+            input.focus();
+        }
+        
+        // Add message to UI immediately (for better UX)
+        function addMessageToUI(message, isSent = false) {
+            const container = document.getElementById('messagesContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+            
+            const currentUser = Backend.getCurrentUser();
+            const username = currentUser ? currentUser.get('username') : 'You';
+            
+            messageDiv.innerHTML = `
+                ${!isSent && isGlobalChat ? `<div class="message-header">${username}</div>` : ''}
+                <div class="message-content">${formatMessage(message)}</div>
+                <div class="message-time">${formatTime(new Date())}</div>
+            `;
+            
+            // Remove empty state if it exists
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+            
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
         }
         
         // Show users modal
         async function showUsers() {
-            document.getElementById('usersModal').style.display = 'block';
+            const modal = document.getElementById('usersModal');
+            modal.style.display = 'block';
+            
+            // Clear previous search
+            document.getElementById('userSearchInput').value = '';
+            
+            // Load all users initially
             await loadUsers();
+            
+            // Focus on search input
+            setTimeout(() => {
+                document.getElementById('userSearchInput').focus();
+            }, 100);
         }
         
         // Hide users modal
@@ -1343,7 +1512,7 @@
             document.getElementById('usersModal').style.display = 'none';
         }
         
-        // Load users
+        // Load users with better error handling
         async function loadUsers(searchTerm = '') {
             const usersList = document.getElementById('usersList');
             usersList.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
@@ -1363,31 +1532,55 @@
                         usersList.innerHTML = `
                             <div class="empty-state">
                                 <i class="fas fa-user-slash"></i>
-                                <h3>No users found</h3>
-                                <p>Try a different search term</p>
+                                <h3>${searchTerm ? 'No users found' : 'No other users online'}</h3>
+                                <p>${searchTerm ? 'Try a different search term' : 'Be the first to invite friends!'}</p>
                             </div>
                         `;
                         return;
                     }
                     
+                    // Sort users - online first
+                    filteredUsers.sort((a, b) => {
+                        const aOnline = a.get('isOnline') || false;
+                        const bOnline = b.get('isOnline') || false;
+                        if (aOnline && !bOnline) return -1;
+                        if (!aOnline && bOnline) return 1;
+                        return a.get('username').localeCompare(b.get('username'));
+                    });
+                    
                     filteredUsers.forEach(user => {
                         const isOnline = user.get('isOnline');
                         const lastSeen = user.get('lastSeen');
+                        const username = user.get('username') || 'Unknown';
                         
                         const userDiv = document.createElement('div');
                         userDiv.className = 'user-result';
-                        userDiv.onclick = () => startChat(user.id, user.get('username'));
+                        userDiv.onclick = () => startChat(user.id, username);
+                        
+                        // Add hover effect
+                        userDiv.addEventListener('mouseenter', function() {
+                            this.style.backgroundColor = '#f0f8ff';
+                            this.style.borderColor = '#25d366';
+                        });
+                        
+                        userDiv.addEventListener('mouseleave', function() {
+                            this.style.backgroundColor = '';
+                            this.style.borderColor = 'transparent';
+                        });
                         
                         userDiv.innerHTML = `
                             <div class="user-result-avatar">
-                                ${user.get('username')[0].toUpperCase()}
+                                ${username[0].toUpperCase()}
                                 ${isOnline ? '<div class="chat-online-dot"></div>' : ''}
                             </div>
                             <div class="user-result-info">
-                                <div class="user-result-name">${user.get('username')}</div>
+                                <div class="user-result-name">${username}</div>
                                 <div class="user-result-status ${isOnline ? 'online' : ''}">
-                                    ${isOnline ? 'Online now' : `Last seen ${formatTime(lastSeen)}`}
+                                    ${isOnline ? '🟢 Online now' : `⚫ Last seen ${formatTime(lastSeen)}`}
                                 </div>
+                            </div>
+                            <div style="color: #25d366; font-size: 20px;">
+                                <i class="fas fa-comment"></i>
                             </div>
                         `;
                         
@@ -1398,7 +1591,10 @@
                         <div class="empty-state">
                             <i class="fas fa-exclamation-triangle"></i>
                             <h3>Error loading users</h3>
-                            <p>Please try again</p>
+                            <p>${result.error || 'Please try again'}</p>
+                            <button onclick="loadUsers('${searchTerm}')" style="background: #25d366; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px;">
+                                <i class="fas fa-redo"></i> Try Again
+                            </button>
                         </div>
                     `;
                 }
@@ -1406,9 +1602,12 @@
                 console.error('Error loading users:', error);
                 usersList.innerHTML = `
                     <div class="empty-state">
-                        <i class="fas fa-exclamation-triangle"></i>
+                        <i class="fas fa-wifi"></i>
                         <h3>Connection error</h3>
                         <p>Please check your internet connection</p>
+                        <button onclick="loadUsers('${searchTerm}')" style="background: #25d366; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px;">
+                            <i class="fas fa-redo"></i> Retry
+                        </button>
                     </div>
                 `;
             }
@@ -1424,6 +1623,7 @@
         function startChat(userId, username) {
             hideUsers();
             selectChat(userId, username);
+            showNotification(`Started chat with ${username}! 💬`, 'success', 3000);
         }
         
         // Search chats
@@ -1488,7 +1688,17 @@
             
             // Enable/disable send button based on content
             const sendBtn = document.getElementById('sendBtn');
-            sendBtn.disabled = !textarea.value.trim();
+            const hasContent = textarea.value.trim().length > 0;
+            sendBtn.disabled = !hasContent;
+            
+            // Change button color when message is ready
+            if (hasContent) {
+                sendBtn.style.background = '#25d366';
+                sendBtn.style.transform = 'scale(1.05)';
+            } else {
+                sendBtn.style.background = '#ccc';
+                sendBtn.style.transform = 'scale(1)';
+            }
         }
         
         // Add emoji (simple implementation)
@@ -1589,7 +1799,44 @@
             }, duration);
         }
         
-        // Mobile sidebar toggle
+        // Test message function for debugging
+        async function testMessage() {
+            if (!currentChatId) {
+                showNotification('Please select a chat first', 'error');
+                return;
+            }
+            
+            const testMsg = `Test message at ${new Date().toLocaleTimeString()}`;
+            console.log('Sending test message:', testMsg, 'to:', currentChatId, 'isGlobal:', isGlobalChat);
+            
+            try {
+                let result;
+                if (isGlobalChat) {
+                    result = await Backend.sendGlobalMessage(testMsg);
+                } else {
+                    result = await Backend.sendMessage(currentChatId, testMsg);
+                }
+                
+                console.log('Test message result:', result);
+                
+                if (result.success) {
+                    showNotification('Test message sent successfully! ✓', 'success');
+                    // Reload messages after a short delay
+                    setTimeout(() => {
+                        if (isGlobalChat) {
+                            loadGlobalMessages();
+                        } else {
+                            loadMessages();
+                        }
+                    }, 1000);
+                } else {
+                    showNotification('Test message failed: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Test message error:', error);
+                showNotification('Test message error: ' + error.message, 'error');
+            }
+        }
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('show');
@@ -1624,8 +1871,29 @@
         });
         
         // Initialize input handlers
-        document.getElementById('messageInput').addEventListener('input', function() {
-            adjustTextareaHeight(this);
+        document.addEventListener('DOMContentLoaded', function() {
+            const messageInput = document.getElementById('messageInput');
+            if (messageInput) {
+                messageInput.addEventListener('input', function() {
+                    adjustTextareaHeight(this);
+                });
+                
+                // Initial adjustment
+                adjustTextareaHeight(messageInput);
+            }
+        });
+        
+        // Initialize after page load as well
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                const messageInput = document.getElementById('messageInput');
+                if (messageInput) {
+                    messageInput.addEventListener('input', function() {
+                        adjustTextareaHeight(this);
+                    });
+                    adjustTextareaHeight(messageInput);
+                }
+            }, 1000);
         });
         
         // Initialize search handlers
