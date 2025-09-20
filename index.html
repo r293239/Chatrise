@@ -959,13 +959,22 @@
                     } else {
                         result.messages.forEach(msg => {
                             const sender = msg.get('sender');
+                            const senderName = msg.get('senderName'); // Fallback to stored senderName
                             const isOwn = sender && sender.id === currentUser.id;
+                            
+                            // Determine display name with proper fallback
+                            let displayName = 'Unknown User';
+                            if (sender && sender.get) {
+                                displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
+                            } else if (senderName) {
+                                displayName = senderName;
+                            }
                             
                             const messageDiv = document.createElement('div');
                             messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
                             
                             messageDiv.innerHTML = `
-                                ${!isOwn ? `<div class="message-header">${sender.get('username')}</div>` : ''}
+                                ${!isOwn ? `<div class="message-header">${displayName}</div>` : ''}
                                 <div class="message-content">${msg.get('message')}</div>
                                 <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
                             `;
@@ -1008,13 +1017,29 @@
                     } else {
                         result.messages.forEach(msg => {
                             const sender = msg.get('sender');
+                            const senderName = msg.get('senderName'); // Fallback to stored senderName
                             const isOwn = sender && sender.id === currentUser.id;
+                            
+                            // Determine display name with proper fallback
+                            let displayName = 'Unknown User';
+                            if (sender && sender.get) {
+                                displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
+                            } else if (senderName) {
+                                displayName = senderName;
+                            }
+                            
+                            console.log('Message sender info:', { 
+                                sender: sender, 
+                                senderName: senderName, 
+                                displayName: displayName,
+                                isOwn: isOwn 
+                            });
                             
                             const messageDiv = document.createElement('div');
                             messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
                             
                             messageDiv.innerHTML = `
-                                ${!isOwn ? `<div class="message-header">${sender ? sender.get('username') : 'Unknown User'}</div>` : ''}
+                                ${!isOwn ? `<div class="message-header">${displayName}</div>` : ''}
                                 <div class="message-content">${msg.get('message')}</div>
                                 <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
                             `;
