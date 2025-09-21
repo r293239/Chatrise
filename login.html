@@ -6,7 +6,6 @@
     <title>ChatRise - Login</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
-    <script src="backend.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -404,7 +403,8 @@
                 <ul>
                     <li>🌍 Join the global chat room</li>
                     <li>💬 Send private messages</li>
-                    <li>👥 See who's online</li>
+                    <li>👥 Add friends and contacts</li>
+                    <li>📷 Set profile pictures</li>
                     <li>🚀 Instant setup, no email needed</li>
                 </ul>
             </div>
@@ -445,6 +445,101 @@
     </div>
 
     <script>
+        // Initialize Parse immediately
+        Parse.initialize('z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT', 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV');
+        Parse.serverURL = 'https://parseapi.back4app.com';
+
+        // Enhanced Backend Object (simplified for login page)
+        const Backend = {
+            // Check if user is logged in
+            isLoggedIn() {
+                return Parse.User.current() !== null;
+            },
+            
+            // Login
+            async login(username, password) {
+                try {
+                    const user = await Parse.User.logIn(username, password);
+                    await this.updateUserStatus(true);
+                    return { success: true, user };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Register with enhanced profile fields
+            async register(username, email, password) {
+                try {
+                    const user = new Parse.User();
+                    user.set('username', username);
+                    user.set('email', email);
+                    user.set('password', password);
+                    user.set('isOnline', true);
+                    user.set('lastSeen', new Date());
+                    user.set('joinedAt', new Date());
+                    user.set('description', ''); // User description/bio
+                    user.set('profilePicture', null); // Profile picture file
+                    
+                    const result = await user.signUp();
+                    await this.updateUserStatus(true);
+                    return { success: true, user: result };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Update user online status
+            async updateUserStatus(isOnline) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { success: false, error: 'Not logged in' };
+                    
+                    currentUser.set('isOnline', isOnline);
+                    currentUser.set('lastSeen', new Date());
+                    await currentUser.save();
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Update user activity
+            async updateActivity() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { success: false };
+                    
+                    currentUser.set('lastSeen', new Date());
+                    currentUser.set('isOnline', true);
+                    await currentUser.save();
+                    
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            }
+        };
+
+        // Auto-update user activity
+        let activityInterval = null;
+
+        Backend.startActivityTracking = function() {
+            if (activityInterval) clearInterval(activityInterval);
+            
+            activityInterval = setInterval(async () => {
+                if (Backend.isLoggedIn()) {
+                    await Backend.updateActivity();
+                }
+            }, 30000);
+        };
+
+        Backend.stopActivityTracking = function() {
+            if (activityInterval) {
+                clearInterval(activityInterval);
+                activityInterval = null;
+            }
+        };
+
         let isLoading = false;
         
         // Check if already logged in
@@ -807,9 +902,21 @@
         // Focus first input on load
         window.addEventListener('load', function() {
             setTimeout(() => {
-                document.getElementById('username').focus();
+                if (!Backend.isLoggedIn()) {
+                    document.getElementById('username').focus();
+                }
             }, 500);
         });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', async () => {
+            if (Backend.isLoggedIn()) {
+                await Backend.updateUserStatus(false);
+            }
+        });
+
+        // Make Backend available globally
+        window.Backend = Backend;
     </script>
 </body>
 </html>
