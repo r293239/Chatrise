@@ -1,10 +1,10 @@
-// backend.js - Enhanced Backend for ChatRise with Global Chat
+// Enhanced Backend with Profile Management Features - Complete backend.js
 
 // Initialize Parse immediately
 Parse.initialize('z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT', 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV');
 Parse.serverURL = 'https://parseapi.back4app.com';
 
-// Enhanced Backend Object
+// Enhanced Backend Object with Profile Management
 const Backend = {
     
     // Check if user is logged in
@@ -28,7 +28,7 @@ const Backend = {
         }
     },
     
-    // Register
+    // Register - Updated with profile fields
     async register(username, email, password) {
         try {
             const user = new Parse.User();
@@ -38,6 +38,8 @@ const Backend = {
             user.set('isOnline', true);
             user.set('lastSeen', new Date());
             user.set('joinedAt', new Date());
+            user.set('description', ''); // User description/bio
+            user.set('profilePicture', null); // Profile picture file
             
             const result = await user.signUp();
             await this.updateUserStatus(true);
@@ -46,6 +48,548 @@ const Backend = {
             return { success: false, error: error.message };
         }
     },
+    
+    // =============== PROFILE MANAGEMENT FUNCTIONS ===============
+    
+    // Update username
+    async updateUsername(newUsername, currentPassword) {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            // Verify current password first
+            const verifyResult = await this.verifyPassword(currentPassword);
+            if (!verifyResult.success) {
+                return { success: false, error: 'Current password is incorrect' };
+            }
+            
+            // Check if username is already taken
+            const query = new Parse.Query(Parse.User);
+            query.equalTo('username', newUsername);
+            query.notEqualTo('objectId', currentUser.id);
+            const existingUser = await query.first();
+            
+            if (existingUser) {
+                return { success: false, error: 'Username is already taken' };
+            }
+            
+            // Update username
+            currentUser.set('username', newUsername);
+            await currentUser.save();
+            
+            return { success: true, message: 'Username updated successfully' };
+        } catch (error) {
+            console.error('Update username error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Update password
+    async updatePassword(currentPassword, newPassword) {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            // Verify current password first
+            const verifyResult = await this.verifyPassword(currentPassword);
+            if (!verifyResult.success) {
+                return { success: false, error: 'Current password is incorrect' };
+            }
+            
+            // Update password
+            currentUser.set('password', newPassword);
+            await currentUser.save();
+            
+            return { success: true, message: 'Password updated successfully' };
+        } catch (error) {
+            console.error('Update password error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Verify current password
+    async verifyPassword(password) {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            // Attempt to login with current username and provided password
+            const username = currentUser.get('username');
+            await Parse.User.logIn(username, password);
+            
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: 'Invalid password' };
+        }
+    },
+    
+    // Update description/bio
+    async updateDescription(description) {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            // Validate description length
+            if (description.length > 500) {
+                return { success: false, error: 'Description must be 500 characters or less' };
+            }
+            
+            currentUser.set('description', description);
+            await currentUser.save();
+            
+            return { success: true, message: 'Description updated successfully' };
+        } catch (error) {
+            console.error('Update description error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Upload profile picture
+    async updateProfilePicture(fileInput) {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                return { success: false, error: 'No file selected' };
+            }
+            
+            const file = fileInput.files[0];
+            
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                return { success: false, error: 'Please select an image file' };
+            }
+            
+            // Validate file size (max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                return { success: false, error: 'File size must be less than 5MB' };
+            }
+            
+            // Create Parse file
+            const parseFile = new Parse.File(`profile_${currentUser.id}.${file.type.split('/')[1]}`, file);
+            
+            // Save file to Parse
+            const savedFile = await parseFile.save();
+            
+            // Delete old profile picture if exists
+            const oldProfilePicture = currentUser.get('profilePicture');
+            if (oldProfilePicture) {
+                try {
+                    await oldProfilePicture.destroy();
+                } catch (error) {
+                    console.warn('Could not delete old profile picture:', error);
+                }
+            }
+            
+            // Update user with new profile picture
+            currentUser.set('profilePicture', savedFile);
+            await currentUser.save();
+            
+            return { 
+                success: true, 
+                message: 'Profile picture updated successfully',
+                profilePictureUrl: savedFile.url()
+            };
+        } catch (error) {
+            console.error('Update profile picture error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Get user profile (with profile picture and description)
+    async getUserProfile(userId) {
+        try {
+            const query = new Parse.Query(Parse.User);
+            const user = await query.get(userId);
+            
+            const profilePicture = user.get('profilePicture');
+            
+            return {
+                success: true,
+                profile: {
+                    id: user.id,
+                    username: user.get('username'),
+                    description: user.get('description') || '',
+                    profilePictureUrl: profilePicture ? profilePicture.url() : null,
+                    isOnline: user.get('isOnline') || false,
+                    lastSeen: user.get('lastSeen'),
+                    joinedAt: user.get('joinedAt')
+                }
+            };
+        } catch (error) {
+            console.error('Get user profile error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Get current user's full profile
+    async getCurrentUserProfile() {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            // Refresh user data
+            await currentUser.fetch();
+            
+            const profilePicture = currentUser.get('profilePicture');
+            
+            return {
+                success: true,
+                profile: {
+                    id: currentUser.id,
+                    username: currentUser.get('username'),
+                    email: currentUser.get('email'),
+                    description: currentUser.get('description') || '',
+                    profilePictureUrl: profilePicture ? profilePicture.url() : null,
+                    isOnline: currentUser.get('isOnline') || false,
+                    lastSeen: currentUser.get('lastSeen'),
+                    joinedAt: currentUser.get('joinedAt')
+                }
+            };
+        } catch (error) {
+            console.error('Get current user profile error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // =============== CONTACT SYSTEM FUNCTIONS ===============
+    
+    // Add contact (send friend request)
+    async addContact(userId, username) {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            // Check if contact already exists
+            const existingContact = await this.getContactStatus(userId);
+            if (existingContact.isContact || existingContact.isPending) {
+                return { success: false, error: 'Contact already exists or request pending' };
+            }
+            
+            const Contact = Parse.Object.extend('Contact');
+            const contact = new Contact();
+            
+            contact.set('from', currentUser);
+            contact.set('to', { __type: 'Pointer', className: '_User', objectId: userId });
+            contact.set('fromUsername', currentUser.get('username'));
+            contact.set('toUsername', username);
+            contact.set('status', 'pending');
+            contact.set('createdAt', new Date());
+            
+            const result = await contact.save();
+            return { success: true, contact: result };
+        } catch (error) {
+            console.error('Add contact error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Accept contact request
+    async acceptContact(contactId) {
+        try {
+            const Contact = Parse.Object.extend('Contact');
+            const query = new Parse.Query(Contact);
+            const contact = await query.get(contactId);
+            
+            contact.set('status', 'accepted');
+            contact.set('acceptedAt', new Date());
+            await contact.save();
+            
+            return { success: true };
+        } catch (error) {
+            console.error('Accept contact error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Reject/Remove contact
+    async removeContact(contactId) {
+        try {
+            const Contact = Parse.Object.extend('Contact');
+            const query = new Parse.Query(Contact);
+            const contact = await query.get(contactId);
+            await contact.destroy();
+            
+            return { success: true };
+        } catch (error) {
+            console.error('Remove contact error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Get contact status between current user and another user
+    async getContactStatus(userId) {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) return { isContact: false, isPending: false };
+            
+            const Contact = Parse.Object.extend('Contact');
+            
+            // Check if we sent a request to them or they sent to us
+            const query1 = new Parse.Query(Contact);
+            query1.equalTo('from', currentUser);
+            query1.equalTo('to', { __type: 'Pointer', className: '_User', objectId: userId });
+            
+            const query2 = new Parse.Query(Contact);
+            query2.equalTo('to', currentUser);
+            query2.equalTo('from', { __type: 'Pointer', className: '_User', objectId: userId });
+            
+            const mainQuery = Parse.Query.or(query1, query2);
+            const contacts = await mainQuery.find();
+            
+            if (contacts.length === 0) {
+                return { isContact: false, isPending: false, canAdd: true };
+            }
+            
+            const contact = contacts[0];
+            const status = contact.get('status');
+            const fromId = contact.get('from').id;
+            const currentUserId = currentUser.id;
+            
+            return {
+                isContact: status === 'accepted',
+                isPending: status === 'pending',
+                canAdd: false,
+                contactId: contact.id,
+                sentByMe: fromId === currentUserId,
+                receivedByMe: fromId !== currentUserId
+            };
+        } catch (error) {
+            console.error('Get contact status error:', error);
+            return { isContact: false, isPending: false, canAdd: true };
+        }
+    },
+    
+    // Get all contacts (accepted friends) - ENHANCED with profiles
+    async getContacts() {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            const Contact = Parse.Object.extend('Contact');
+            
+            // Get contacts where current user is 'from' or 'to' and status is accepted
+            const query1 = new Parse.Query(Contact);
+            query1.equalTo('from', currentUser);
+            query1.equalTo('status', 'accepted');
+            query1.include('to');
+            
+            const query2 = new Parse.Query(Contact);
+            query2.equalTo('to', currentUser);
+            query2.equalTo('status', 'accepted');
+            query2.include('from');
+            
+            const mainQuery = Parse.Query.or(query1, query2);
+            mainQuery.descending('acceptedAt');
+            
+            const contacts = await mainQuery.find();
+            
+            // Process contacts to get friend info with profiles
+            const friends = [];
+            for (const contact of contacts) {
+                const fromUser = contact.get('from');
+                const toUser = contact.get('to');
+                const currentUserId = currentUser.id;
+                
+                // Determine which user is the friend
+                const friend = fromUser.id === currentUserId ? toUser : fromUser;
+                
+                if (friend) {
+                    const profilePicture = friend.get('profilePicture');
+                    
+                    friends.push({
+                        contactId: contact.id,
+                        userId: friend.id,
+                        username: friend.get('username'),
+                        description: friend.get('description') || '',
+                        profilePictureUrl: profilePicture ? profilePicture.url() : null,
+                        isOnline: friend.get('isOnline') || false,
+                        lastSeen: friend.get('lastSeen'),
+                        acceptedAt: contact.get('acceptedAt')
+                    });
+                }
+            }
+            
+            return { success: true, contacts: friends };
+        } catch (error) {
+            console.error('Get contacts error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Get pending contact requests (received) - ENHANCED with profiles
+    async getPendingRequests() {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            const Contact = Parse.Object.extend('Contact');
+            const query = new Parse.Query(Contact);
+            query.equalTo('to', currentUser);
+            query.equalTo('status', 'pending');
+            query.include('from');
+            query.descending('createdAt');
+            
+            const requests = await query.find();
+            
+            const pendingRequests = requests.map(request => {
+                const fromUser = request.get('from');
+                const profilePicture = fromUser.get('profilePicture');
+                
+                return {
+                    contactId: request.id,
+                    fromUserId: fromUser.id,
+                    fromUsername: fromUser.get('username'),
+                    description: fromUser.get('description') || '',
+                    profilePictureUrl: profilePicture ? profilePicture.url() : null,
+                    createdAt: request.get('createdAt'),
+                    isOnline: fromUser.get('isOnline') || false
+                };
+            });
+            
+            return { success: true, requests: pendingRequests };
+        } catch (error) {
+            console.error('Get pending requests error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Get sent requests (pending requests sent by current user) - ENHANCED with profiles
+    async getSentRequests() {
+        try {
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            const Contact = Parse.Object.extend('Contact');
+            const query = new Parse.Query(Contact);
+            query.equalTo('from', currentUser);
+            query.equalTo('status', 'pending');
+            query.include('to');
+            query.descending('createdAt');
+            
+            const requests = await query.find();
+            
+            const sentRequests = requests.map(request => {
+                const toUser = request.get('to');
+                const profilePicture = toUser.get('profilePicture');
+                
+                return {
+                    contactId: request.id,
+                    toUserId: toUser.id,
+                    toUsername: toUser.get('username'),
+                    description: toUser.get('description') || '',
+                    profilePictureUrl: profilePicture ? profilePicture.url() : null,
+                    createdAt: request.get('createdAt'),
+                    isOnline: toUser.get('isOnline') || false
+                };
+            });
+            
+            return { success: true, requests: sentRequests };
+        } catch (error) {
+            console.error('Get sent requests error:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Get all users with contact status and profiles - ENHANCED
+    async getUsersWithContactStatus() {
+        try {
+            const query = new Parse.Query(Parse.User);
+            query.limit(50);
+            query.descending('isOnline');
+            query.descending('lastSeen');
+            
+            const users = await query.find();
+            const currentUser = this.getCurrentUser();
+            
+            // Filter out current user and add contact status + profile info
+            const usersWithStatus = [];
+            for (const user of users) {
+                if (user.id !== currentUser.id) {
+                    const contactStatus = await this.getContactStatus(user.id);
+                    const profilePicture = user.get('profilePicture');
+                    
+                    usersWithStatus.push({
+                        id: user.id,
+                        username: user.get('username'),
+                        description: user.get('description') || '',
+                        profilePictureUrl: profilePicture ? profilePicture.url() : null,
+                        isOnline: user.get('isOnline') || false,
+                        lastSeen: user.get('lastSeen'),
+                        ...contactStatus
+                    });
+                }
+            }
+            
+            return { success: true, users: usersWithStatus };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Search users - ENHANCED with profile info
+    async searchUsers(searchTerm) {
+        try {
+            if (!searchTerm || searchTerm.length < 2) {
+                return this.getUsersWithContactStatus();
+            }
+            
+            const query = new Parse.Query(Parse.User);
+            query.contains('username', searchTerm.toLowerCase());
+            query.limit(20);
+            query.descending('isOnline');
+            query.descending('lastSeen');
+            
+            const users = await query.find();
+            const currentUser = this.getCurrentUser();
+            
+            // Filter out current user and add contact status + profile info
+            const usersWithStatus = [];
+            for (const user of users) {
+                if (user.id !== currentUser.id) {
+                    const contactStatus = await this.getContactStatus(user.id);
+                    const profilePicture = user.get('profilePicture');
+                    
+                    usersWithStatus.push({
+                        id: user.id,
+                        username: user.get('username'),
+                        description: user.get('description') || '',
+                        profilePictureUrl: profilePicture ? profilePicture.url() : null,
+                        isOnline: user.get('isOnline') || false,
+                        lastSeen: user.get('lastSeen'),
+                        ...contactStatus
+                    });
+                }
+            }
+            
+            return { success: true, users: usersWithStatus };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // =============== MESSAGING FUNCTIONS ===============
     
     // Logout
     async logout() {
@@ -68,20 +612,6 @@ const Backend = {
             currentUser.set('lastSeen', new Date());
             await currentUser.save();
             return { success: true };
-        } catch (error) {
-            return { success: false, error: error.message };
-        }
-    },
-    
-    // Get all users with online status
-    async getUsers() {
-        try {
-            const query = new Parse.Query(Parse.User);
-            query.limit(50);
-            query.descending('isOnline');
-            query.descending('lastSeen');
-            const users = await query.find();
-            return { success: true, users };
         } catch (error) {
             return { success: false, error: error.message };
         }
@@ -125,10 +655,9 @@ const Backend = {
         }
     },
     
-    // Send global message - FIXED VERSION
+    // Send global message
     async sendGlobalMessage(message) {
         try {
-            // Use the same Message class but with a special flag for global messages
             const Message = Parse.Object.extend('Message');
             const msg = new Message();
             
@@ -139,12 +668,12 @@ const Backend = {
             
             msg.set('sender', currentUser);
             msg.set('senderName', currentUser.get('username'));
-            msg.set('recipientId', 'GLOBAL_CHAT'); // Special identifier for global messages
+            msg.set('recipientId', 'GLOBAL_CHAT');
             msg.set('message', message);
             msg.set('timestamp', new Date());
-            msg.set('isRead', true); // Global messages are always "read"
+            msg.set('isRead', true);
             msg.set('messageType', 'global');
-            msg.set('isGlobal', true); // Additional flag to easily identify global messages
+            msg.set('isGlobal', true);
             
             const result = await msg.save();
             return { success: true, message: result };
@@ -164,17 +693,15 @@ const Backend = {
             
             const Message = Parse.Object.extend('Message');
             
-            // Create queries for both directions of messages
             const query1 = new Parse.Query(Message);
             query1.equalTo('sender', currentUser);
             query1.equalTo('recipientId', userId);
-            query1.notEqualTo('messageType', 'global'); // Exclude global messages
+            query1.notEqualTo('messageType', 'global');
             
             const query2 = new Parse.Query(Message);
             query2.equalTo('recipientId', currentUser.id);
-            query2.notEqualTo('messageType', 'global'); // Exclude global messages
+            query2.notEqualTo('messageType', 'global');
             
-            // Create a user pointer for the sender query
             const senderUser = new Parse.User();
             senderUser.id = userId;
             query2.equalTo('sender', senderUser);
@@ -182,11 +709,9 @@ const Backend = {
             const mainQuery = Parse.Query.or(query1, query2);
             mainQuery.ascending('timestamp');
             mainQuery.limit(100);
-            mainQuery.include('sender'); // Include sender user object
+            mainQuery.include('sender');
             
             const messages = await mainQuery.find();
-            
-            // Mark messages as read
             await this.markMessagesAsRead(userId);
             
             return { success: true, messages };
@@ -196,31 +721,19 @@ const Backend = {
         }
     },
     
-    // Get global messages - FIXED VERSION
+    // Get global messages
     async getGlobalMessages() {
         try {
             const Message = Parse.Object.extend('Message');
             const query = new Parse.Query(Message);
             
-            // Query for global messages using the special identifier
             query.equalTo('recipientId', 'GLOBAL_CHAT');
             query.equalTo('messageType', 'global');
             query.ascending('timestamp');
-            query.limit(50); // Limit to last 50 global messages
-            query.include('sender'); // Include sender user object
+            query.limit(50);
+            query.include('sender');
             
             const messages = await query.find();
-            console.log('Global messages loaded:', messages.length); // Debug log
-            
-            // Additional check to ensure sender data is available
-            for (const message of messages) {
-                const sender = message.get('sender');
-                if (!sender && message.get('senderName')) {
-                    // If sender object is missing but we have senderName, create a temporary object
-                    console.log('Sender object missing, using senderName:', message.get('senderName'));
-                }
-            }
-            
             return { success: true, messages };
         } catch (error) {
             console.error('Global messages error:', error);
@@ -253,7 +766,7 @@ const Backend = {
         }
     },
     
-    // Get recent chats - UPDATED to exclude global messages
+    // Get recent chats
     async getChats() {
         try {
             const currentUser = Parse.User.current();
@@ -263,14 +776,13 @@ const Backend = {
             
             const Message = Parse.Object.extend('Message');
             
-            // Get messages where user is involved (excluding global messages)
             const query1 = new Parse.Query(Message);
             query1.equalTo('sender', currentUser);
-            query1.notEqualTo('messageType', 'global'); // Exclude global messages
+            query1.notEqualTo('messageType', 'global');
             
             const query2 = new Parse.Query(Message);
             query2.equalTo('recipientId', currentUser.id);
-            query2.notEqualTo('messageType', 'global'); // Exclude global messages
+            query2.notEqualTo('messageType', 'global');
             
             const mainQuery = Parse.Query.or(query1, query2);
             mainQuery.descending('timestamp');
@@ -279,7 +791,6 @@ const Backend = {
             
             const messages = await mainQuery.find();
             
-            // Group by chat partner
             const chatMap = new Map();
             const currentUserId = currentUser.id;
             
@@ -290,9 +801,7 @@ const Backend = {
                 let partnerId, partnerName;
                 
                 if (sender && sender.id === currentUserId) {
-                    // Message sent by current user
                     partnerId = recipientId;
-                    // Get partner name from user query
                     try {
                         const userQuery = new Parse.Query(Parse.User);
                         const partnerUser = await userQuery.get(partnerId);
@@ -302,16 +811,13 @@ const Backend = {
                         console.warn('Could not fetch partner user:', error);
                     }
                 } else if (sender) {
-                    // Message received by current user
                     partnerId = sender.id;
                     partnerName = sender.get('username') || 'Unknown User';
                 } else {
-                    // Skip if sender is null
                     continue;
                 }
                 
                 if (!chatMap.has(partnerId)) {
-                    // Get unread count
                     let unreadCount = 0;
                     try {
                         unreadCount = await this.getUnreadCount(partnerId);
@@ -325,12 +831,11 @@ const Backend = {
                         lastMessage: msg.get('message') || '',
                         timestamp: msg.get('timestamp'),
                         unreadCount: unreadCount,
-                        isOnline: false // Will be updated below
+                        isOnline: false
                     });
                 }
             }
             
-            // Update online status for each chat partner
             const chats = Array.from(chatMap.values());
             for (const chat of chats) {
                 try {
@@ -344,7 +849,6 @@ const Backend = {
                 }
             }
             
-            // Sort by timestamp
             chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             
             return { success: true, chats };
@@ -365,7 +869,7 @@ const Backend = {
             query.equalTo('recipientId', currentUser.id);
             query.equalTo('sender', { __type: 'Pointer', className: '_User', objectId: senderId });
             query.equalTo('isRead', false);
-            query.notEqualTo('messageType', 'global'); // Exclude global messages from unread count
+            query.notEqualTo('messageType', 'global');
             
             return await query.count();
         } catch (error) {
@@ -373,65 +877,7 @@ const Backend = {
         }
     },
     
-    // Search users
-    async searchUsers(searchTerm) {
-        try {
-            if (!searchTerm || searchTerm.length < 2) {
-                return this.getUsers();
-            }
-            
-            const query = new Parse.Query(Parse.User);
-            query.contains('username', searchTerm.toLowerCase());
-            query.limit(20);
-            query.descending('isOnline');
-            query.descending('lastSeen');
-            
-            const users = await query.find();
-            return { success: true, users };
-        } catch (error) {
-            return { success: false, error: error.message };
-        }
-    },
-    
-    // Real-time subscriptions (for future use)
-    async subscribeToMessages(callback) {
-        try {
-            const currentUser = Parse.User.current();
-            if (!currentUser) return null;
-            
-            const Message = Parse.Object.extend('Message');
-            const query = new Parse.Query(Message);
-            query.equalTo('recipientId', currentUser.id);
-            
-            const subscription = await query.subscribe();
-            subscription.on('create', callback);
-            
-            return subscription;
-        } catch (error) {
-            console.error('Subscription error:', error);
-            return null;
-        }
-    },
-    
-    // Subscribe to global messages - FIXED VERSION
-    async subscribeToGlobalMessages(callback) {
-        try {
-            const Message = Parse.Object.extend('Message');
-            const query = new Parse.Query(Message);
-            query.equalTo('recipientId', 'GLOBAL_CHAT');
-            query.equalTo('messageType', 'global');
-            
-            const subscription = await query.subscribe();
-            subscription.on('create', callback);
-            
-            return subscription;
-        } catch (error) {
-            console.error('Global subscription error:', error);
-            return null;
-        }
-    },
-    
-    // Update user activity (keep alive)
+    // Update user activity
     async updateActivity() {
         try {
             const currentUser = Parse.User.current();
@@ -459,7 +905,7 @@ Backend.startActivityTracking = function() {
         if (Backend.isLoggedIn()) {
             await Backend.updateActivity();
         }
-    }, 30000); // 30 seconds
+    }, 30000);
 };
 
 // Stop activity tracking
@@ -474,10 +920,8 @@ Backend.stopActivityTracking = function() {
 document.addEventListener('visibilitychange', async () => {
     if (Backend.isLoggedIn()) {
         if (document.hidden) {
-            // Page is hidden, user might be away
             Backend.stopActivityTracking();
         } else {
-            // Page is visible, user is back
             await Backend.updateActivity();
             Backend.startActivityTracking();
         }
