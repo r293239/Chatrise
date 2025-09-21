@@ -6,13 +6,12 @@
     <title>ChatRise - Messenger</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
-    <script src="backend.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             height: 100vh;
-            height: calc(var(--vh, 1vh) * 100); /* Mobile viewport fix */
+            height: calc(var(--vh, 1vh) * 100);
             background: #f0f2f5;
             overflow: hidden;
         }
@@ -20,7 +19,7 @@
         .app-container {
             display: flex;
             height: 100vh;
-            height: calc(var(--vh, 1vh) * 100); /* Mobile viewport fix */
+            height: calc(var(--vh, 1vh) * 100);
         }
         
         /* Sidebar */
@@ -117,6 +116,61 @@
             transform: scale(1.1);
         }
         
+        .sidebar-tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 15px 10px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .tab-btn.active {
+            color: #25d366;
+            background: white;
+        }
+        
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #25d366;
+        }
+        
+        .tab-btn:hover:not(.active) {
+            background: #f0f0f0;
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ff4757;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            min-width: 20px;
+        }
+        
         .search-box {
             padding: 15px;
             background: #f8f9fa;
@@ -138,9 +192,14 @@
             box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
         }
         
-        .chat-list {
+        .tab-content {
             flex: 1;
             overflow-y: auto;
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
         }
         
         .global-chat-item {
@@ -164,7 +223,7 @@
             background: linear-gradient(45deg, #1ea952, #0a6b6f);
         }
         
-        .chat-item {
+        .chat-item, .contact-item {
             padding: 15px;
             border-bottom: 1px solid #f0f0f0;
             cursor: pointer;
@@ -175,15 +234,15 @@
             position: relative;
         }
         
-        .chat-item:hover {
+        .chat-item:hover, .contact-item:hover {
             background: #f8f9fa;
         }
         
-        .chat-item.active {
+        .chat-item.active, .contact-item.active {
             background: #e3f2fd;
         }
         
-        .chat-avatar {
+        .chat-avatar, .contact-avatar {
             width: 50px;
             height: 50px;
             border-radius: 50%;
@@ -210,24 +269,28 @@
             font-size: 20px;
         }
         
-        .chat-info {
+        .chat-info, .contact-info {
             flex: 1;
             min-width: 0;
         }
         
-        .chat-name {
+        .chat-name, .contact-name {
             font-weight: 600;
             margin-bottom: 3px;
             font-size: 16px;
         }
         
-        .chat-preview {
+        .chat-preview, .contact-status {
             color: #666;
             font-size: 14px;
             opacity: 0.8;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+        
+        .contact-status.online {
+            color: #25d366;
         }
         
         .global-chat-item .chat-preview {
@@ -252,6 +315,53 @@
             position: absolute;
             bottom: 2px;
             right: 2px;
+        }
+        
+        .contact-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .contact-btn {
+            width: 35px;
+            height: 35px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .contact-btn.accept {
+            background: #25d366;
+            color: white;
+        }
+        
+        .contact-btn.reject {
+            background: #ff4757;
+            color: white;
+        }
+        
+        .contact-btn.message {
+            background: #007bff;
+            color: white;
+        }
+        
+        .contact-btn.remove {
+            background: #ff4757;
+            color: white;
+        }
+        
+        .contact-btn.pending {
+            background: #ffa502;
+            color: white;
+        }
+        
+        .contact-btn:hover {
+            transform: scale(1.1);
         }
         
         /* Chat Area */
@@ -340,7 +450,6 @@
             scroll-behavior: smooth;
         }
         
-        /* Add scroll indicator */
         .messages-container::-webkit-scrollbar {
             width: 6px;
         }
@@ -593,9 +702,9 @@
             align-items: center;
             padding: 15px;
             border-radius: 12px;
-            cursor: pointer;
             transition: all 0.2s;
             margin-bottom: 8px;
+            position: relative;
         }
         
         .user-result:hover {
@@ -634,6 +743,48 @@
         
         .user-result-status.online {
             color: #25d366;
+        }
+        
+        .user-result-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .user-action-btn {
+            width: 35px;
+            height: 35px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .user-action-btn.add {
+            background: #25d366;
+            color: white;
+        }
+        
+        .user-action-btn.message {
+            background: #007bff;
+            color: white;
+        }
+        
+        .user-action-btn.pending {
+            background: #ffa502;
+            color: white;
+        }
+        
+        .user-action-btn.friends {
+            background: #2ed573;
+            color: white;
+        }
+        
+        .user-action-btn:hover {
+            transform: scale(1.1);
         }
         
         /* Loading */
@@ -696,16 +847,16 @@
             margin-bottom: 16px;
         }
         
-        /* Mobile viewport fix */
+        /* Mobile Responsive */
         @media (max-width: 768px) {
             body {
                 height: 100vh;
-                height: -webkit-fill-available; /* iOS Safari fix */
+                height: -webkit-fill-available;
             }
             
             .app-container {
                 height: 100vh;
-                height: -webkit-fill-available; /* iOS Safari fix */
+                height: -webkit-fill-available;
             }
             
             .sidebar {
@@ -731,19 +882,16 @@
                 max-width: 85%;
             }
             
-            /* Show mobile menu toggle */
             .mobile-menu-toggle {
                 display: flex !important;
                 align-items: center;
                 justify-content: center;
             }
             
-            /* Adjust chat header info for mobile menu */
             .chat-header-info {
-                margin-left: 50px; /* Make space for menu button */
+                margin-left: 50px;
             }
             
-            /* Fix mobile keyboard viewport issue */
             .message-input-area {
                 position: fixed;
                 bottom: 0;
@@ -757,10 +905,9 @@
             }
             
             .messages-container {
-                padding-bottom: 90px; /* Space for fixed input */
+                padding-bottom: 90px;
             }
             
-            /* Mobile header stays fixed */
             .chat-header {
                 position: sticky;
                 top: 0;
@@ -769,7 +916,6 @@
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             
-            /* Sidebar overlay */
             .sidebar::before {
                 content: '';
                 position: fixed;
@@ -790,7 +936,6 @@
             }
         }
         
-        /* Desktop - ensure sidebar is always visible */
         @media (min-width: 769px) {
             .sidebar {
                 transform: translateX(0) !important;
@@ -829,10 +974,10 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button class="action-btn" onclick="showUsers()" title="Find Users">
+                    <button class="action-btn" onclick="showUsers()" title="Find People">
                         <i class="fas fa-user-plus"></i>
                     </button>
-                    <button class="action-btn" onclick="refreshChats()" title="Refresh">
+                    <button class="action-btn" onclick="refreshAll()" title="Refresh">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                     <button class="action-btn" onclick="logout()" title="Logout">
@@ -841,11 +986,26 @@
                 </div>
             </div>
             
-            <div class="search-box">
-                <input type="text" placeholder="Search chats..." id="searchInput" onkeyup="searchChats()">
+            <!-- Tabs -->
+            <div class="sidebar-tabs">
+                <button class="tab-btn active" onclick="switchTab('chats')" id="chatsTab">
+                    <i class="fas fa-comments"></i> Chats
+                </button>
+                <button class="tab-btn" onclick="switchTab('contacts')" id="contactsTab">
+                    <i class="fas fa-users"></i> Contacts
+                </button>
+                <button class="tab-btn" onclick="switchTab('requests')" id="requestsTab">
+                    <i class="fas fa-user-plus"></i> Requests
+                    <div class="notification-badge hidden" id="requestsBadge">0</div>
+                </button>
             </div>
             
-            <div class="chat-list" id="chatList">
+            <div class="search-box">
+                <input type="text" placeholder="Search..." id="searchInput" onkeyup="searchContent()">
+            </div>
+            
+            <!-- Chats Tab -->
+            <div class="tab-content active" id="chatsContent">
                 <!-- Global Chat -->
                 <div class="global-chat-item" onclick="selectGlobalChat()" id="globalChatItem">
                     <div class="global-avatar">
@@ -865,6 +1025,22 @@
                     Loading chats...
                 </div>
             </div>
+            
+            <!-- Contacts Tab -->
+            <div class="tab-content" id="contactsContent">
+                <div class="loading" id="contactsLoading">
+                    <div class="spinner"></div>
+                    Loading contacts...
+                </div>
+            </div>
+            
+            <!-- Requests Tab -->
+            <div class="tab-content" id="requestsContent">
+                <div class="loading" id="requestsLoading">
+                    <div class="spinner"></div>
+                    Loading requests...
+                </div>
+            </div>
         </div>
         
         <!-- Chat Area -->
@@ -874,7 +1050,7 @@
                     <i class="fas fa-comments"></i>
                 </div>
                 <h2>Welcome to ChatRise</h2>
-                <p>Select a chat to start messaging or join the global conversation</p>
+                <p>Select a chat to start messaging, add contacts, or join the global conversation</p>
             </div>
             
             <div id="chatContent" class="hidden">
@@ -884,7 +1060,7 @@
                     </button>
                     <div class="chat-header-info">
                         <div class="chat-header-avatar" id="chatHeaderAvatar">
-                            <div class="online-indicator" id="chatOnlineIndicator" class="hidden"></div>
+                            <div class="online-indicator hidden" id="chatOnlineIndicator"></div>
                         </div>
                         <div class="chat-header-details">
                             <h3 id="currentChatName">Chat</h3>
@@ -942,11 +1118,15 @@
     </div>
 
     <script>
+        // Include the enhanced backend script here
+        // (The backend script from the previous artifact would go here)
+        
         let currentChatId = null;
         let currentChatName = '';
         let isGlobalChat = false;
         let messageRefreshInterval = null;
-        let chatRefreshInterval = null;
+        let dataRefreshInterval = null;
+        let currentTab = 'chats';
         
         // Initialize app
         window.addEventListener('load', async function() {
@@ -962,8 +1142,7 @@
             document.getElementById('userAvatar').textContent = user.get('username')[0].toUpperCase();
             
             Backend.startActivityTracking();
-            await loadChats();
-            await updateOnlineUsersCount();
+            await loadAllData();
             startAutoRefresh();
             
             // Initialize input handler
@@ -975,24 +1154,57 @@
             console.log('App initialized successfully');
         });
         
+        // Tab switching
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName + 'Content').classList.add('active');
+            
+            // Load appropriate data
+            switch(tabName) {
+                case 'chats':
+                    loadChats();
+                    break;
+                case 'contacts':
+                    loadContacts();
+                    break;
+                case 'requests':
+                    loadRequests();
+                    break;
+            }
+        }
+        
+        async function loadAllData() {
+            await Promise.all([
+                loadChats(),
+                loadContacts(),
+                loadRequests(),
+                updateOnlineUsersCount()
+            ]);
+        }
+        
         function startAutoRefresh() {
-            chatRefreshInterval = setInterval(async () => {
+            dataRefreshInterval = setInterval(async () => {
                 if (!document.hidden) {
-                    await loadChats();
-                    await updateOnlineUsersCount();
+                    await loadAllData();
                 }
             }, 10000);
             
             messageRefreshInterval = setInterval(async () => {
                 if (!document.hidden && currentChatId) {
-                    // Only refresh messages if user is near the bottom or new messages arrived
                     const container = document.getElementById('messagesContainer');
                     const wasAtBottom = isScrolledToBottom(container);
                     
                     if (isGlobalChat) {
                         await loadGlobalMessages();
                     } else {
-                        await loadMessages(wasAtBottom); // Only auto-scroll if user was at bottom
+                        await loadMessages(wasAtBottom);
                     }
                 }
             }, 5000);
@@ -1001,12 +1213,13 @@
         async function loadChats() {
             try {
                 const result = await Backend.getChats();
-                const chatList = document.getElementById('chatList');
+                const chatsContent = document.getElementById('chatsContent');
                 const globalChat = document.getElementById('globalChatItem');
                 const loading = document.getElementById('chatsLoading');
                 
-                chatList.innerHTML = '';
-                chatList.appendChild(globalChat);
+                // Clear existing content but keep global chat
+                chatsContent.innerHTML = '';
+                chatsContent.appendChild(globalChat);
                 
                 if (result.success && result.chats.length > 0) {
                     result.chats.forEach(chat => {
@@ -1026,11 +1239,267 @@
                             <div class="chat-time">${formatTime(chat.timestamp)}</div>
                         `;
                         
-                        chatList.appendChild(chatDiv);
+                        chatsContent.appendChild(chatDiv);
                     });
+                } else {
+                    // Show empty state if no chats
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'empty-state';
+                    emptyDiv.innerHTML = `
+                        <i class="fas fa-comments"></i>
+                        <h3>No chats yet</h3>
+                        <p>Start a conversation with your contacts or join the global chat!</p>
+                    `;
+                    chatsContent.appendChild(emptyDiv);
                 }
             } catch (error) {
                 console.error('Error loading chats:', error);
+            }
+        }
+        
+        async function loadContacts() {
+            try {
+                const result = await Backend.getContacts();
+                const contactsContent = document.getElementById('contactsContent');
+                const loading = document.getElementById('contactsLoading');
+                
+                contactsContent.innerHTML = '';
+                
+                if (result.success && result.contacts.length > 0) {
+                    result.contacts.forEach(contact => {
+                        const contactDiv = document.createElement('div');
+                        contactDiv.className = 'contact-item';
+                        
+                        const statusText = contact.isOnline ? 'Online now' : formatLastSeen(contact.lastSeen);
+                        
+                        contactDiv.innerHTML = `
+                            <div class="contact-avatar">
+                                ${contact.username[0].toUpperCase()}
+                                ${contact.isOnline ? '<div class="chat-online-dot"></div>' : ''}
+                            </div>
+                            <div class="contact-info">
+                                <div class="contact-name">${contact.username}</div>
+                                <div class="contact-status ${contact.isOnline ? 'online' : ''}">
+                                    ${contact.isOnline ? '🟢' : '⚫'} ${statusText}
+                                </div>
+                            </div>
+                            <div class="contact-actions">
+                                <button class="contact-btn message" onclick="startChat('${contact.userId}', '${contact.username}')" title="Message">
+                                    <i class="fas fa-comment"></i>
+                                </button>
+                                <button class="contact-btn remove" onclick="removeContact('${contact.contactId}', '${contact.username}')" title="Remove Contact">
+                                    <i class="fas fa-user-minus"></i>
+                                </button>
+                            </div>
+                        `;
+                        
+                        contactsContent.appendChild(contactDiv);
+                    });
+                } else {
+                    // Show empty state
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'empty-state';
+                    emptyDiv.innerHTML = `
+                        <i class="fas fa-users"></i>
+                        <h3>No contacts yet</h3>
+                        <p>Add people to your contacts to start chatting!</p>
+                    `;
+                    contactsContent.appendChild(emptyDiv);
+                }
+            } catch (error) {
+                console.error('Error loading contacts:', error);
+            }
+        }
+        
+        async function loadRequests() {
+            try {
+                const [pendingResult, sentResult] = await Promise.all([
+                    Backend.getPendingRequests(),
+                    Backend.getSentRequests()
+                ]);
+                
+                const requestsContent = document.getElementById('requestsContent');
+                const badge = document.getElementById('requestsBadge');
+                
+                requestsContent.innerHTML = '';
+                
+                let totalRequests = 0;
+                
+                // Show received requests
+                if (pendingResult.success && pendingResult.requests.length > 0) {
+                    const headerDiv = document.createElement('div');
+                    headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Received Requests</h4>';
+                    requestsContent.appendChild(headerDiv);
+                    
+                    pendingResult.requests.forEach(request => {
+                        totalRequests++;
+                        const requestDiv = document.createElement('div');
+                        requestDiv.className = 'contact-item';
+                        
+                        requestDiv.innerHTML = `
+                            <div class="contact-avatar">
+                                ${request.fromUsername[0].toUpperCase()}
+                                ${request.isOnline ? '<div class="chat-online-dot"></div>' : ''}
+                            </div>
+                            <div class="contact-info">
+                                <div class="contact-name">${request.fromUsername}</div>
+                                <div class="contact-status">Wants to connect</div>
+                            </div>
+                            <div class="contact-actions">
+                                <button class="contact-btn accept" onclick="acceptContactRequest('${request.contactId}', '${request.fromUsername}')" title="Accept">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="contact-btn reject" onclick="rejectContactRequest('${request.contactId}', '${request.fromUsername}')" title="Reject">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `;
+                        
+                        requestsContent.appendChild(requestDiv);
+                    });
+                }
+                
+                // Show sent requests
+                if (sentResult.success && sentResult.requests.length > 0) {
+                    const headerDiv = document.createElement('div');
+                    headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Sent Requests</h4>';
+                    requestsContent.appendChild(headerDiv);
+                    
+                    sentResult.requests.forEach(request => {
+                        const requestDiv = document.createElement('div');
+                        requestDiv.className = 'contact-item';
+                        
+                        requestDiv.innerHTML = `
+                            <div class="contact-avatar">
+                                ${request.toUsername[0].toUpperCase()}
+                                ${request.isOnline ? '<div class="chat-online-dot"></div>' : ''}
+                            </div>
+                            <div class="contact-info">
+                                <div class="contact-name">${request.toUsername}</div>
+                                <div class="contact-status">Request pending</div>
+                            </div>
+                            <div class="contact-actions">
+                                <button class="contact-btn pending" onclick="cancelContactRequest('${request.contactId}', '${request.toUsername}')" title="Cancel Request">
+                                    <i class="fas fa-clock"></i>
+                                </button>
+                            </div>
+                        `;
+                        
+                        requestsContent.appendChild(requestDiv);
+                    });
+                }
+                
+                // Show empty state if no requests
+                if (totalRequests === 0) {
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'empty-state';
+                    emptyDiv.innerHTML = `
+                        <i class="fas fa-user-plus"></i>
+                        <h3>No contact requests</h3>
+                        <p>Contact requests will appear here</p>
+                    `;
+                    requestsContent.appendChild(emptyDiv);
+                }
+                
+                // Update badge
+                if (totalRequests > 0) {
+                    badge.textContent = totalRequests;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+                
+            } catch (error) {
+                console.error('Error loading requests:', error);
+            }
+        }
+        
+        // Contact management functions
+        async function addContact(userId, username) {
+            try {
+                showNotification('Sending contact request...', 'info', 2000);
+                const result = await Backend.addContact(userId, username);
+                
+                if (result.success) {
+                    showNotification(`Contact request sent to ${username}! 📤`, 'success');
+                    await loadRequests();
+                    hideUsers();
+                } else {
+                    showNotification(result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Add contact error:', error);
+                showNotification('Failed to send contact request', 'error');
+            }
+        }
+        
+        async function acceptContactRequest(contactId, username) {
+            try {
+                const result = await Backend.acceptContact(contactId);
+                
+                if (result.success) {
+                    showNotification(`${username} added to contacts! 👥`, 'success');
+                    await Promise.all([loadContacts(), loadRequests()]);
+                } else {
+                    showNotification('Failed to accept request', 'error');
+                }
+            } catch (error) {
+                console.error('Accept contact error:', error);
+                showNotification('Failed to accept request', 'error');
+            }
+        }
+        
+        async function rejectContactRequest(contactId, username) {
+            if (confirm(`Reject contact request from ${username}?`)) {
+                try {
+                    const result = await Backend.removeContact(contactId);
+                    
+                    if (result.success) {
+                        showNotification(`Request from ${username} rejected`, 'info');
+                        await loadRequests();
+                    } else {
+                        showNotification('Failed to reject request', 'error');
+                    }
+                } catch (error) {
+                    console.error('Reject contact error:', error);
+                    showNotification('Failed to reject request', 'error');
+                }
+            }
+        }
+        
+        async function cancelContactRequest(contactId, username) {
+            if (confirm(`Cancel contact request to ${username}?`)) {
+                try {
+                    const result = await Backend.removeContact(contactId);
+                    
+                    if (result.success) {
+                        showNotification(`Request to ${username} cancelled`, 'info');
+                        await loadRequests();
+                    } else {
+                        showNotification('Failed to cancel request', 'error');
+                    }
+                } catch (error) {
+                    console.error('Cancel contact error:', error);
+                    showNotification('Failed to cancel request', 'error');
+                }
+            }
+        }
+        
+        async function removeContact(contactId, username) {
+            if (confirm(`Remove ${username} from contacts?`)) {
+                try {
+                    const result = await Backend.removeContact(contactId);
+                    
+                    if (result.success) {
+                        showNotification(`${username} removed from contacts`, 'info');
+                        await loadContacts();
+                    } else {
+                        showNotification('Failed to remove contact', 'error');
+                    }
+                } catch (error) {
+                    console.error('Remove contact error:', error);
+                    showNotification('Failed to remove contact', 'error');
+                }
             }
         }
         
@@ -1053,7 +1522,7 @@
             isGlobalChat = true;
             
             // Update UI
-            document.querySelectorAll('.chat-item, .global-chat-item').forEach(item => {
+            document.querySelectorAll('.chat-item, .global-chat-item, .contact-item').forEach(item => {
                 item.classList.remove('active');
             });
             document.getElementById('globalChatItem').classList.add('active');
@@ -1068,6 +1537,11 @@
             await loadGlobalMessages();
             document.getElementById('messageInput').focus();
             
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('show');
+            }
+            
             console.log('Global chat selected successfully');
         }
         
@@ -1076,8 +1550,16 @@
             currentChatName = username;
             isGlobalChat = false;
             
-            document.querySelectorAll('.chat-item, .global-chat-item').forEach(item => {
+            document.querySelectorAll('.chat-item, .global-chat-item, .contact-item').forEach(item => {
                 item.classList.remove('active');
+            });
+            
+            // Find and highlight the active chat
+            const chatItems = document.querySelectorAll('.chat-item, .contact-item');
+            chatItems.forEach(item => {
+                if (item.onclick && item.onclick.toString().includes(userId)) {
+                    item.classList.add('active');
+                }
             });
             
             document.getElementById('welcomeScreen').classList.add('hidden');
@@ -1089,6 +1571,19 @@
             
             await loadMessages();
             document.getElementById('messageInput').focus();
+            
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('show');
+            }
+        }
+        
+        function startChat(userId, username) {
+            if (currentTab !== 'chats') {
+                switchTab('chats');
+            }
+            selectChat(userId, username);
+            showNotification(`Started chat with ${username}! 💬`, 'success', 2000);
         }
         
         async function loadMessages(scrollToBottom = true) {
@@ -1098,7 +1593,6 @@
                 const result = await Backend.getMessages(currentChatId);
                 const container = document.getElementById('messagesContainer');
                 
-                // Remember scroll position before loading
                 const wasAtBottom = isScrolledToBottom(container);
                 
                 if (result.success) {
@@ -1116,10 +1610,9 @@
                     } else {
                         result.messages.forEach(msg => {
                             const sender = msg.get('sender');
-                            const senderName = msg.get('senderName'); // Fallback to stored senderName
+                            const senderName = msg.get('senderName');
                             const isOwn = sender && sender.id === currentUser.id;
                             
-                            // Determine display name with proper fallback
                             let displayName = 'Unknown User';
                             if (sender && sender.get) {
                                 displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
@@ -1139,7 +1632,6 @@
                             container.appendChild(messageDiv);
                         });
                         
-                        // Only auto-scroll if user was at bottom or it's the initial load
                         if (scrollToBottom || wasAtBottom) {
                             container.scrollTop = container.scrollHeight;
                         }
@@ -1158,7 +1650,6 @@
                 const result = await Backend.getGlobalMessages();
                 const container = document.getElementById('messagesContainer');
                 
-                // Remember scroll position before loading
                 const wasAtBottom = isScrolledToBottom(container);
                 
                 console.log('Global messages result:', result);
@@ -1178,23 +1669,15 @@
                     } else {
                         result.messages.forEach(msg => {
                             const sender = msg.get('sender');
-                            const senderName = msg.get('senderName'); // Fallback to stored senderName
+                            const senderName = msg.get('senderName');
                             const isOwn = sender && sender.id === currentUser.id;
                             
-                            // Determine display name with proper fallback
                             let displayName = 'Unknown User';
                             if (sender && sender.get) {
                                 displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
                             } else if (senderName) {
                                 displayName = senderName;
                             }
-                            
-                            console.log('Message sender info:', { 
-                                sender: sender, 
-                                senderName: senderName, 
-                                displayName: displayName,
-                                isOwn: isOwn 
-                            });
                             
                             const messageDiv = document.createElement('div');
                             messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
@@ -1208,7 +1691,6 @@
                             container.appendChild(messageDiv);
                         });
                         
-                        // Only auto-scroll if user was at bottom or it's the initial load
                         if (wasAtBottom || result.messages.length <= 5) {
                             container.scrollTop = container.scrollHeight;
                         }
@@ -1223,10 +1705,9 @@
             }
         }
         
-        // Helper function to check if user is scrolled to bottom
         function isScrolledToBottom(container) {
             if (!container) return true;
-            const threshold = 100; // pixels from bottom
+            const threshold = 100;
             return container.scrollTop >= (container.scrollHeight - container.clientHeight - threshold);
         }
         
@@ -1259,19 +1740,16 @@
                     input.value = '';
                     adjustTextareaHeight(input);
                     
-                    // After sending, always scroll to bottom and reload messages
                     if (isGlobalChat) {
                         await loadGlobalMessages();
-                        // Force scroll to bottom after sending
                         const container = document.getElementById('messagesContainer');
                         setTimeout(() => {
                             container.scrollTop = container.scrollHeight;
                         }, 100);
                     } else {
-                        await loadMessages(true); // Force scroll to bottom when sending
+                        await loadMessages(true);
                     }
                     
-                    // Reload chats after a short delay
                     setTimeout(loadChats, 500);
                     showNotification('Message sent! ✓', 'success', 2000);
                 } else {
@@ -1292,7 +1770,6 @@
             document.getElementById('usersModal').style.display = 'block';
             document.getElementById('userSearchInput').value = '';
             
-            // Show loading first
             document.getElementById('usersList').innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
             
             await loadUsers();
@@ -1313,54 +1790,69 @@
                 
                 const result = searchTerm && searchTerm.length >= 2 ? 
                     await Backend.searchUsers(searchTerm) : 
-                    await Backend.getUsers();
+                    await Backend.getUsersWithContactStatus();
                 
                 console.log('Users loaded:', result);
                 
                 if (result.success) {
-                    const currentUser = Backend.getCurrentUser();
                     usersList.innerHTML = '';
                     
-                    const filteredUsers = result.users.filter(user => user.id !== currentUser.id);
-                    
-                    if (filteredUsers.length === 0) {
+                    if (result.users.length === 0) {
                         usersList.innerHTML = `
                             <div class="empty-state">
                                 <i class="fas fa-user-slash"></i>
                                 <h3>No users found</h3>
-                                <p>${searchTerm ? 'Try a different search' : 'No other users online right now'}</p>
+                                <p>${searchTerm ? 'Try a different search' : 'No other users available right now'}</p>
                             </div>
                         `;
                         return;
                     }
                     
-                    filteredUsers.forEach(user => {
-                        const isOnline = user.get('isOnline');
-                        const username = user.get('username') || 'Unknown';
-                        const lastSeen = user.get('lastSeen');
+                    result.users.forEach(user => {
+                        const isOnline = user.isOnline;
+                        const username = user.username || 'Unknown';
+                        const lastSeen = user.lastSeen;
                         
-                        // Format last seen time
                         let statusText = isOnline ? 'Online now' : 'Offline';
                         if (!isOnline && lastSeen) {
-                            const timeDiff = new Date() - new Date(lastSeen);
-                            const minutes = Math.floor(timeDiff / (1000 * 60));
-                            const hours = Math.floor(minutes / 60);
-                            const days = Math.floor(hours / 24);
-                            
-                            if (minutes < 60) {
-                                statusText = `Last seen ${minutes}m ago`;
-                            } else if (hours < 24) {
-                                statusText = `Last seen ${hours}h ago`;
-                            } else if (days < 7) {
-                                statusText = `Last seen ${days}d ago`;
-                            } else {
-                                statusText = 'Last seen long ago';
-                            }
+                            statusText = formatLastSeen(lastSeen);
                         }
                         
                         const userDiv = document.createElement('div');
                         userDiv.className = 'user-result';
-                        userDiv.onclick = () => startChat(user.id, username);
+                        
+                        // Determine action buttons based on contact status
+                        let actionButtons = '';
+                        if (user.isContact) {
+                            actionButtons = `
+                                <button class="user-action-btn friends" title="Already Friends">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="user-action-btn message" onclick="startChatFromUsers('${user.id}', '${username}')" title="Message">
+                                    <i class="fas fa-comment"></i>
+                                </button>
+                            `;
+                        } else if (user.isPending) {
+                            if (user.sentByMe) {
+                                actionButtons = `
+                                    <button class="user-action-btn pending" title="Request Sent">
+                                        <i class="fas fa-clock"></i>
+                                    </button>
+                                `;
+                            } else {
+                                actionButtons = `
+                                    <button class="user-action-btn accept" onclick="acceptFromUsers('${user.contactId}', '${username}')" title="Accept Request">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                `;
+                            }
+                        } else {
+                            actionButtons = `
+                                <button class="user-action-btn add" onclick="addContact('${user.id}', '${username}')" title="Add Contact">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                            `;
+                        }
                         
                         userDiv.innerHTML = `
                             <div class="user-result-avatar">
@@ -1373,15 +1865,15 @@
                                     ${isOnline ? '🟢' : '⚫'} ${statusText}
                                 </div>
                             </div>
-                            <div style="color: #25d366; font-size: 20px;">
-                                <i class="fas fa-comment"></i>
+                            <div class="user-result-actions">
+                                ${actionButtons}
                             </div>
                         `;
                         
                         usersList.appendChild(userDiv);
                     });
                     
-                    console.log('Users list populated with', filteredUsers.length, 'users');
+                    console.log('Users list populated with', result.users.length, 'users');
                 } else {
                     console.error('Failed to load users:', result.error);
                     usersList.innerHTML = `
@@ -1410,10 +1902,34 @@
             await loadUsers(searchTerm);
         }
         
-        function startChat(userId, username) {
+        function startChatFromUsers(userId, username) {
             hideUsers();
-            selectChat(userId, username);
-            showNotification(`Started chat with ${username}! 💬`, 'success');
+            switchTab('chats');
+            startChat(userId, username);
+        }
+        
+        async function acceptFromUsers(contactId, username) {
+            await acceptContactRequest(contactId, username);
+            await loadUsers(); // Refresh the users list
+        }
+        
+        // Search functionality for sidebar content
+        function searchContent() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (currentTab === 'chats') {
+                const chatItems = document.querySelectorAll('.chat-item');
+                chatItems.forEach(item => {
+                    const chatName = item.querySelector('.chat-name')?.textContent.toLowerCase() || '';
+                    item.style.display = chatName.includes(searchTerm) ? 'flex' : 'none';
+                });
+            } else if (currentTab === 'contacts') {
+                const contactItems = document.querySelectorAll('.contact-item');
+                contactItems.forEach(item => {
+                    const contactName = item.querySelector('.contact-name')?.textContent.toLowerCase() || '';
+                    item.style.display = contactName.includes(searchTerm) ? 'flex' : 'none';
+                });
+            }
         }
         
         // Mobile sidebar toggle
@@ -1429,7 +1945,6 @@
             const toggleBtn = document.querySelector('.mobile-menu-toggle');
             
             if (window.innerWidth <= 768 && sidebar.classList.contains('show')) {
-                // Check if click is outside sidebar and not on toggle button
                 if (!sidebar.contains(e.target) && e.target !== toggleBtn && !toggleBtn.contains(e.target)) {
                     sidebar.classList.remove('show');
                     console.log('Sidebar closed by outside click');
@@ -1437,57 +1952,9 @@
             }
         });
         
-        // Handle window resize
-        window.addEventListener('resize', function() {
-            const sidebar = document.getElementById('sidebar');
-            if (window.innerWidth > 768) {
-                sidebar.classList.remove('show');
-            }
-        });
-        
-        // Fix mobile viewport height
-        function setViewportHeight() {
-            const vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-        }
-        
-        setViewportHeight();
-        window.addEventListener('resize', setViewportHeight);
-        window.addEventListener('orientationchange', () => {
-            setTimeout(setViewportHeight, 100);
-        });
-        
-        // Debug mobile menu visibility
-        window.addEventListener('load', function() {
-            if (window.innerWidth <= 768) {
-                console.log('Mobile view detected, menu should be visible');
-                const menuBtn = document.querySelector('.mobile-menu-toggle');
-                if (menuBtn) {
-                    console.log('Menu button found:', menuBtn);
-                } else {
-                    console.log('Menu button NOT found');
-                }
-            }
-        });
-        
-        function searchChats() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const chatItems = document.querySelectorAll('.chat-item');
-            
-            chatItems.forEach(item => {
-                const chatName = item.querySelector('.chat-name')?.textContent.toLowerCase() || '';
-                
-                if (chatName.includes(searchTerm)) {
-                    item.style.display = 'flex';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-        }
-        
-        async function refreshChats() {
+        async function refreshAll() {
             showNotification('Refreshing...', 'info', 2000);
-            await loadChats();
+            await loadAllData();
         }
         
         async function refreshMessages() {
@@ -1503,7 +1970,7 @@
         async function logout() {
             if (confirm('Are you sure you want to logout?')) {
                 Backend.stopActivityTracking();
-                clearInterval(chatRefreshInterval);
+                clearInterval(dataRefreshInterval);
                 clearInterval(messageRefreshInterval);
                 
                 await Backend.logout();
@@ -1557,6 +2024,30 @@
             }
         }
         
+        function formatLastSeen(lastSeen) {
+            if (!lastSeen) return 'Last seen long ago';
+            
+            const now = new Date();
+            const seenDate = new Date(lastSeen);
+            const diffInMinutes = Math.floor((now - seenDate) / (1000 * 60));
+            
+            if (diffInMinutes < 1) {
+                return 'Just now';
+            } else if (diffInMinutes < 60) {
+                return `Last seen ${diffInMinutes}m ago`;
+            } else if (diffInMinutes < 1440) { // 24 hours
+                const hours = Math.floor(diffInMinutes / 60);
+                return `Last seen ${hours}h ago`;
+            } else {
+                const days = Math.floor(diffInMinutes / 1440);
+                if (days < 7) {
+                    return `Last seen ${days}d ago`;
+                } else {
+                    return 'Last seen long ago';
+                }
+            }
+        }
+        
         function showNotification(message, type = 'info', duration = 4000) {
             const existing = document.querySelector('.notification');
             if (existing) existing.remove();
@@ -1577,6 +2068,26 @@
             }, duration);
         }
         
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('show');
+            }
+        });
+        
+        // Fix mobile viewport height
+        function setViewportHeight() {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        }
+        
+        setViewportHeight();
+        window.addEventListener('resize', setViewportHeight);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(setViewportHeight, 100);
+        });
+        
         // Close modal when clicking outside
         window.onclick = function(event) {
             const modal = document.getElementById('usersModal');
@@ -1595,6 +2106,718 @@
                 }
             }
         });
+        
+        // Initialize input handler on page load
+        window.addEventListener('load', function() {
+            const messageInput = document.getElementById('messageInput');
+            if (messageInput) {
+                messageInput.addEventListener('input', function() {
+                    adjustTextareaHeight(this);
+                });
+            }
+        });
+    </script>
+    
+    <!-- Include the enhanced backend script -->
+    <script>
+        // Initialize Parse immediately
+        Parse.initialize('z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT', 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV');
+        Parse.serverURL = 'https://parseapi.back4app.com';
+
+        // Enhanced Backend Object with Contact System
+        const Backend = {
+            
+            // Check if user is logged in
+            isLoggedIn() {
+                return Parse.User.current() !== null;
+            },
+            
+            // Get current user
+            getCurrentUser() {
+                return Parse.User.current();
+            },
+            
+            // Login
+            async login(username, password) {
+                try {
+                    const user = await Parse.User.logIn(username, password);
+                    await this.updateUserStatus(true);
+                    return { success: true, user };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Register
+            async register(username, email, password) {
+                try {
+                    const user = new Parse.User();
+                    user.set('username', username);
+                    user.set('email', email);
+                    user.set('password', password);
+                    user.set('isOnline', true);
+                    user.set('lastSeen', new Date());
+                    user.set('joinedAt', new Date());
+                    
+                    const result = await user.signUp();
+                    await this.updateUserStatus(true);
+                    return { success: true, user: result };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Logout
+            async logout() {
+                try {
+                    await this.updateUserStatus(false);
+                    await Parse.User.logOut();
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Update user online status
+            async updateUserStatus(isOnline) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { success: false, error: 'Not logged in' };
+                    
+                    currentUser.set('isOnline', isOnline);
+                    currentUser.set('lastSeen', new Date());
+                    await currentUser.save();
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // =============== CONTACT SYSTEM FUNCTIONS ===============
+            
+            // Add contact (send friend request)
+            async addContact(userId, username) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    // Check if contact already exists
+                    const existingContact = await this.getContactStatus(userId);
+                    if (existingContact.isContact || existingContact.isPending) {
+                        return { success: false, error: 'Contact already exists or request pending' };
+                    }
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    const contact = new Contact();
+                    
+                    contact.set('from', currentUser);
+                    contact.set('to', { __type: 'Pointer', className: '_User', objectId: userId });
+                    contact.set('fromUsername', currentUser.get('username'));
+                    contact.set('toUsername', username);
+                    contact.set('status', 'pending'); // pending, accepted, blocked
+                    contact.set('createdAt', new Date());
+                    
+                    const result = await contact.save();
+                    return { success: true, contact: result };
+                } catch (error) {
+                    console.error('Add contact error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Accept contact request
+            async acceptContact(contactId) {
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    const contact = await query.get(contactId);
+                    
+                    contact.set('status', 'accepted');
+                    contact.set('acceptedAt', new Date());
+                    await contact.save();
+                    
+                    return { success: true };
+                } catch (error) {
+                    console.error('Accept contact error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Reject/Remove contact
+            async removeContact(contactId) {
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    const contact = await query.get(contactId);
+                    await contact.destroy();
+                    
+                    return { success: true };
+                } catch (error) {
+                    console.error('Remove contact error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get contact status between current user and another user
+            async getContactStatus(userId) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { isContact: false, isPending: false };
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    
+                    // Check if we sent a request to them or they sent to us
+                    const query1 = new Parse.Query(Contact);
+                    query1.equalTo('from', currentUser);
+                    query1.equalTo('to', { __type: 'Pointer', className: '_User', objectId: userId });
+                    
+                    const query2 = new Parse.Query(Contact);
+                    query2.equalTo('to', currentUser);
+                    query2.equalTo('from', { __type: 'Pointer', className: '_User', objectId: userId });
+                    
+                    const mainQuery = Parse.Query.or(query1, query2);
+                    const contacts = await mainQuery.find();
+                    
+                    if (contacts.length === 0) {
+                        return { isContact: false, isPending: false, canAdd: true };
+                    }
+                    
+                    const contact = contacts[0];
+                    const status = contact.get('status');
+                    const fromId = contact.get('from').id;
+                    const currentUserId = currentUser.id;
+                    
+                    return {
+                        isContact: status === 'accepted',
+                        isPending: status === 'pending',
+                        canAdd: false,
+                        contactId: contact.id,
+                        sentByMe: fromId === currentUserId,
+                        receivedByMe: fromId !== currentUserId
+                    };
+                } catch (error) {
+                    console.error('Get contact status error:', error);
+                    return { isContact: false, isPending: false, canAdd: true };
+                }
+            },
+            
+            // Get all contacts (accepted friends)
+            async getContacts() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    
+                    // Get contacts where current user is 'from' or 'to' and status is accepted
+                    const query1 = new Parse.Query(Contact);
+                    query1.equalTo('from', currentUser);
+                    query1.equalTo('status', 'accepted');
+                    query1.include('to');
+                    
+                    const query2 = new Parse.Query(Contact);
+                    query2.equalTo('to', currentUser);
+                    query2.equalTo('status', 'accepted');
+                    query2.include('from');
+                    
+                    const mainQuery = Parse.Query.or(query1, query2);
+                    mainQuery.descending('acceptedAt');
+                    
+                    const contacts = await mainQuery.find();
+                    
+                    // Process contacts to get friend info
+                    const friends = [];
+                    for (const contact of contacts) {
+                        const fromUser = contact.get('from');
+                        const toUser = contact.get('to');
+                        const currentUserId = currentUser.id;
+                        
+                        // Determine which user is the friend
+                        const friend = fromUser.id === currentUserId ? toUser : fromUser;
+                        
+                        if (friend) {
+                            friends.push({
+                                contactId: contact.id,
+                                userId: friend.id,
+                                username: friend.get('username'),
+                                isOnline: friend.get('isOnline') || false,
+                                lastSeen: friend.get('lastSeen'),
+                                acceptedAt: contact.get('acceptedAt')
+                            });
+                        }
+                    }
+                    
+                    return { success: true, contacts: friends };
+                } catch (error) {
+                    console.error('Get contacts error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get pending contact requests (received)
+            async getPendingRequests() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    query.equalTo('to', currentUser);
+                    query.equalTo('status', 'pending');
+                    query.include('from');
+                    query.descending('createdAt');
+                    
+                    const requests = await query.find();
+                    
+                    const pendingRequests = requests.map(request => ({
+                        contactId: request.id,
+                        fromUserId: request.get('from').id,
+                        fromUsername: request.get('from').get('username'),
+                        createdAt: request.get('createdAt'),
+                        isOnline: request.get('from').get('isOnline') || false
+                    }));
+                    
+                    return { success: true, requests: pendingRequests };
+                } catch (error) {
+                    console.error('Get pending requests error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get sent requests (pending requests sent by current user)
+            async getSentRequests() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    query.equalTo('from', currentUser);
+                    query.equalTo('status', 'pending');
+                    query.include('to');
+                    query.descending('createdAt');
+                    
+                    const requests = await query.find();
+                    
+                    const sentRequests = requests.map(request => ({
+                        contactId: request.id,
+                        toUserId: request.get('to').id,
+                        toUsername: request.get('to').get('username'),
+                        createdAt: request.get('createdAt'),
+                        isOnline: request.get('to').get('isOnline') || false
+                    }));
+                    
+                    return { success: true, requests: sentRequests };
+                } catch (error) {
+                    console.error('Get sent requests error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get all users with contact status
+            async getUsersWithContactStatus() {
+                try {
+                    const query = new Parse.Query(Parse.User);
+                    query.limit(50);
+                    query.descending('isOnline');
+                    query.descending('lastSeen');
+                    
+                    const users = await query.find();
+                    const currentUser = this.getCurrentUser();
+                    
+                    // Filter out current user and add contact status
+                    const usersWithStatus = [];
+                    for (const user of users) {
+                        if (user.id !== currentUser.id) {
+                            const contactStatus = await this.getContactStatus(user.id);
+                            usersWithStatus.push({
+                                id: user.id,
+                                username: user.get('username'),
+                                isOnline: user.get('isOnline') || false,
+                                lastSeen: user.get('lastSeen'),
+                                ...contactStatus
+                            });
+                        }
+                    }
+                    
+                    return { success: true, users: usersWithStatus };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // =============== EXISTING FUNCTIONS (Updated for contacts) ===============
+            
+            // Get all users with online status
+            async getUsers() {
+                return await this.getUsersWithContactStatus();
+            },
+            
+            // Get online users count
+            async getOnlineUsersCount() {
+                try {
+                    const query = new Parse.Query(Parse.User);
+                    query.equalTo('isOnline', true);
+                    const count = await query.count();
+                    return { success: true, count };
+                } catch (error) {
+                    return { success: false, error: error.message, count: 0 };
+                }
+            },
+            
+            // Send private message
+            async sendMessage(recipientId, message) {
+                try {
+                    const Message = Parse.Object.extend('Message');
+                    const msg = new Message();
+                    
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    msg.set('sender', currentUser);
+                    msg.set('senderName', currentUser.get('username'));
+                    msg.set('recipientId', recipientId);
+                    msg.set('message', message);
+                    msg.set('timestamp', new Date());
+                    msg.set('isRead', false);
+                    msg.set('messageType', 'private');
+                    
+                    const result = await msg.save();
+                    return { success: true, message: result };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Send global message
+            async sendGlobalMessage(message) {
+                try {
+                    const Message = Parse.Object.extend('Message');
+                    const msg = new Message();
+                    
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    msg.set('sender', currentUser);
+                    msg.set('senderName', currentUser.get('username'));
+                    msg.set('recipientId', 'GLOBAL_CHAT');
+                    msg.set('message', message);
+                    msg.set('timestamp', new Date());
+                    msg.set('isRead', true);
+                    msg.set('messageType', 'global');
+                    msg.set('isGlobal', true);
+                    
+                    const result = await msg.save();
+                    return { success: true, message: result };
+                } catch (error) {
+                    console.error('Global message send error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get messages between users
+            async getMessages(userId) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Message = Parse.Object.extend('Message');
+                    
+                    const query1 = new Parse.Query(Message);
+                    query1.equalTo('sender', currentUser);
+                    query1.equalTo('recipientId', userId);
+                    query1.notEqualTo('messageType', 'global');
+                    
+                    const query2 = new Parse.Query(Message);
+                    query2.equalTo('recipientId', currentUser.id);
+                    query2.notEqualTo('messageType', 'global');
+                    
+                    const senderUser = new Parse.User();
+                    senderUser.id = userId;
+                    query2.equalTo('sender', senderUser);
+                    
+                    const mainQuery = Parse.Query.or(query1, query2);
+                    mainQuery.ascending('timestamp');
+                    mainQuery.limit(100);
+                    mainQuery.include('sender');
+                    
+                    const messages = await mainQuery.find();
+                    await this.markMessagesAsRead(userId);
+                    
+                    return { success: true, messages };
+                } catch (error) {
+                    console.error('Get messages error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get global messages
+            async getGlobalMessages() {
+                try {
+                    const Message = Parse.Object.extend('Message');
+                    const query = new Parse.Query(Message);
+                    
+                    query.equalTo('recipientId', 'GLOBAL_CHAT');
+                    query.equalTo('messageType', 'global');
+                    query.ascending('timestamp');
+                    query.limit(50);
+                    query.include('sender');
+                    
+                    const messages = await query.find();
+                    console.log('Global messages loaded:', messages.length);
+                    
+                    return { success: true, messages };
+                } catch (error) {
+                    console.error('Global messages error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Mark messages as read
+            async markMessagesAsRead(senderId) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { success: false };
+                    
+                    const Message = Parse.Object.extend('Message');
+                    const query = new Parse.Query(Message);
+                    query.equalTo('recipientId', currentUser.id);
+                    query.equalTo('sender', { __type: 'Pointer', className: '_User', objectId: senderId });
+                    query.equalTo('isRead', false);
+                    
+                    const messages = await query.find();
+                    
+                    for (const message of messages) {
+                        message.set('isRead', true);
+                        await message.save();
+                    }
+                    
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get recent chats - Updated to work with contacts
+            async getChats() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Message = Parse.Object.extend('Message');
+                    
+                    const query1 = new Parse.Query(Message);
+                    query1.equalTo('sender', currentUser);
+                    query1.notEqualTo('messageType', 'global');
+                    
+                    const query2 = new Parse.Query(Message);
+                    query2.equalTo('recipientId', currentUser.id);
+                    query2.notEqualTo('messageType', 'global');
+                    
+                    const mainQuery = Parse.Query.or(query1, query2);
+                    mainQuery.descending('timestamp');
+                    mainQuery.limit(200);
+                    mainQuery.include('sender');
+                    
+                    const messages = await mainQuery.find();
+                    
+                    const chatMap = new Map();
+                    const currentUserId = currentUser.id;
+                    
+                    for (const msg of messages) {
+                        const sender = msg.get('sender');
+                        const recipientId = msg.get('recipientId');
+                        
+                        let partnerId, partnerName;
+                        
+                        if (sender && sender.id === currentUserId) {
+                            partnerId = recipientId;
+                            try {
+                                const userQuery = new Parse.Query(Parse.User);
+                                const partnerUser = await userQuery.get(partnerId);
+                                partnerName = partnerUser.get('username') || 'Unknown User';
+                            } catch (error) {
+                                partnerName = 'Unknown User';
+                                console.warn('Could not fetch partner user:', error);
+                            }
+                        } else if (sender) {
+                            partnerId = sender.id;
+                            partnerName = sender.get('username') || 'Unknown User';
+                        } else {
+                            continue;
+                        }
+                        
+                        if (!chatMap.has(partnerId)) {
+                            let unreadCount = 0;
+                            try {
+                                unreadCount = await this.getUnreadCount(partnerId);
+                            } catch (error) {
+                                console.warn('Could not get unread count:', error);
+                            }
+                            
+                            chatMap.set(partnerId, {
+                                id: partnerId,
+                                name: partnerName,
+                                lastMessage: msg.get('message') || '',
+                                timestamp: msg.get('timestamp'),
+                                unreadCount: unreadCount,
+                                isOnline: false
+                            });
+                        }
+                    }
+                    
+                    const chats = Array.from(chatMap.values());
+                    for (const chat of chats) {
+                        try {
+                            const userQuery = new Parse.Query(Parse.User);
+                            const partnerUser = await userQuery.get(chat.id);
+                            chat.isOnline = partnerUser.get('isOnline') || false;
+                            chat.lastSeen = partnerUser.get('lastSeen');
+                        } catch (error) {
+                            chat.isOnline = false;
+                            console.warn('Could not update online status:', error);
+                        }
+                    }
+                    
+                    chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    return { success: true, chats };
+                } catch (error) {
+                    console.error('Get chats error:', error);
+                    return { success: false, error: error.message, chats: [] };
+                }
+            },
+            
+            // Get unread message count
+            async getUnreadCount(senderId) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return 0;
+                    
+                    const Message = Parse.Object.extend('Message');
+                    const query = new Parse.Query(Message);
+                    query.equalTo('recipientId', currentUser.id);
+                    query.equalTo('sender', { __type: 'Pointer', className: '_User', objectId: senderId });
+                    query.equalTo('isRead', false);
+                    query.notEqualTo('messageType', 'global');
+                    
+                    return await query.count();
+                } catch (error) {
+                    return 0;
+                }
+            },
+            
+            // Search users - Updated to include contact status
+            async searchUsers(searchTerm) {
+                try {
+                    if (!searchTerm || searchTerm.length < 2) {
+                        return this.getUsersWithContactStatus();
+                    }
+                    
+                    const query = new Parse.Query(Parse.User);
+                    query.contains('username', searchTerm.toLowerCase());
+                    query.limit(20);
+                    query.descending('isOnline');
+                    query.descending('lastSeen');
+                    
+                    const users = await query.find();
+                    const currentUser = this.getCurrentUser();
+                    
+                    // Filter out current user and add contact status
+                    const usersWithStatus = [];
+                    for (const user of users) {
+                        if (user.id !== currentUser.id) {
+                            const contactStatus = await this.getContactStatus(user.id);
+                            usersWithStatus.push({
+                                id: user.id,
+                                username: user.get('username'),
+                                isOnline: user.get('isOnline') || false,
+                                lastSeen: user.get('lastSeen'),
+                                ...contactStatus
+                            });
+                        }
+                    }
+                    
+                    return { success: true, users: usersWithStatus };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Update user activity
+            async updateActivity() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { success: false };
+                    
+                    currentUser.set('lastSeen', new Date());
+                    currentUser.set('isOnline', true);
+                    await currentUser.save();
+                    
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            }
+        };
+
+        // Auto-update user activity every 30 seconds
+        let activityInterval = null;
+
+        Backend.startActivityTracking = function() {
+            if (activityInterval) clearInterval(activityInterval);
+            
+            activityInterval = setInterval(async () => {
+                if (Backend.isLoggedIn()) {
+                    await Backend.updateActivity();
+                }
+            }, 30000);
+        };
+
+        Backend.stopActivityTracking = function() {
+            if (activityInterval) {
+                clearInterval(activityInterval);
+                activityInterval = null;
+            }
+        };
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', async () => {
+            if (Backend.isLoggedIn()) {
+                if (document.hidden) {
+                    Backend.stopActivityTracking();
+                } else {
+                    await Backend.updateActivity();
+                    Backend.startActivityTracking();
+                }
+            }
+        });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', async () => {
+            if (Backend.isLoggedIn()) {
+                await Backend.updateUserStatus(false);
+            }
+        });
+
+        // Make Backend available globally
+        window.Backend = Backend;
     </script>
 </body>
 </html>
