@@ -119,11 +119,22 @@ const Backend = {
                 return { success: false, error: 'Not logged in' };
             }
             
+            // Store current user session
+            const currentSessionToken = currentUser.getSessionToken();
+            
             // Attempt to login with current username and provided password
             const username = currentUser.get('username');
-            await Parse.User.logIn(username, password);
+            const testUser = await Parse.User.logIn(username, password);
             
-            return { success: true };
+            // Restore original session if different user was logged in during test
+            if (testUser.id === currentUser.id) {
+                return { success: true };
+            } else {
+                // This shouldn't happen but handle it anyway
+                await Parse.User.logOut();
+                await Parse.User.become(currentSessionToken);
+                return { success: false, error: 'Invalid password' };
+            }
         } catch (error) {
             return { success: false, error: 'Invalid password' };
         }
@@ -138,11 +149,11 @@ const Backend = {
             }
             
             // Validate description length
-            if (description.length > 500) {
+            if (description && description.length > 500) {
                 return { success: false, error: 'Description must be 500 characters or less' };
             }
             
-            currentUser.set('description', description);
+            currentUser.set('description', description || '');
             await currentUser.save();
             
             return { success: true, message: 'Description updated successfully' };
@@ -177,7 +188,7 @@ const Backend = {
             }
             
             // Create Parse file
-            const parseFile = new Parse.File(`profile_${currentUser.id}.${file.type.split('/')[1]}`, file);
+            const parseFile = new Parse.File(`profile_${currentUser.id}_${Date.now()}.${file.type.split('/')[1]}`, file);
             
             // Save file to Parse
             const savedFile = await parseFile.save();
@@ -275,6 +286,10 @@ const Backend = {
                 return { success: false, error: 'Not logged in' };
             }
             
+            if (userId === currentUser.id) {
+                return { success: false, error: 'Cannot add yourself as contact' };
+            }
+            
             // Check if contact already exists
             const existingContact = await this.getContactStatus(userId);
             if (existingContact.isContact || existingContact.isPending) {
@@ -289,7 +304,7 @@ const Backend = {
             contact.set('fromUsername', currentUser.get('username'));
             contact.set('toUsername', username);
             contact.set('status', 'pending');
-            contact.set('createdAt', new Date());
+            contact.set('timestamp', new Date());
             
             const result = await contact.save();
             return { success: true, contact: result };
@@ -305,6 +320,14 @@ const Backend = {
             const Contact = Parse.Object.extend('Contact');
             const query = new Parse.Query(Contact);
             const contact = await query.get(contactId);
+            
+            // Verify this request was sent to current user
+            const currentUser = Parse.User.current();
+            const toUser = contact.get('to');
+            
+            if (!toUser || toUser.id !== currentUser.id) {
+                return { success: false, error: 'Unauthorized' };
+            }
             
             contact.set('status', 'accepted');
             contact.set('acceptedAt', new Date());
@@ -323,8 +346,18 @@ const Backend = {
             const Contact = Parse.Object.extend('Contact');
             const query = new Parse.Query(Contact);
             const contact = await query.get(contactId);
-            await contact.destroy();
             
+            // Verify user has permission to delete this contact
+            const currentUser = Parse.User.current();
+            const fromUser = contact.get('from');
+            const toUser = contact.get('to');
+            
+            if ((!fromUser || fromUser.id !== currentUser.id) && 
+                (!toUser || toUser.id !== currentUser.id)) {
+                return { success: false, error: 'Unauthorized' };
+            }
+            
+            await contact.destroy();
             return { success: true };
         } catch (error) {
             console.error('Remove contact error:', error);
@@ -447,7 +480,7 @@ const Backend = {
             query.equalTo('to', currentUser);
             query.equalTo('status', 'pending');
             query.include('from');
-            query.descending('createdAt');
+            query.descending('timestamp');
             
             const requests = await query.find();
             
@@ -461,8 +494,9 @@ const Backend = {
                     fromUsername: fromUser.get('username'),
                     description: fromUser.get('description') || '',
                     profilePictureUrl: profilePicture ? profilePicture.url() : null,
-                    createdAt: request.get('createdAt'),
-                    isOnline: fromUser.get('isOnline') || false
+                    timestamp: request.get('timestamp'),
+                    isOnline: fromUser.get('isOnline') || false,
+                    lastSeen: fromUser.get('lastSeen')
                 };
             });
             
@@ -486,7 +520,7 @@ const Backend = {
             query.equalTo('from', currentUser);
             query.equalTo('status', 'pending');
             query.include('to');
-            query.descending('createdAt');
+            query.descending('timestamp');
             
             const requests = await query.find();
             
@@ -500,8 +534,9 @@ const Backend = {
                     toUsername: toUser.get('username'),
                     description: toUser.get('description') || '',
                     profilePictureUrl: profilePicture ? profilePicture.url() : null,
-                    createdAt: request.get('createdAt'),
-                    isOnline: toUser.get('isOnline') || false
+                    timestamp: request.get('timestamp'),
+                    isOnline: toUser.get('isOnline') || false,
+                    lastSeen: toUser.get('lastSeen')
                 };
             });
             
@@ -595,6 +630,7 @@ const Backend = {
     async logout() {
         try {
             await this.updateUserStatus(false);
+            this.stopActivityTracking();
             await Parse.User.logOut();
             return { success: true };
         } catch (error) {
@@ -613,6 +649,7 @@ const Backend = {
             await currentUser.save();
             return { success: true };
         } catch (error) {
+            console.error('Update status error:', error);
             return { success: false, error: error.message };
         }
     },
@@ -625,6 +662,7 @@ const Backend = {
             const count = await query.count();
             return { success: true, count };
         } catch (error) {
+            console.error('Get online users count error:', error);
             return { success: false, error: error.message, count: 0 };
         }
     },
@@ -651,6 +689,7 @@ const Backend = {
             const result = await msg.save();
             return { success: true, message: result };
         } catch (error) {
+            console.error('Send message error:', error);
             return { success: false, error: error.message };
         }
     },
@@ -702,8 +741,7 @@ const Backend = {
             query2.equalTo('recipientId', currentUser.id);
             query2.notEqualTo('messageType', 'global');
             
-            const senderUser = new Parse.User();
-            senderUser.id = userId;
+            const senderUser = { __type: 'Pointer', className: '_User', objectId: userId };
             query2.equalTo('sender', senderUser);
             
             const mainQuery = Parse.Query.or(query1, query2);
@@ -755,13 +793,15 @@ const Backend = {
             
             const messages = await query.find();
             
-            for (const message of messages) {
+            const savePromises = messages.map(message => {
                 message.set('isRead', true);
-                await message.save();
-            }
+                return message.save();
+            });
             
+            await Promise.all(savePromises);
             return { success: true };
         } catch (error) {
+            console.error('Mark messages as read error:', error);
             return { success: false, error: error.message };
         }
     },
@@ -798,7 +838,7 @@ const Backend = {
                 const sender = msg.get('sender');
                 const recipientId = msg.get('recipientId');
                 
-                let partnerId, partnerName;
+                let partnerId, partnerName, isOnline = false;
                 
                 if (sender && sender.id === currentUserId) {
                     partnerId = recipientId;
@@ -806,6 +846,7 @@ const Backend = {
                         const userQuery = new Parse.Query(Parse.User);
                         const partnerUser = await userQuery.get(partnerId);
                         partnerName = partnerUser.get('username') || 'Unknown User';
+                        isOnline = partnerUser.get('isOnline') || false;
                     } catch (error) {
                         partnerName = 'Unknown User';
                         console.warn('Could not fetch partner user:', error);
@@ -813,11 +854,12 @@ const Backend = {
                 } else if (sender) {
                     partnerId = sender.id;
                     partnerName = sender.get('username') || 'Unknown User';
+                    isOnline = sender.get('isOnline') || false;
                 } else {
                     continue;
                 }
                 
-                if (!chatMap.has(partnerId)) {
+                if (partnerId && !chatMap.has(partnerId)) {
                     let unreadCount = 0;
                     try {
                         unreadCount = await this.getUnreadCount(partnerId);
@@ -831,24 +873,12 @@ const Backend = {
                         lastMessage: msg.get('message') || '',
                         timestamp: msg.get('timestamp'),
                         unreadCount: unreadCount,
-                        isOnline: false
+                        isOnline: isOnline
                     });
                 }
             }
             
             const chats = Array.from(chatMap.values());
-            for (const chat of chats) {
-                try {
-                    const userQuery = new Parse.Query(Parse.User);
-                    const partnerUser = await userQuery.get(chat.id);
-                    chat.isOnline = partnerUser.get('isOnline') || false;
-                    chat.lastSeen = partnerUser.get('lastSeen');
-                } catch (error) {
-                    chat.isOnline = false;
-                    console.warn('Could not update online status:', error);
-                }
-            }
-            
             chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             
             return { success: true, chats };
@@ -873,6 +903,7 @@ const Backend = {
             
             return await query.count();
         } catch (error) {
+            console.error('Get unread count error:', error);
             return 0;
         }
     },
@@ -889,6 +920,7 @@ const Backend = {
             
             return { success: true };
         } catch (error) {
+            console.error('Update activity error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -902,7 +934,7 @@ Backend.startActivityTracking = function() {
     if (activityInterval) clearInterval(activityInterval);
     
     activityInterval = setInterval(async () => {
-        if (Backend.isLoggedIn()) {
+        if (Backend.isLoggedIn() && !document.hidden) {
             await Backend.updateActivity();
         }
     }, 30000);
@@ -920,9 +952,10 @@ Backend.stopActivityTracking = function() {
 document.addEventListener('visibilitychange', async () => {
     if (Backend.isLoggedIn()) {
         if (document.hidden) {
+            await Backend.updateUserStatus(false);
             Backend.stopActivityTracking();
         } else {
-            await Backend.updateActivity();
+            await Backend.updateUserStatus(true);
             Backend.startActivityTracking();
         }
     }
@@ -932,6 +965,7 @@ document.addEventListener('visibilitychange', async () => {
 window.addEventListener('beforeunload', async () => {
     if (Backend.isLoggedIn()) {
         await Backend.updateUserStatus(false);
+        Backend.stopActivityTracking();
     }
 });
 
