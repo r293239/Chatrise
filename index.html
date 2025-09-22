@@ -269,10 +269,11 @@
             const userDiv = document.createElement('div');
             userDiv.className = 'user-result';
             
-            // Profile picture or initial
-            let avatarContent = `<span>${user.username[0].toUpperCase()}</span>`;
+            // Profile picture or initial - safe fallback
+            const initial = user.username && user.username.length > 0 ? user.username[0].toUpperCase() : '?';
+            let avatarContent = `<span>${initial}</span>`;
             if (user.profilePictureUrl) {
-                avatarContent = `<img src="${user.profilePictureUrl}" onerror="this.parentElement.innerHTML='<span>${user.username[0].toUpperCase()}</span>'">`;
+                avatarContent = `<img src="${user.profilePictureUrl}" onerror="this.parentElement.innerHTML='<span>${initial}</span>'">`;
             }
             
             const isOnline = user.isOnline;
@@ -317,7 +318,7 @@
                     ${isOnline ? '<div class="chat-online-dot"></div>' : ''}
                 </div>
                 <div class="user-result-info">
-                    <div class="user-result-name">${user.username}</div>
+                    <div class="user-result-name">${user.username || 'Unknown User'}</div>
                     <div class="user-result-status ${isOnline ? 'online' : ''}">
                         ${isOnline ? '🟢' : '⚫'} ${statusText}
                     </div>
@@ -336,9 +337,10 @@
             const contactDiv = document.createElement('div');
             contactDiv.className = 'contact-item';
             
-            let avatarContent = `<span>${contact.username[0].toUpperCase()}</span>`;
+            const initial = contact.username && contact.username.length > 0 ? contact.username[0].toUpperCase() : '?';
+            let avatarContent = `<span>${initial}</span>`;
             if (contact.profilePictureUrl) {
-                avatarContent = `<img src="${contact.profilePictureUrl}" onerror="this.parentElement.innerHTML='<span>${contact.username[0].toUpperCase()}</span>'">`;
+                avatarContent = `<img src="${contact.profilePictureUrl}" onerror="this.parentElement.innerHTML='<span>${initial}</span>'">`;
             }
             
             const statusText = contact.isOnline ? 'Online now' : formatLastSeen(contact.lastSeen);
@@ -424,12 +426,141 @@
         // Rest of the functions continue...
         // Tab switching, data loading, chat functions, etc. (to complete the file)
         
-        // For now, adding essential functions to complete the corrected structure
-        function switchTab(tabName) { /* Implementation */ }
-        function loadAllData() { /* Implementation */ }
-        function startAutoRefresh() { /* Implementation */ }
+        // Tab switching
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName + 'Content').classList.add('active');
+        }
         
-        // ... All other existing functions from your original file would continue here
+        async function loadAllData() {
+            console.log('Loading all data...');
+            // Implement data loading
+        }
+        
+        function startAutoRefresh() {
+            console.log('Starting auto refresh...');
+            // Implement auto refresh
+        }
+        
+        // Contact management functions
+        async function addContact(userId, username) {
+            try {
+                showNotification('Sending contact request...', 'info', 2000);
+                const result = await Backend.addContact(userId, username);
+                
+                if (result.success) {
+                    showNotification('Contact request sent to ' + username + '!', 'success');
+                    hideUsers();
+                } else {
+                    showNotification(result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Add contact error:', error);
+                showNotification('Failed to send contact request', 'error');
+            }
+        }
+        
+        function startChat(userId, username) {
+            console.log('Starting chat with:', username);
+            // Implement chat functionality
+        }
+        
+        function startChatFromUsers(userId, username) {
+            hideUsers();
+            startChat(userId, username);
+        }
+        
+        function acceptFromUsers(contactId, username) {
+            console.log('Accepting contact:', username);
+            // Implement accept functionality
+        }
+        
+        async function showUsers() {
+            document.getElementById('usersModal').style.display = 'block';
+        }
+        
+        function hideUsers() {
+            document.getElementById('usersModal').style.display = 'none';
+        }
+        
+        function formatTime(date) {
+            if (!date) return '';
+            
+            const now = new Date();
+            const messageDate = new Date(date);
+            const diffInHours = (now - messageDate) / (1000 * 60 * 60);
+            
+            if (diffInHours < 1) {
+                return 'now';
+            } else if (diffInHours < 24) {
+                return messageDate.toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: false 
+                });
+            } else {
+                return messageDate.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+            }
+        }
+        
+        function formatLastSeen(lastSeen) {
+            if (!lastSeen) return 'Last seen long ago';
+            
+            const now = new Date();
+            const seenDate = new Date(lastSeen);
+            const diffInMinutes = Math.floor((now - seenDate) / (1000 * 60));
+            
+            if (diffInMinutes < 1) {
+                return 'Just now';
+            } else if (diffInMinutes < 60) {
+                return 'Last seen ' + diffInMinutes + 'm ago';
+            } else if (diffInMinutes < 1440) {
+                const hours = Math.floor(diffInMinutes / 60);
+                return 'Last seen ' + hours + 'h ago';
+            } else {
+                const days = Math.floor(diffInMinutes / 1440);
+                if (days < 7) {
+                    return 'Last seen ' + days + 'd ago';
+                } else {
+                    return 'Last seen long ago';
+                }
+            }
+        }
+        
+        function showNotification(message, type, duration) {
+            type = type || 'info';
+            duration = duration || 4000;
+            
+            const existing = document.querySelector('.notification');
+            if (existing) existing.remove();
+            
+            const notification = document.createElement('div');
+            notification.className = 'notification ' + type;
+            notification.innerHTML = message + '<button style="background:none;border:none;color:white;float:right;cursor:pointer;margin-left:12px;" onclick="this.parentElement.remove()">×</button>';
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(function() {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, duration);
+        }
+        
+        function logout() {
+            Backend.logout();
+            window.location.href = 'login.html';
+        }
     </script>
     
     <!-- External backend.js file should be included here -->
