@@ -401,7 +401,26 @@ const Backend = {
             return { success: false, error: error.message };
         }
     },
-    
+    // List all other users (for sending requests)
+async listUsers() {
+    try {
+        const currentUser = Parse.User.current();
+
+        const query = new Parse.Query(Parse.User);
+        query.notEqualTo('objectId', currentUser.id); // exclude yourself
+        query.select('username'); // only send safe fields
+        const results = await query.find();
+
+        return results.map(user => ({
+            id: user.id,
+            username: user.get('username'),
+        }));
+    } catch (error) {
+        console.error('List users error:', error);
+        return [];
+    }
+},
+
     // Accept contact request
     async acceptContact(contactId) {
         try {
@@ -428,6 +447,17 @@ const Backend = {
         }
     },
     
+ // List all other users for sending contact requests
+app.get('/users', async (req, res) => {
+    try {
+        const users = await backend.listUsers();
+        res.json({ success: true, users });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+   
     // Reject/Remove contact
     async removeContact(contactId) {
         try {
