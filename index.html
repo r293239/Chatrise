@@ -60,8 +60,6 @@
             font-size: 18px;
             border: 2px solid rgba(255,255,255,0.3);
             position: relative;
-            background-size: cover;
-            background-position: center;
         }
         
         .online-indicator {
@@ -256,8 +254,6 @@
             font-weight: bold;
             font-size: 18px;
             position: relative;
-            background-size: cover;
-            background-position: center;
         }
         
         .global-avatar {
@@ -375,6 +371,7 @@
             flex-direction: column;
             min-width: 0;
             min-height: 0;
+
         }
         
         .chat-header {
@@ -431,8 +428,6 @@
             font-weight: bold;
             font-size: 18px;
             position: relative;
-            background-size: cover;
-            background-position: center;
         }
         
         .chat-header-details h3 {
@@ -704,41 +699,6 @@
             overflow-y: auto;
         }
         
-        .email-search-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .email-search-box input {
-            flex: 1;
-            padding: 12px 15px;
-            border: 1px solid #e1e5e9;
-            border-radius: 20px;
-            outline: none;
-            font-size: 14px;
-        }
-        
-        .search-email-btn {
-            padding: 12px 20px;
-            background: #25d366;
-            color: white;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: background 0.2s;
-        }
-        
-        .search-email-btn:hover {
-            background: #20b858;
-        }
-        
-        .search-email-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
         .user-result {
             display: flex;
             align-items: center;
@@ -747,12 +707,10 @@
             transition: all 0.2s;
             margin-bottom: 8px;
             position: relative;
-            border: 1px solid #f0f0f0;
         }
         
         .user-result:hover {
             background: #f8f9fa;
-            border-color: #25d366;
         }
         
         .user-result-avatar {
@@ -768,8 +726,6 @@
             font-size: 18px;
             margin-right: 15px;
             position: relative;
-            background-size: cover;
-            background-position: center;
         }
         
         .user-result-info {
@@ -782,26 +738,13 @@
             font-size: 16px;
         }
         
-        .user-result-email {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 2px;
-        }
-        
         .user-result-status {
             color: #666;
-            font-size: 12px;
+            font-size: 14px;
         }
         
         .user-result-status.online {
             color: #25d366;
-        }
-        
-        .user-result-description {
-            color: #888;
-            font-size: 12px;
-            font-style: italic;
-            margin-top: 4px;
         }
         
         .user-result-actions {
@@ -1033,7 +976,7 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button class="action-btn" onclick="showAddContact()" title="Add Contact by Email">
+                    <button class="action-btn" onclick="showUsers()" title="Find People">
                         <i class="fas fa-user-plus"></i>
                     </button>
                     <button class="action-btn" onclick="refreshAll()" title="Refresh">
@@ -1109,7 +1052,7 @@
                     <i class="fas fa-comments"></i>
                 </div>
                 <h2>Welcome to ChatRise</h2>
-                <p>Select a chat to start messaging, add contacts by email, or join the global conversation</p>
+                <p>Select a chat to start messaging, add contacts, or join the global conversation</p>
             </div>
             
             <div id="chatContent" class="hidden">
@@ -1155,25 +1098,21 @@
         </div>
     </div>
     
-    <!-- Add Contact Modal -->
-    <div id="addContactModal" class="modal">
+    <!-- Users Modal -->
+    <div id="usersModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3><i class="fas fa-user-plus"></i> Add Contact by Email</h3>
-                <button class="close" onclick="hideAddContact()">×</button>
+                <h3><i class="fas fa-users"></i> Find People</h3>
+                <button class="close" onclick="hideUsers()">×</button>
             </div>
             <div class="modal-body">
-                <div class="email-search-box">
-                    <input type="email" placeholder="Enter email address..." id="emailSearchInput">
-                    <button class="search-email-btn" onclick="searchByEmail()" id="searchEmailBtn">
-                        <i class="fas fa-search"></i> Search
-                    </button>
+                <div class="search-box">
+                    <input type="text" placeholder="Search users..." id="userSearchInput" onkeyup="searchUsers()">
                 </div>
-                <div id="emailSearchResult">
-                    <div class="empty-state">
-                        <i class="fas fa-envelope"></i>
-                        <h3>Find People by Email</h3>
-                        <p>Enter an email address to find and connect with other users</p>
+                <div id="usersList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Loading users...
                     </div>
                 </div>
             </div>
@@ -1182,749 +1121,7 @@
 
     <script>
         // Include the enhanced backend script here
-        // Initialize Parse immediately
-        Parse.initialize('z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT', 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV');
-        Parse.serverURL = 'https://parseapi.back4app.com';
-
-        // Enhanced Backend Object with Email-based Contact System
-        const Backend = {
-            
-            // Check if user is logged in
-            isLoggedIn() {
-                return Parse.User.current() !== null;
-            },
-            
-            // Get current user
-            getCurrentUser() {
-                return Parse.User.current();
-            },
-            
-            // Login
-            async login(username, password) {
-                try {
-                    const user = await Parse.User.logIn(username, password);
-                    await this.updateUserStatus(true);
-                    return { success: true, user };
-                } catch (error) {
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Register
-            async register(username, email, password) {
-                try {
-                    const user = new Parse.User();
-                    user.set('username', username);
-                    user.set('email', email);
-                    user.set('password', password);
-                    user.set('isOnline', true);
-                    user.set('lastSeen', new Date());
-                    user.set('joinedAt', new Date());
-                    user.set('description', '');
-                    user.set('profilePicture', null);
-                    
-                    const result = await user.signUp();
-                    await this.updateUserStatus(true);
-                    return { success: true, user: result };
-                } catch (error) {
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Logout
-            async logout() {
-                try {
-                    await this.updateUserStatus(false);
-                    this.stopActivityTracking();
-                    await Parse.User.logOut();
-                    return { success: true };
-                } catch (error) {
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Update user online status
-            async updateUserStatus(isOnline) {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) return { success: false, error: 'Not logged in' };
-                    
-                    currentUser.set('isOnline', isOnline);
-                    currentUser.set('lastSeen', new Date());
-                    await currentUser.save();
-                    return { success: true };
-                } catch (error) {
-                    console.error('Update status error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // =============== EMAIL-BASED CONTACT SYSTEM FUNCTIONS ===============
-            
-            // Add contact by email (send friend request)
-            async addContactByEmail(email) {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) {
-                        return { success: false, error: 'Not logged in' };
-                    }
-                    
-                    // Validate email format
-                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                        return { success: false, error: 'Please enter a valid email address' };
-                    }
-                    
-                    // Check if trying to add own email
-                    if (email.toLowerCase() === currentUser.get('email').toLowerCase()) {
-                        return { success: false, error: 'Cannot add yourself as contact' };
-                    }
-                    
-                    // Find user by email
-                    const userQuery = new Parse.Query(Parse.User);
-                    userQuery.equalTo('email', email.toLowerCase());
-                    const targetUser = await userQuery.first();
-                    
-                    if (!targetUser) {
-                        return { success: false, error: 'No user found with this email address' };
-                    }
-                    
-                    // Check if contact already exists
-                    const existingContact = await this.getContactStatus(targetUser.id);
-                    if (existingContact.isContact || existingContact.isPending) {
-                        return { success: false, error: 'Contact already exists or request pending' };
-                    }
-                    
-                    const Contact = Parse.Object.extend('Contact');
-                    const contact = new Contact();
-                    
-                    contact.set('from', currentUser);
-                    contact.set('to', targetUser);
-                    contact.set('fromUsername', currentUser.get('username'));
-                    contact.set('toUsername', targetUser.get('username'));
-                    contact.set('fromEmail', currentUser.get('email'));
-                    contact.set('toEmail', targetUser.get('email'));
-                    contact.set('status', 'pending');
-                    contact.set('timestamp', new Date());
-                    
-                    const result = await contact.save();
-                    return { 
-                        success: true, 
-                        contact: result,
-                        message: `Contact request sent to ${targetUser.get('username')} (${email})`
-                    };
-                } catch (error) {
-                    console.error('Add contact by email error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Search for users by email
-            async searchUserByEmail(email) {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) {
-                        return { success: false, error: 'Not logged in' };
-                    }
-                    
-                    // Validate email format
-                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                        return { success: false, error: 'Please enter a valid email address' };
-                    }
-                    
-                    // Check if trying to search own email
-                    if (email.toLowerCase() === currentUser.get('email').toLowerCase()) {
-                        return { success: false, error: 'Cannot search for yourself' };
-                    }
-                    
-                    // Find user by email
-                    const userQuery = new Parse.Query(Parse.User);
-                    userQuery.equalTo('email', email.toLowerCase());
-                    const user = await userQuery.first();
-                    
-                    if (!user) {
-                        return { success: false, error: 'No user found with this email address' };
-                    }
-                    
-                    // Get contact status
-                    const contactStatus = await this.getContactStatus(user.id);
-                    const profilePicture = user.get('profilePicture');
-                    
-                    return {
-                        success: true,
-                        user: {
-                            id: user.id,
-                            username: user.get('username'),
-                            email: user.get('email'),
-                            description: user.get('description') || '',
-                            profilePictureUrl: profilePicture ? profilePicture.url() : null,
-                            isOnline: user.get('isOnline') || false,
-                            lastSeen: user.get('lastSeen'),
-                            ...contactStatus
-                        }
-                    };
-                } catch (error) {
-                    console.error('Search user by email error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Accept contact request
-            async acceptContact(contactId) {
-                try {
-                    const Contact = Parse.Object.extend('Contact');
-                    const query = new Parse.Query(Contact);
-                    const contact = await query.get(contactId);
-                    
-                    // Verify this request was sent to current user
-                    const currentUser = Parse.User.current();
-                    const toUser = contact.get('to');
-                    
-                    if (!toUser || toUser.id !== currentUser.id) {
-                        return { success: false, error: 'Unauthorized' };
-                    }
-                    
-                    contact.set('status', 'accepted');
-                    contact.set('acceptedAt', new Date());
-                    await contact.save();
-                    
-                    return { success: true };
-                } catch (error) {
-                    console.error('Accept contact error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Reject/Remove contact
-            async removeContact(contactId) {
-                try {
-                    const Contact = Parse.Object.extend('Contact');
-                    const query = new Parse.Query(Contact);
-                    const contact = await query.get(contactId);
-                    
-                    // Verify user has permission to delete this contact
-                    const currentUser = Parse.User.current();
-                    const fromUser = contact.get('from');
-                    const toUser = contact.get('to');
-                    
-                    if ((!fromUser || fromUser.id !== currentUser.id) && 
-                        (!toUser || toUser.id !== currentUser.id)) {
-                        return { success: false, error: 'Unauthorized' };
-                    }
-                    
-                    await contact.destroy();
-                    return { success: true };
-                } catch (error) {
-                    console.error('Remove contact error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Get contact status between current user and another user
-            async getContactStatus(userId) {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) return { isContact: false, isPending: false };
-                    
-                    const Contact = Parse.Object.extend('Contact');
-                    
-                    // Check if we sent a request to them or they sent to us
-                    const query1 = new Parse.Query(Contact);
-                    query1.equalTo('from', currentUser);
-                    query1.equalTo('to', { __type: 'Pointer', className: '_User', objectId: userId });
-                    
-                    const query2 = new Parse.Query(Contact);
-                    query2.equalTo('to', currentUser);
-                    query2.equalTo('from', { __type: 'Pointer', className: '_User', objectId: userId });
-                    
-                    const mainQuery = Parse.Query.or(query1, query2);
-                    const contacts = await mainQuery.find();
-                    
-                    if (contacts.length === 0) {
-                        return { isContact: false, isPending: false, canAdd: true };
-                    }
-                    
-                    const contact = contacts[0];
-                    const status = contact.get('status');
-                    const fromId = contact.get('from').id;
-                    const currentUserId = currentUser.id;
-                    
-                    return {
-                        isContact: status === 'accepted',
-                        isPending: status === 'pending',
-                        canAdd: false,
-                        contactId: contact.id,
-                        sentByMe: fromId === currentUserId,
-                        receivedByMe: fromId !== currentUserId
-                    };
-                } catch (error) {
-                    console.error('Get contact status error:', error);
-                    return { isContact: false, isPending: false, canAdd: true };
-                }
-            },
-            
-            // Get all contacts (accepted friends)
-            async getContacts() {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) {
-                        return { success: false, error: 'Not logged in' };
-                    }
-                    
-                    const Contact = Parse.Object.extend('Contact');
-                    
-                    // Get contacts where current user is 'from' or 'to' and status is accepted
-                    const query1 = new Parse.Query(Contact);
-                    query1.equalTo('from', currentUser);
-                    query1.equalTo('status', 'accepted');
-                    query1.include('to');
-                    
-                    const query2 = new Parse.Query(Contact);
-                    query2.equalTo('to', currentUser);
-                    query2.equalTo('status', 'accepted');
-                    query2.include('from');
-                    
-                    const mainQuery = Parse.Query.or(query1, query2);
-                    mainQuery.descending('acceptedAt');
-                    
-                    const contacts = await mainQuery.find();
-                    
-                    // Process contacts to get friend info with profiles
-                    const friends = [];
-                    for (const contact of contacts) {
-                        const fromUser = contact.get('from');
-                        const toUser = contact.get('to');
-                        const currentUserId = currentUser.id;
-                        
-                        // Determine which user is the friend
-                        const friend = fromUser.id === currentUserId ? toUser : fromUser;
-                        
-                        if (friend) {
-                            const profilePicture = friend.get('profilePicture');
-                            
-                            friends.push({
-                                contactId: contact.id,
-                                userId: friend.id,
-                                username: friend.get('username'),
-                                email: friend.get('email'),
-                                description: friend.get('description') || '',
-                                profilePictureUrl: profilePicture ? profilePicture.url() : null,
-                                isOnline: friend.get('isOnline') || false,
-                                lastSeen: friend.get('lastSeen'),
-                                acceptedAt: contact.get('acceptedAt')
-                            });
-                        }
-                    }
-                    
-                    return { success: true, contacts: friends };
-                } catch (error) {
-                    console.error('Get contacts error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Get pending contact requests (received)
-            async getPendingRequests() {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) {
-                        return { success: false, error: 'Not logged in' };
-                    }
-                    
-                    const Contact = Parse.Object.extend('Contact');
-                    const query = new Parse.Query(Contact);
-                    query.equalTo('to', currentUser);
-                    query.equalTo('status', 'pending');
-                    query.include('from');
-                    query.descending('timestamp');
-                    
-                    const requests = await query.find();
-                    
-                    const pendingRequests = requests.map(request => {
-                        const fromUser = request.get('from');
-                        const profilePicture = fromUser.get('profilePicture');
-                        
-                        return {
-                            contactId: request.id,
-                            fromUserId: fromUser.id,
-                            fromUsername: fromUser.get('username'),
-                            fromEmail: fromUser.get('email'),
-                            description: fromUser.get('description') || '',
-                            profilePictureUrl: profilePicture ? profilePicture.url() : null,
-                            timestamp: request.get('timestamp'),
-                            isOnline: fromUser.get('isOnline') || false,
-                            lastSeen: fromUser.get('lastSeen')
-                        };
-                    });
-                    
-                    return { success: true, requests: pendingRequests };
-                } catch (error) {
-                    console.error('Get pending requests error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Get sent requests (pending requests sent by current user)
-            async getSentRequests() {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) {
-                        return { success: false, error: 'Not logged in' };
-                    }
-                    
-                    const Contact = Parse.Object.extend('Contact');
-                    const query = new Parse.Query(Contact);
-                    query.equalTo('from', currentUser);
-                    query.equalTo('status', 'pending');
-                    query.include('to');
-                    query.descending('timestamp');
-                    
-                    const requests = await query.find();
-                    
-                    const sentRequests = requests.map(request => {
-                        const toUser = request.get('to');
-                        const profilePicture = toUser.get('profilePicture');
-                        
-                        return {
-                            contactId: request.id,
-                            toUserId: toUser.id,
-                            toUsername: toUser.get('username'),
-                            toEmail: toUser.get('email'),
-                            description: toUser.get('description') || '',
-                            profilePictureUrl: profilePicture ? profilePicture.url() : null,
-                            timestamp: request.get('timestamp'),
-                            isOnline: toUser.get('isOnline') || false,
-                            lastSeen: toUser.get('lastSeen')
-                        };
-                    });
-                    
-                    return { success: true, requests: sentRequests };
-                } catch (error) {
-                    console.error('Get sent requests error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // =============== MESSAGING FUNCTIONS ===============
-            
-            // Get online users count
-            async getOnlineUsersCount() {
-                try {
-                    const query = new Parse.Query(Parse.User);
-                    query.equalTo('isOnline', true);
-                    const count = await query.count();
-                    return { success: true, count };
-                } catch (error) {
-                    console.error('Get online users count error:', error);
-                    return { success: false, error: error.message, count: 0 };
-                }
-            },
-            
-            // Send private message
-            async sendMessage(recipientId, message) {
-                try {
-                    const Message = Parse.Object.extend('Message');
-                    const msg = new Message();
-                    
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) {
-                        return { success: false, error: 'Not logged in' };
-                    }
-                    
-                    msg.set('sender', currentUser);
-                    msg.set('senderName', currentUser.get('username'));
-                    msg.set('recipientId', recipientId);
-                    msg.set('message', message);
-                    msg.set('timestamp', new Date());
-                    msg.set('isRead', false);
-                    msg.set('messageType', 'private');
-                    
-                    const result = await msg.save();
-                    return { success: true, message: result };
-                } catch (error) {
-                    console.error('Send message error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Send global message
-            async sendGlobalMessage(message) {
-                try {
-                    const Message = Parse.Object.extend('Message');
-                    const msg = new Message();
-                    
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) {
-                        return { success: false, error: 'Not logged in' };
-                    }
-                    
-                    msg.set('sender', currentUser);
-                    msg.set('senderName', currentUser.get('username'));
-                    msg.set('recipientId', 'GLOBAL_CHAT');
-                    msg.set('message', message);
-                    msg.set('timestamp', new Date());
-                    msg.set('isRead', true);
-                    msg.set('messageType', 'global');
-                    msg.set('isGlobal', true);
-                    
-                    const result = await msg.save();
-                    return { success: true, message: result };
-                } catch (error) {
-                    console.error('Global message send error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Get messages between users
-            async getMessages(userId) {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) {
-                        return { success: false, error: 'Not logged in' };
-                    }
-                    
-                    const Message = Parse.Object.extend('Message');
-                    
-                    const query1 = new Parse.Query(Message);
-                    query1.equalTo('sender', currentUser);
-                    query1.equalTo('recipientId', userId);
-                    query1.notEqualTo('messageType', 'global');
-                    
-                    const query2 = new Parse.Query(Message);
-                    query2.equalTo('recipientId', currentUser.id);
-                    query2.notEqualTo('messageType', 'global');
-                    
-                    const senderUser = { __type: 'Pointer', className: '_User', objectId: userId };
-                    query2.equalTo('sender', senderUser);
-                    
-                    const mainQuery = Parse.Query.or(query1, query2);
-                    mainQuery.ascending('timestamp');
-                    mainQuery.limit(100);
-                    mainQuery.include('sender');
-                    
-                    const messages = await mainQuery.find();
-                    await this.markMessagesAsRead(userId);
-                    
-                    return { success: true, messages };
-                } catch (error) {
-                    console.error('Get messages error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Get global messages
-            async getGlobalMessages() {
-                try {
-                    const Message = Parse.Object.extend('Message');
-                    const query = new Parse.Query(Message);
-                    
-                    query.equalTo('recipientId', 'GLOBAL_CHAT');
-                    query.equalTo('messageType', 'global');
-                    query.ascending('timestamp');
-                    query.limit(50);
-                    query.include('sender');
-                    
-                    const messages = await query.find();
-                    return { success: true, messages };
-                } catch (error) {
-                    console.error('Global messages error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Mark messages as read
-            async markMessagesAsRead(senderId) {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) return { success: false };
-                    
-                    const Message = Parse.Object.extend('Message');
-                    const query = new Parse.Query(Message);
-                    query.equalTo('recipientId', currentUser.id);
-                    query.equalTo('sender', { __type: 'Pointer', className: '_User', objectId: senderId });
-                    query.equalTo('isRead', false);
-                    
-                    const messages = await query.find();
-                    
-                    const savePromises = messages.map(message => {
-                        message.set('isRead', true);
-                        return message.save();
-                    });
-                    
-                    await Promise.all(savePromises);
-                    return { success: true };
-                } catch (error) {
-                    console.error('Mark messages as read error:', error);
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Get recent chats
-            async getChats() {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) {
-                        return { success: false, error: 'Not logged in' };
-                    }
-                    
-                    const Message = Parse.Object.extend('Message');
-                    
-                    const query1 = new Parse.Query(Message);
-                    query1.equalTo('sender', currentUser);
-                    query1.notEqualTo('messageType', 'global');
-                    
-                    const query2 = new Parse.Query(Message);
-                    query2.equalTo('recipientId', currentUser.id);
-                    query2.notEqualTo('messageType', 'global');
-                    
-                    const mainQuery = Parse.Query.or(query1, query2);
-                    mainQuery.descending('timestamp');
-                    mainQuery.limit(200);
-                    mainQuery.include('sender');
-                    
-                    const messages = await mainQuery.find();
-                    
-                    const chatMap = new Map();
-                    const currentUserId = currentUser.id;
-                    
-                    for (const msg of messages) {
-                        const sender = msg.get('sender');
-                        const recipientId = msg.get('recipientId');
-                        
-                        let partnerId, partnerName, isOnline = false;
-                        
-                        if (sender && sender.id === currentUserId) {
-                            partnerId = recipientId;
-                            try {
-                                const userQuery = new Parse.Query(Parse.User);
-                                const partnerUser = await userQuery.get(partnerId);
-                                partnerName = partnerUser.get('username') || 'Unknown User';
-                                isOnline = partnerUser.get('isOnline') || false;
-                            } catch (error) {
-                                partnerName = 'Unknown User';
-                                console.warn('Could not fetch partner user:', error);
-                            }
-                        } else if (sender) {
-                            partnerId = sender.id;
-                            partnerName = sender.get('username') || 'Unknown User';
-                            isOnline = sender.get('isOnline') || false;
-                        } else {
-                            continue;
-                        }
-                        
-                        if (partnerId && !chatMap.has(partnerId)) {
-                            let unreadCount = 0;
-                            try {
-                                unreadCount = await this.getUnreadCount(partnerId);
-                            } catch (error) {
-                                console.warn('Could not get unread count:', error);
-                            }
-                            
-                            chatMap.set(partnerId, {
-                                id: partnerId,
-                                name: partnerName,
-                                lastMessage: msg.get('message') || '',
-                                timestamp: msg.get('timestamp'),
-                                unreadCount: unreadCount,
-                                isOnline: isOnline
-                            });
-                        }
-                    }
-                    
-                    const chats = Array.from(chatMap.values());
-                    chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                    
-                    return { success: true, chats };
-                } catch (error) {
-                    console.error('Get chats error:', error);
-                    return { success: false, error: error.message, chats: [] };
-                }
-            },
-            
-            // Get unread message count
-            async getUnreadCount(senderId) {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) return 0;
-                    
-                    const Message = Parse.Object.extend('Message');
-                    const query = new Parse.Query(Message);
-                    query.equalTo('recipientId', currentUser.id);
-                    query.equalTo('sender', { __type: 'Pointer', className: '_User', objectId: senderId });
-                    query.equalTo('isRead', false);
-                    query.notEqualTo('messageType', 'global');
-                    
-                    return await query.count();
-                } catch (error) {
-                    console.error('Get unread count error:', error);
-                    return 0;
-                }
-            },
-            
-            // Update user activity
-            async updateActivity() {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) return { success: false };
-                    
-                    currentUser.set('lastSeen', new Date());
-                    currentUser.set('isOnline', true);
-                    await currentUser.save();
-                    
-                    return { success: true };
-                } catch (error) {
-                    console.error('Update activity error:', error);
-                    return { success: false, error: error.message };
-                }
-            }
-        };
-
-        // Auto-update user activity every 30 seconds
-        let activityInterval = null;
-
-        // Start activity tracking
-        Backend.startActivityTracking = function() {
-            if (activityInterval) clearInterval(activityInterval);
-            
-            activityInterval = setInterval(async () => {
-                if (Backend.isLoggedIn() && !document.hidden) {
-                    await Backend.updateActivity();
-                }
-            }, 30000);
-        };
-
-        // Stop activity tracking
-        Backend.stopActivityTracking = function() {
-            if (activityInterval) {
-                clearInterval(activityInterval);
-                activityInterval = null;
-            }
-        };
-
-        // Handle page visibility changes
-        document.addEventListener('visibilitychange', async () => {
-            if (Backend.isLoggedIn()) {
-                if (document.hidden) {
-                    await Backend.updateUserStatus(false);
-                    Backend.stopActivityTracking();
-                } else {
-                    await Backend.updateUserStatus(true);
-                    Backend.startActivityTracking();
-                }
-            }
-        });
-
-        // Handle page unload
-        window.addEventListener('beforeunload', async () => {
-            if (Backend.isLoggedIn()) {
-                await Backend.updateUserStatus(false);
-                Backend.stopActivityTracking();
-            }
-        });
-
-        // Make Backend available globally
-        window.Backend = Backend;
-        
-        // =============== MAIN APPLICATION CODE ===============
+        // (The backend script from the previous artifact would go here)
         
         let currentChatId = null;
         let currentChatName = '';
@@ -1943,18 +1140,8 @@
             }
             
             const user = Backend.getCurrentUser();
-            const username = user.get('username');
-            const profilePicture = user.get('profilePicture');
-            
-            document.getElementById('username-display').textContent = username;
-            
-            const userAvatar = document.getElementById('userAvatar');
-            if (profilePicture && profilePicture.url) {
-                userAvatar.style.backgroundImage = `url(${profilePicture.url()})`;
-                userAvatar.textContent = '';
-            } else {
-                userAvatar.textContent = username[0].toUpperCase();
-            }
+            document.getElementById('username-display').textContent = user.get('username');
+            document.getElementById('userAvatar').textContent = user.get('username')[0].toUpperCase();
             
             Backend.startActivityTracking();
             await loadAllData();
@@ -2087,17 +1274,9 @@
                         
                         const statusText = contact.isOnline ? 'Online now' : formatLastSeen(contact.lastSeen);
                         
-                        // Create avatar with profile picture if available
-                        let avatarContent = contact.username[0].toUpperCase();
-                        let avatarStyle = '';
-                        if (contact.profilePictureUrl) {
-                            avatarStyle = `style="background-image: url('${contact.profilePictureUrl}'); background-size: cover; background-position: center;"`;
-                            avatarContent = '';
-                        }
-                        
                         contactDiv.innerHTML = `
-                            <div class="contact-avatar" ${avatarStyle}>
-                                ${avatarContent}
+                            <div class="contact-avatar">
+                                ${contact.username[0].toUpperCase()}
                                 ${contact.isOnline ? '<div class="chat-online-dot"></div>' : ''}
                             </div>
                             <div class="contact-info">
@@ -2105,7 +1284,6 @@
                                 <div class="contact-status ${contact.isOnline ? 'online' : ''}">
                                     ${contact.isOnline ? '🟢' : '⚫'} ${statusText}
                                 </div>
-                                ${contact.description ? `<div class="user-result-description">${contact.description}</div>` : ''}
                             </div>
                             <div class="contact-actions">
                                 <button class="contact-btn message" onclick="startChat('${contact.userId}', '${contact.username}')" title="Message">
@@ -2126,7 +1304,7 @@
                     emptyDiv.innerHTML = `
                         <i class="fas fa-users"></i>
                         <h3>No contacts yet</h3>
-                        <p>Add people to your contacts by email to start chatting!</p>
+                        <p>Add people to your contacts to start chatting!</p>
                     `;
                     contactsContent.appendChild(emptyDiv);
                 }
@@ -2160,23 +1338,14 @@
                         const requestDiv = document.createElement('div');
                         requestDiv.className = 'contact-item';
                         
-                        // Create avatar with profile picture if available
-                        let avatarContent = request.fromUsername[0].toUpperCase();
-                        let avatarStyle = '';
-                        if (request.profilePictureUrl) {
-                            avatarStyle = `style="background-image: url('${request.profilePictureUrl}'); background-size: cover; background-position: center;"`;
-                            avatarContent = '';
-                        }
-                        
                         requestDiv.innerHTML = `
-                            <div class="contact-avatar" ${avatarStyle}>
-                                ${avatarContent}
+                            <div class="contact-avatar">
+                                ${request.fromUsername[0].toUpperCase()}
                                 ${request.isOnline ? '<div class="chat-online-dot"></div>' : ''}
                             </div>
                             <div class="contact-info">
                                 <div class="contact-name">${request.fromUsername}</div>
-                                <div class="contact-status">${request.fromEmail}</div>
-                                ${request.description ? `<div class="user-result-description">${request.description}</div>` : ''}
+                                <div class="contact-status">Wants to connect</div>
                             </div>
                             <div class="contact-actions">
                                 <button class="contact-btn accept" onclick="acceptContactRequest('${request.contactId}', '${request.fromUsername}')" title="Accept">
@@ -2202,23 +1371,14 @@
                         const requestDiv = document.createElement('div');
                         requestDiv.className = 'contact-item';
                         
-                        // Create avatar with profile picture if available
-                        let avatarContent = request.toUsername[0].toUpperCase();
-                        let avatarStyle = '';
-                        if (request.profilePictureUrl) {
-                            avatarStyle = `style="background-image: url('${request.profilePictureUrl}'); background-size: cover; background-position: center;"`;
-                            avatarContent = '';
-                        }
-                        
                         requestDiv.innerHTML = `
-                            <div class="contact-avatar" ${avatarStyle}>
-                                ${avatarContent}
+                            <div class="contact-avatar">
+                                ${request.toUsername[0].toUpperCase()}
                                 ${request.isOnline ? '<div class="chat-online-dot"></div>' : ''}
                             </div>
                             <div class="contact-info">
                                 <div class="contact-name">${request.toUsername}</div>
-                                <div class="contact-status">${request.toEmail}</div>
-                                ${request.description ? `<div class="user-result-description">${request.description}</div>` : ''}
+                                <div class="contact-status">Request pending</div>
                             </div>
                             <div class="contact-actions">
                                 <button class="contact-btn pending" onclick="cancelContactRequest('${request.contactId}', '${request.toUsername}')" title="Cancel Request">
@@ -2256,149 +1416,16 @@
             }
         }
         
-        // =============== EMAIL-BASED CONTACT FUNCTIONS ===============
-        
-        function showAddContact() {
-            document.getElementById('addContactModal').style.display = 'block';
-            document.getElementById('emailSearchInput').value = '';
-            document.getElementById('emailSearchResult').innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-envelope"></i>
-                    <h3>Find People by Email</h3>
-                    <p>Enter an email address to find and connect with other users</p>
-                </div>
-            `;
-            setTimeout(() => {
-                document.getElementById('emailSearchInput').focus();
-            }, 100);
-        }
-        
-        function hideAddContact() {
-            document.getElementById('addContactModal').style.display = 'none';
-        }
-        
-        async function searchByEmail() {
-            const emailInput = document.getElementById('emailSearchInput');
-            const email = emailInput.value.trim();
-            const searchBtn = document.getElementById('searchEmailBtn');
-            const resultDiv = document.getElementById('emailSearchResult');
-            
-            if (!email) {
-                showNotification('Please enter an email address', 'error');
-                return;
-            }
-            
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                showNotification('Please enter a valid email address', 'error');
-                return;
-            }
-            
-            searchBtn.disabled = true;
-            searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
-            
-            resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Searching...</div>';
-            
-            try {
-                const result = await Backend.searchUserByEmail(email);
-                
-                if (result.success) {
-                    const user = result.user;
-                    
-                    // Create avatar with profile picture if available
-                    let avatarContent = user.username[0].toUpperCase();
-                    let avatarStyle = '';
-                    if (user.profilePictureUrl) {
-                        avatarStyle = `style="background-image: url('${user.profilePictureUrl}'); background-size: cover; background-position: center;"`;
-                        avatarContent = '';
-                    }
-                    
-                    // Determine action buttons based on contact status
-                    let actionButtons = '';
-                    if (user.isContact) {
-                        actionButtons = `
-                            <button class="user-action-btn friends" title="Already Friends">
-                                <i class="fas fa-check"></i>
-                            </button>
-                            <button class="user-action-btn message" onclick="startChatFromEmail('${user.id}', '${user.username}')" title="Message">
-                                <i class="fas fa-comment"></i>
-                            </button>
-                        `;
-                    } else if (user.isPending) {
-                        if (user.sentByMe) {
-                            actionButtons = `
-                                <button class="user-action-btn pending" title="Request Sent">
-                                    <i class="fas fa-clock"></i>
-                                </button>
-                            `;
-                        } else {
-                            actionButtons = `
-                                <button class="user-action-btn accept" onclick="acceptFromEmail('${user.contactId}', '${user.username}')" title="Accept Request">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                            `;
-                        }
-                    } else {
-                        actionButtons = `
-                            <button class="user-action-btn add" onclick="addContactByEmail('${email}', '${user.username}')" title="Add Contact">
-                                <i class="fas fa-user-plus"></i>
-                            </button>
-                        `;
-                    }
-                    
-                    const statusText = user.isOnline ? 'Online now' : formatLastSeen(user.lastSeen);
-                    
-                    resultDiv.innerHTML = `
-                        <div class="user-result">
-                            <div class="user-result-avatar" ${avatarStyle}>
-                                ${avatarContent}
-                                ${user.isOnline ? '<div class="chat-online-dot"></div>' : ''}
-                            </div>
-                            <div class="user-result-info">
-                                <div class="user-result-name">${user.username}</div>
-                                <div class="user-result-email">${user.email}</div>
-                                <div class="user-result-status ${user.isOnline ? 'online' : ''}">
-                                    ${user.isOnline ? '🟢' : '⚫'} ${statusText}
-                                </div>
-                                ${user.description ? `<div class="user-result-description">${user.description}</div>` : ''}
-                            </div>
-                            <div class="user-result-actions">
-                                ${actionButtons}
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    resultDiv.innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-user-slash"></i>
-                            <h3>No user found</h3>
-                            <p>${result.error}</p>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                console.error('Email search error:', error);
-                resultDiv.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <h3>Search Error</h3>
-                        <p>Please try again</p>
-                    </div>
-                `;
-            }
-            
-            searchBtn.disabled = false;
-            searchBtn.innerHTML = '<i class="fas fa-search"></i> Search';
-        }
-        
-        async function addContactByEmail(email, username) {
+        // Contact management functions
+        async function addContact(userId, username) {
             try {
                 showNotification('Sending contact request...', 'info', 2000);
-                const result = await Backend.addContactByEmail(email);
+                const result = await Backend.addContact(userId, username);
                 
                 if (result.success) {
-                    showNotification(result.message, 'success');
+                    showNotification(`Contact request sent to ${username}! 📤`, 'success');
                     await loadRequests();
-                    hideAddContact();
+                    hideUsers();
                 } else {
                     showNotification(result.error, 'error');
                 }
@@ -2407,19 +1434,6 @@
                 showNotification('Failed to send contact request', 'error');
             }
         }
-        
-        function startChatFromEmail(userId, username) {
-            hideAddContact();
-            switchTab('chats');
-            startChat(userId, username);
-        }
-        
-        async function acceptFromEmail(contactId, username) {
-            await acceptContactRequest(contactId, username);
-            await searchByEmail(); // Refresh the search result
-        }
-        
-        // =============== CONTACT MANAGEMENT FUNCTIONS ===============
         
         async function acceptContactRequest(contactId, username) {
             try {
@@ -2490,8 +1504,6 @@
                 }
             }
         }
-        
-        // =============== CHAT FUNCTIONS ===============
         
         async function updateOnlineUsersCount() {
             try {
@@ -2650,7 +1662,6 @@
                     
                     if (result.messages.length === 0) {
                         container.innerHTML = `
-                        container.innerHTML = `
                             <div class="empty-state">
                                 <i class="fas fa-globe"></i>
                                 <h3>Welcome to Global Chat! 🌍</h3>
@@ -2757,6 +1768,153 @@
             input.focus();
         }
         
+        async function showUsers() {
+            document.getElementById('usersModal').style.display = 'block';
+            document.getElementById('userSearchInput').value = '';
+            
+            document.getElementById('usersList').innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
+            
+            await loadUsers();
+            setTimeout(() => {
+                document.getElementById('userSearchInput').focus();
+            }, 100);
+        }
+        
+        function hideUsers() {
+            document.getElementById('usersModal').style.display = 'none';
+        }
+        
+        async function loadUsers(searchTerm = '') {
+            const usersList = document.getElementById('usersList');
+            
+            try {
+                console.log('Loading users with search term:', searchTerm);
+                
+                const result = searchTerm && searchTerm.length >= 2 ? 
+                    await Backend.searchUsers(searchTerm) : 
+                    await Backend.getUsersWithContactStatus();
+                
+                console.log('Users loaded:', result);
+                
+                if (result.success) {
+                    usersList.innerHTML = '';
+                    
+                    if (result.users.length === 0) {
+                        usersList.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-user-slash"></i>
+                                <h3>No users found</h3>
+                                <p>${searchTerm ? 'Try a different search' : 'No other users available right now'}</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    result.users.forEach(user => {
+                        const isOnline = user.isOnline;
+                        const username = user.username || 'Unknown';
+                        const lastSeen = user.lastSeen;
+                        
+                        let statusText = isOnline ? 'Online now' : 'Offline';
+                        if (!isOnline && lastSeen) {
+                            statusText = formatLastSeen(lastSeen);
+                        }
+                        
+                        const userDiv = document.createElement('div');
+                        userDiv.className = 'user-result';
+                        
+                        // Determine action buttons based on contact status
+                        let actionButtons = '';
+                        if (user.isContact) {
+                            actionButtons = `
+                                <button class="user-action-btn friends" title="Already Friends">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="user-action-btn message" onclick="startChatFromUsers('${user.id}', '${username}')" title="Message">
+                                    <i class="fas fa-comment"></i>
+                                </button>
+                            `;
+                        } else if (user.isPending) {
+                            if (user.sentByMe) {
+                                actionButtons = `
+                                    <button class="user-action-btn pending" title="Request Sent">
+                                        <i class="fas fa-clock"></i>
+                                    </button>
+                                `;
+                            } else {
+                                actionButtons = `
+                                    <button class="user-action-btn accept" onclick="acceptFromUsers('${user.contactId}', '${username}')" title="Accept Request">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                `;
+                            }
+                        } else {
+                            actionButtons = `
+                                <button class="user-action-btn add" onclick="addContact('${user.id}', '${username}')" title="Add Contact">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                            `;
+                        }
+                        
+                        userDiv.innerHTML = `
+                            <div class="user-result-avatar">
+                                ${username[0].toUpperCase()}
+                                ${isOnline ? '<div class="chat-online-dot"></div>' : ''}
+                            </div>
+                            <div class="user-result-info">
+                                <div class="user-result-name">${username}</div>
+                                <div class="user-result-status ${isOnline ? 'online' : ''}">
+                                    ${isOnline ? '🟢' : '⚫'} ${statusText}
+                                </div>
+                            </div>
+                            <div class="user-result-actions">
+                                ${actionButtons}
+                            </div>
+                        `;
+                        
+                        usersList.appendChild(userDiv);
+                    });
+                    
+                    console.log('Users list populated with', result.users.length, 'users');
+                } else {
+                    console.error('Failed to load users:', result.error);
+                    usersList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Error loading users</h3>
+                            <p>${result.error || 'Please try again'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                usersList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Connection Error</h3>
+                        <p>Please check your connection and try again</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function searchUsers() {
+            const searchTerm = document.getElementById('userSearchInput').value.trim();
+            console.log('Searching users:', searchTerm);
+            await loadUsers(searchTerm);
+        }
+        
+        function startChatFromUsers(userId, username) {
+            hideUsers();
+            switchTab('chats');
+            startChat(userId, username);
+        }
+        
+        async function acceptFromUsers(contactId, username) {
+            await acceptContactRequest(contactId, username);
+            await loadUsers(); // Refresh the users list
+        }
+        
         // Search functionality for sidebar content
         function searchContent() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
@@ -2828,14 +1986,6 @@
                 sendMessage();
             }
         }
-        
-        // Handle Enter key in email search
-        document.addEventListener('keypress', function(event) {
-            if (event.target.id === 'emailSearchInput' && event.key === 'Enter') {
-                event.preventDefault();
-                searchByEmail();
-            }
-        });
         
         function adjustTextareaHeight(textarea) {
             textarea.style.height = 'auto';
@@ -2942,9 +2092,9 @@
         
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const addContactModal = document.getElementById('addContactModal');
-            if (event.target === addContactModal) {
-                hideAddContact();
+            const modal = document.getElementById('usersModal');
+            if (event.target === modal) {
+                hideUsers();
             }
         }
         
@@ -2968,6 +2118,708 @@
                 });
             }
         });
+    </script>
+    
+    <!-- Include the enhanced backend script -->
+    <script>
+        // Initialize Parse immediately
+        Parse.initialize('z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT', 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV');
+        Parse.serverURL = 'https://parseapi.back4app.com';
+
+        // Enhanced Backend Object with Contact System
+        const Backend = {
+            
+            // Check if user is logged in
+            isLoggedIn() {
+                return Parse.User.current() !== null;
+            },
+            
+            // Get current user
+            getCurrentUser() {
+                return Parse.User.current();
+            },
+            
+            // Login
+            async login(username, password) {
+                try {
+                    const user = await Parse.User.logIn(username, password);
+                    await this.updateUserStatus(true);
+                    return { success: true, user };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Register
+            async register(username, email, password) {
+                try {
+                    const user = new Parse.User();
+                    user.set('username', username);
+                    user.set('email', email);
+                    user.set('password', password);
+                    user.set('isOnline', true);
+                    user.set('lastSeen', new Date());
+                    user.set('joinedAt', new Date());
+                    
+                    const result = await user.signUp();
+                    await this.updateUserStatus(true);
+                    return { success: true, user: result };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Logout
+            async logout() {
+                try {
+                    await this.updateUserStatus(false);
+                    await Parse.User.logOut();
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Update user online status
+            async updateUserStatus(isOnline) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { success: false, error: 'Not logged in' };
+                    
+                    currentUser.set('isOnline', isOnline);
+                    currentUser.set('lastSeen', new Date());
+                    await currentUser.save();
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // =============== CONTACT SYSTEM FUNCTIONS ===============
+            
+            // Add contact (send friend request)
+            async addContact(userId, username) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    // Check if contact already exists
+                    const existingContact = await this.getContactStatus(userId);
+                    if (existingContact.isContact || existingContact.isPending) {
+                        return { success: false, error: 'Contact already exists or request pending' };
+                    }
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    const contact = new Contact();
+                    
+                    contact.set('from', currentUser);
+                    contact.set('to', { __type: 'Pointer', className: '_User', objectId: userId });
+                    contact.set('fromUsername', currentUser.get('username'));
+                    contact.set('toUsername', username);
+                    contact.set('status', 'pending'); // pending, accepted, blocked
+                    contact.set('createdAt', new Date());
+                    
+                    const result = await contact.save();
+                    return { success: true, contact: result };
+                } catch (error) {
+                    console.error('Add contact error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Accept contact request
+            async acceptContact(contactId) {
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    const contact = await query.get(contactId);
+                    
+                    contact.set('status', 'accepted');
+                    contact.set('acceptedAt', new Date());
+                    await contact.save();
+                    
+                    return { success: true };
+                } catch (error) {
+                    console.error('Accept contact error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Reject/Remove contact
+            async removeContact(contactId) {
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    const contact = await query.get(contactId);
+                    await contact.destroy();
+                    
+                    return { success: true };
+                } catch (error) {
+                    console.error('Remove contact error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get contact status between current user and another user
+            async getContactStatus(userId) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { isContact: false, isPending: false };
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    
+                    // Check if we sent a request to them or they sent to us
+                    const query1 = new Parse.Query(Contact);
+                    query1.equalTo('from', currentUser);
+                    query1.equalTo('to', { __type: 'Pointer', className: '_User', objectId: userId });
+                    
+                    const query2 = new Parse.Query(Contact);
+                    query2.equalTo('to', currentUser);
+                    query2.equalTo('from', { __type: 'Pointer', className: '_User', objectId: userId });
+                    
+                    const mainQuery = Parse.Query.or(query1, query2);
+                    const contacts = await mainQuery.find();
+                    
+                    if (contacts.length === 0) {
+                        return { isContact: false, isPending: false, canAdd: true };
+                    }
+                    
+                    const contact = contacts[0];
+                    const status = contact.get('status');
+                    const fromId = contact.get('from').id;
+                    const currentUserId = currentUser.id;
+                    
+                    return {
+                        isContact: status === 'accepted',
+                        isPending: status === 'pending',
+                        canAdd: false,
+                        contactId: contact.id,
+                        sentByMe: fromId === currentUserId,
+                        receivedByMe: fromId !== currentUserId
+                    };
+                } catch (error) {
+                    console.error('Get contact status error:', error);
+                    return { isContact: false, isPending: false, canAdd: true };
+                }
+            },
+            
+            // Get all contacts (accepted friends)
+            async getContacts() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    
+                    // Get contacts where current user is 'from' or 'to' and status is accepted
+                    const query1 = new Parse.Query(Contact);
+                    query1.equalTo('from', currentUser);
+                    query1.equalTo('status', 'accepted');
+                    query1.include('to');
+                    
+                    const query2 = new Parse.Query(Contact);
+                    query2.equalTo('to', currentUser);
+                    query2.equalTo('status', 'accepted');
+                    query2.include('from');
+                    
+                    const mainQuery = Parse.Query.or(query1, query2);
+                    mainQuery.descending('acceptedAt');
+                    
+                    const contacts = await mainQuery.find();
+                    
+                    // Process contacts to get friend info
+                    const friends = [];
+                    for (const contact of contacts) {
+                        const fromUser = contact.get('from');
+                        const toUser = contact.get('to');
+                        const currentUserId = currentUser.id;
+                        
+                        // Determine which user is the friend
+                        const friend = fromUser.id === currentUserId ? toUser : fromUser;
+                        
+                        if (friend) {
+                            friends.push({
+                                contactId: contact.id,
+                                userId: friend.id,
+                                username: friend.get('username'),
+                                isOnline: friend.get('isOnline') || false,
+                                lastSeen: friend.get('lastSeen'),
+                                acceptedAt: contact.get('acceptedAt')
+                            });
+                        }
+                    }
+                    
+                    return { success: true, contacts: friends };
+                } catch (error) {
+                    console.error('Get contacts error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get pending contact requests (received)
+            async getPendingRequests() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    query.equalTo('to', currentUser);
+                    query.equalTo('status', 'pending');
+                    query.include('from');
+                    query.descending('createdAt');
+                    
+                    const requests = await query.find();
+                    
+                    const pendingRequests = requests.map(request => ({
+                        contactId: request.id,
+                        fromUserId: request.get('from').id,
+                        fromUsername: request.get('from').get('username'),
+                        createdAt: request.get('createdAt'),
+                        isOnline: request.get('from').get('isOnline') || false
+                    }));
+                    
+                    return { success: true, requests: pendingRequests };
+                } catch (error) {
+                    console.error('Get pending requests error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get sent requests (pending requests sent by current user)
+            async getSentRequests() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    query.equalTo('from', currentUser);
+                    query.equalTo('status', 'pending');
+                    query.include('to');
+                    query.descending('createdAt');
+                    
+                    const requests = await query.find();
+                    
+                    const sentRequests = requests.map(request => ({
+                        contactId: request.id,
+                        toUserId: request.get('to').id,
+                        toUsername: request.get('to').get('username'),
+                        createdAt: request.get('createdAt'),
+                        isOnline: request.get('to').get('isOnline') || false
+                    }));
+                    
+                    return { success: true, requests: sentRequests };
+                } catch (error) {
+                    console.error('Get sent requests error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get all users with contact status
+            async getUsersWithContactStatus() {
+                try {
+                    const query = new Parse.Query(Parse.User);
+                    query.limit(50);
+                    query.descending('isOnline');
+                    query.descending('lastSeen');
+                    
+                    const users = await query.find();
+                    const currentUser = this.getCurrentUser();
+                    
+                    // Filter out current user and add contact status
+                    const usersWithStatus = [];
+                    for (const user of users) {
+                        if (user.id !== currentUser.id) {
+                            const contactStatus = await this.getContactStatus(user.id);
+                            usersWithStatus.push({
+                                id: user.id,
+                                username: user.get('username'),
+                                isOnline: user.get('isOnline') || false,
+                                lastSeen: user.get('lastSeen'),
+                                ...contactStatus
+                            });
+                        }
+                    }
+                    
+                    return { success: true, users: usersWithStatus };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // =============== EXISTING FUNCTIONS (Updated for contacts) ===============
+            
+            // Get all users with online status
+            async getUsers() {
+                return await this.getUsersWithContactStatus();
+            },
+            
+            // Get online users count
+            async getOnlineUsersCount() {
+                try {
+                    const query = new Parse.Query(Parse.User);
+                    query.equalTo('isOnline', true);
+                    const count = await query.count();
+                    return { success: true, count };
+                } catch (error) {
+                    return { success: false, error: error.message, count: 0 };
+                }
+            },
+            
+            // Send private message
+            async sendMessage(recipientId, message) {
+                try {
+                    const Message = Parse.Object.extend('Message');
+                    const msg = new Message();
+                    
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    msg.set('sender', currentUser);
+                    msg.set('senderName', currentUser.get('username'));
+                    msg.set('recipientId', recipientId);
+                    msg.set('message', message);
+                    msg.set('timestamp', new Date());
+                    msg.set('isRead', false);
+                    msg.set('messageType', 'private');
+                    
+                    const result = await msg.save();
+                    return { success: true, message: result };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Send global message
+            async sendGlobalMessage(message) {
+                try {
+                    const Message = Parse.Object.extend('Message');
+                    const msg = new Message();
+                    
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    msg.set('sender', currentUser);
+                    msg.set('senderName', currentUser.get('username'));
+                    msg.set('recipientId', 'GLOBAL_CHAT');
+                    msg.set('message', message);
+                    msg.set('timestamp', new Date());
+                    msg.set('isRead', true);
+                    msg.set('messageType', 'global');
+                    msg.set('isGlobal', true);
+                    
+                    const result = await msg.save();
+                    return { success: true, message: result };
+                } catch (error) {
+                    console.error('Global message send error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get messages between users
+            async getMessages(userId) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Message = Parse.Object.extend('Message');
+                    
+                    const query1 = new Parse.Query(Message);
+                    query1.equalTo('sender', currentUser);
+                    query1.equalTo('recipientId', userId);
+                    query1.notEqualTo('messageType', 'global');
+                    
+                    const query2 = new Parse.Query(Message);
+                    query2.equalTo('recipientId', currentUser.id);
+                    query2.notEqualTo('messageType', 'global');
+                    
+                    const senderUser = new Parse.User();
+                    senderUser.id = userId;
+                    query2.equalTo('sender', senderUser);
+                    
+                    const mainQuery = Parse.Query.or(query1, query2);
+                    mainQuery.ascending('timestamp');
+                    mainQuery.limit(100);
+                    mainQuery.include('sender');
+                    
+                    const messages = await mainQuery.find();
+                    await this.markMessagesAsRead(userId);
+                    
+                    return { success: true, messages };
+                } catch (error) {
+                    console.error('Get messages error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get global messages
+            async getGlobalMessages() {
+                try {
+                    const Message = Parse.Object.extend('Message');
+                    const query = new Parse.Query(Message);
+                    
+                    query.equalTo('recipientId', 'GLOBAL_CHAT');
+                    query.equalTo('messageType', 'global');
+                    query.ascending('timestamp');
+                    query.limit(50);
+                    query.include('sender');
+                    
+                    const messages = await query.find();
+                    console.log('Global messages loaded:', messages.length);
+                    
+                    return { success: true, messages };
+                } catch (error) {
+                    console.error('Global messages error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Mark messages as read
+            async markMessagesAsRead(senderId) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { success: false };
+                    
+                    const Message = Parse.Object.extend('Message');
+                    const query = new Parse.Query(Message);
+                    query.equalTo('recipientId', currentUser.id);
+                    query.equalTo('sender', { __type: 'Pointer', className: '_User', objectId: senderId });
+                    query.equalTo('isRead', false);
+                    
+                    const messages = await query.find();
+                    
+                    for (const message of messages) {
+                        message.set('isRead', true);
+                        await message.save();
+                    }
+                    
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Get recent chats - Updated to work with contacts
+            async getChats() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) {
+                        return { success: false, error: 'Not logged in' };
+                    }
+                    
+                    const Message = Parse.Object.extend('Message');
+                    
+                    const query1 = new Parse.Query(Message);
+                    query1.equalTo('sender', currentUser);
+                    query1.notEqualTo('messageType', 'global');
+                    
+                    const query2 = new Parse.Query(Message);
+                    query2.equalTo('recipientId', currentUser.id);
+                    query2.notEqualTo('messageType', 'global');
+                    
+                    const mainQuery = Parse.Query.or(query1, query2);
+                    mainQuery.descending('timestamp');
+                    mainQuery.limit(200);
+                    mainQuery.include('sender');
+                    
+                    const messages = await mainQuery.find();
+                    
+                    const chatMap = new Map();
+                    const currentUserId = currentUser.id;
+                    
+                    for (const msg of messages) {
+                        const sender = msg.get('sender');
+                        const recipientId = msg.get('recipientId');
+                        
+                        let partnerId, partnerName;
+                        
+                        if (sender && sender.id === currentUserId) {
+                            partnerId = recipientId;
+                            try {
+                                const userQuery = new Parse.Query(Parse.User);
+                                const partnerUser = await userQuery.get(partnerId);
+                                partnerName = partnerUser.get('username') || 'Unknown User';
+                            } catch (error) {
+                                partnerName = 'Unknown User';
+                                console.warn('Could not fetch partner user:', error);
+                            }
+                        } else if (sender) {
+                            partnerId = sender.id;
+                            partnerName = sender.get('username') || 'Unknown User';
+                        } else {
+                            continue;
+                        }
+                        
+                        if (!chatMap.has(partnerId)) {
+                            let unreadCount = 0;
+                            try {
+                                unreadCount = await this.getUnreadCount(partnerId);
+                            } catch (error) {
+                                console.warn('Could not get unread count:', error);
+                            }
+                            
+                            chatMap.set(partnerId, {
+                                id: partnerId,
+                                name: partnerName,
+                                lastMessage: msg.get('message') || '',
+                                timestamp: msg.get('timestamp'),
+                                unreadCount: unreadCount,
+                                isOnline: false
+                            });
+                        }
+                    }
+                    
+                    const chats = Array.from(chatMap.values());
+                    for (const chat of chats) {
+                        try {
+                            const userQuery = new Parse.Query(Parse.User);
+                            const partnerUser = await userQuery.get(chat.id);
+                            chat.isOnline = partnerUser.get('isOnline') || false;
+                            chat.lastSeen = partnerUser.get('lastSeen');
+                        } catch (error) {
+                            chat.isOnline = false;
+                            console.warn('Could not update online status:', error);
+                        }
+                    }
+                    
+                    chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    return { success: true, chats };
+                } catch (error) {
+                    console.error('Get chats error:', error);
+                    return { success: false, error: error.message, chats: [] };
+                }
+            },
+            
+            // Get unread message count
+            async getUnreadCount(senderId) {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return 0;
+                    
+                    const Message = Parse.Object.extend('Message');
+                    const query = new Parse.Query(Message);
+                    query.equalTo('recipientId', currentUser.id);
+                    query.equalTo('sender', { __type: 'Pointer', className: '_User', objectId: senderId });
+                    query.equalTo('isRead', false);
+                    query.notEqualTo('messageType', 'global');
+                    
+                    return await query.count();
+                } catch (error) {
+                    return 0;
+                }
+            },
+            
+            // Search users - Updated to include contact status
+            async searchUsers(searchTerm) {
+                try {
+                    if (!searchTerm || searchTerm.length < 2) {
+                        return this.getUsersWithContactStatus();
+                    }
+                    
+                    const query = new Parse.Query(Parse.User);
+                    query.contains('username', searchTerm.toLowerCase());
+                    query.limit(20);
+                    query.descending('isOnline');
+                    query.descending('lastSeen');
+                    
+                    const users = await query.find();
+                    const currentUser = this.getCurrentUser();
+                    
+                    // Filter out current user and add contact status
+                    const usersWithStatus = [];
+                    for (const user of users) {
+                        if (user.id !== currentUser.id) {
+                            const contactStatus = await this.getContactStatus(user.id);
+                            usersWithStatus.push({
+                                id: user.id,
+                                username: user.get('username'),
+                                isOnline: user.get('isOnline') || false,
+                                lastSeen: user.get('lastSeen'),
+                                ...contactStatus
+                            });
+                        }
+                    }
+                    
+                    return { success: true, users: usersWithStatus };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            // Update user activity
+            async updateActivity() {
+                try {
+                    const currentUser = Parse.User.current();
+                    if (!currentUser) return { success: false };
+                    
+                    currentUser.set('lastSeen', new Date());
+                    currentUser.set('isOnline', true);
+                    await currentUser.save();
+                    
+                    return { success: true };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            }
+        };
+
+        // Auto-update user activity every 30 seconds
+        let activityInterval = null;
+
+        Backend.startActivityTracking = function() {
+            if (activityInterval) clearInterval(activityInterval);
+            
+            activityInterval = setInterval(async () => {
+                if (Backend.isLoggedIn()) {
+                    await Backend.updateActivity();
+                }
+            }, 30000);
+        };
+
+        Backend.stopActivityTracking = function() {
+            if (activityInterval) {
+                clearInterval(activityInterval);
+                activityInterval = null;
+            }
+        };
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', async () => {
+            if (Backend.isLoggedIn()) {
+                if (document.hidden) {
+                    Backend.stopActivityTracking();
+                } else {
+                    await Backend.updateActivity();
+                    Backend.startActivityTracking();
+                }
+            }
+        });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', async () => {
+            if (Backend.isLoggedIn()) {
+                await Backend.updateUserStatus(false);
+            }
+        });
+
+        // Make Backend available globally
+        window.Backend = Backend;
     </script>
 </body>
 </html>
