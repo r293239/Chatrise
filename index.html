@@ -1087,6 +1087,7 @@
                             id="messageInput" 
                             placeholder="Type a message..." 
                             rows="1"
+                            maxlength="500"
                             onkeypress="handleKeyPress(event)"
                         ></textarea>
                     </div>
@@ -1713,14 +1714,109 @@
             return container.scrollTop >= (container.scrollHeight - container.clientHeight - threshold);
         }
         
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
+        // Advanced Rate limiting - ADD THESE VARIABLES AT THE TOP OF YOUR SCRIPT
+let messageTimestamps = [];
+const MAX_MESSAGES_PER_WINDOW = 5;
+const TIME_WINDOW = 1000;
+const COOLDOWN_PERIOD = 10000;
+const MAX_MESSAGE_LENGTH = 500;
+let cooldownUntil = 0;
+
+async function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    
+    if (!message || !currentChatId) {
+        showNotification('Please enter a message', 'error');
+        return;
+    }
+    
+    // Check message length
+    if (message.length > MAX_MESSAGE_LENGTH) {
+        showNotification(`Message too long! Max ${MAX_MESSAGE_LENGTH} chars (you have ${message.length})`, 'error');
+        return;
+    }
+    
+    const now = Date.now();
+    
+    // Check cooldown
+    if (now < cooldownUntil) {
+        const remaining = Math.ceil((cooldownUntil - now) / 1000);
+        showNotification(`Spam detected! Wait ${remaining}s`, 'error', 3000);
+        return;
+    }
+    
+    // Clean old timestamps
+    messageTimestamps = messageTimestamps.filter(t => now - t < TIME_WINDOW);
+    
+    // Check rate limit
+    if (messageTimestamps.length >= MAX_MESSAGES_PER_WINDOW) {
+        cooldownUntil = now + COOLDOWN_PERIOD;
+        messageTimestamps = [];
+        showNotification(`Too many messages! 10 second cooldown`, 'error', 5000);
+        startCooldownCountdown();
+        return;
+    }
+    
+    const sendBtn = document.getElementById('sendBtn');
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    try {
+        let result;
+        if (isGlobalChat) {
+            result = await Backend.sendGlobalMessage(message);
+        } else {
+            result = await Backend.sendMessage(currentChatId, message);
+        }
+        
+        if (result.success) {
+            messageTimestamps.push(now);
+            input.value = '';
+            adjustTextareaHeight(input);
             
-            if (!message || !currentChatId) {
-                showNotification('Please enter a message', 'error');
-                return;
+            if (isGlobalChat) {
+                await loadGlobalMessages();
+                document.getElementById('messagesContainer').scrollTop = 999999;
+            } else {
+                await loadMessages(true);
             }
+            
+            setTimeout(loadChats, 500);
+            
+            // Warning if close to limit
+            if (messageTimestamps.length >= 4) {
+                showNotification(`Warning: ${messageTimestamps.length}/5 messages. One more = 10s cooldown!`, 'info', 3000);
+            } else {
+                showNotification('Message sent!', 'success', 2000);
+            }
+        } else {
+            showNotification('Failed: ' + result.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Network error', 'error');
+    }
+    
+    sendBtn.disabled = false;
+    sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+    input.focus();
+}
+
+function startCooldownCountdown() {
+    const sendBtn = document.getElementById('sendBtn');
+    const interval = setInterval(() => {
+        const remaining = Math.ceil((cooldownUntil - Date.now()) / 1000);
+        if (remaining <= 0) {
+            clearInterval(interval);
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+            sendBtn.disabled = false;
+            showNotification('Cooldown ended!', 'success', 3000);
+        } else {
+            sendBtn.innerHTML = `<i class="fas fa-ban"></i> ${remaining}s`;
+            sendBtn.disabled = true;
+        }
+    }, 100);
+}
             
             console.log('Sending message:', { message, currentChatId, isGlobalChat });
             
