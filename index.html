@@ -1819,7 +1819,28 @@ function startCooldownCountdown() {
 }
             
             console.log('Sending message:', { message, currentChatId, isGlobalChat });
-            
+            // Check message length
+    if (message.length > 500) {
+        showNotification(`Message too long! Maximum 500 characters (you have ${message.length})`, 'error');
+        return;
+    }
+
+    // Rate limiting
+    const now = Date.now();
+    if (now < cooldownUntil) {
+        const remaining = Math.ceil((cooldownUntil - now) / 1000);
+        showNotification(`Please wait ${remaining} seconds`, 'error');
+        return;
+    }
+
+    messageTimestamps = messageTimestamps.filter(t => now - t < TIME_WINDOW);
+    if (messageTimestamps.length >= MAX_MESSAGES_PER_WINDOW) {
+        cooldownUntil = now + COOLDOWN_PERIOD;
+        messageTimestamps = [];
+        showNotification('Too many messages! 10 second cooldown', 'error');
+        startCooldownCountdown();
+        return;
+    }
             const sendBtn = document.getElementById('sendBtn');
             sendBtn.disabled = true;
             sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
