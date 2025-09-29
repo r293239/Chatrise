@@ -1699,11 +1699,11 @@
                     }
                 } else {
                     console.error('Failed to load global messages:', result.error);
-                    showNotification('Failed to load global chat', 'error');
+                    showNotification('Failed to load global chat. Try logging in again or checking your WIFI.', 'error');
                 }
             } catch (error) {
                 console.error('Error loading global messages:', error);
-                showNotification('Failed to load global chat', 'error');
+                showNotification('Failed to load global chat. Try logging in again or checking your WIFI.', 'error');
             }
         }
         
