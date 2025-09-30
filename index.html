@@ -1120,9 +1120,6 @@
     </div>
 
     <script>
-        // Include the enhanced backend script here
-        // (The backend script from the previous artifact would go here)
-        
         let currentChatId = null;
         let currentChatName = '';
         let isGlobalChat = false;
@@ -1140,8 +1137,7 @@
             }
             
             const user = Backend.getCurrentUser();
-            console.log('Current user:', user); // Debug line
-            console.log('Username:', user.get('username')); // Debug line
+            console.log('Current user:', user.get('username'));
             
             document.getElementById('username-display').textContent = user.get('username');
             document.getElementById('userAvatar').textContent = user.get('username')[0].toUpperCase();
@@ -1149,6 +1145,9 @@
             Backend.startActivityTracking();
             await loadAllData();
             startAutoRefresh();
+            
+            // Debug users
+            await debugUsers();
             
             // Initialize input handler
             const messageInput = document.getElementById('messageInput');
@@ -1158,6 +1157,43 @@
             
             console.log('App initialized successfully');
         });
+        
+        // Debug function to check users
+        async function debugUsers() {
+            console.log('=== DEBUG USERS ===');
+            
+            // Check if logged in
+            if (!Backend.isLoggedIn()) {
+                console.log('Not logged in');
+                return;
+            }
+            
+            const currentUser = Backend.getCurrentUser();
+            console.log('Current user:', currentUser.id, currentUser.get('username'));
+            
+            // Get all users directly from Parse
+            try {
+                const query = new Parse.Query(Parse.User);
+                const allUsers = await query.find();
+                console.log('All users in database:', allUsers.map(u => ({
+                    id: u.id,
+                    username: u.get('username'),
+                    isOnline: u.get('isOnline'),
+                    isCurrent: u.id === currentUser.id
+                })));
+                
+                // Test the contact status function
+                for (const user of allUsers) {
+                    if (user.id !== currentUser.id) {
+                        const contactStatus = await Backend.getContactStatus(user.id);
+                        console.log('Contact status with', user.get('username'), ':', contactStatus);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Debug error:', error);
+            }
+        }
         
         // Tab switching
         function switchTab(tabName) {
@@ -1519,7 +1555,6 @@
             }
         }
         
-        // MISSING FUNCTION - ADDED
         async function selectGlobalChat() {
             console.log('Selecting global chat...');
             
@@ -1801,7 +1836,7 @@
             try {
                 console.log('Loading users with search term:', searchTerm);
                 
-                const result = searchTerm && searchTerm.length >= 2 ? 
+                const result = searchTerm && searchTerm.length >= 1 ? 
                     await Backend.searchUsers(searchTerm) : 
                     await Backend.getUsersWithContactStatus();
                 
