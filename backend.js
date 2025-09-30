@@ -311,21 +311,36 @@ const Backend = {
         try {
             console.log('Loading users with contact status...');
             
+            const currentUser = this.getCurrentUser();
+            if (!currentUser) {
+                return { success: false, error: 'Not logged in' };
+            }
+            
+            console.log('Current user ID:', currentUser.id, 'Username:', currentUser.get('username'));
+            
             const query = new Parse.Query(Parse.User);
             query.limit(100);
-            query.descending('isOnline');
+            // Remove the descending by isOnline to show both online and offline users
             query.descending('lastSeen');
             
             const users = await query.find();
-            const currentUser = this.getCurrentUser();
-            
-            console.log('Found', users.length, 'total users');
+            console.log('Raw users from Parse:', users.map(u => ({
+                id: u.id,
+                username: u.get('username'),
+                isOnline: u.get('isOnline'),
+                isCurrent: u.id === currentUser.id
+            })));
             
             // Filter out current user and add contact status
             const usersWithStatus = [];
             for (const user of users) {
+                console.log('Processing user:', user.id, user.get('username'), 'isCurrent:', user.id === currentUser.id);
+                
                 if (user.id !== currentUser.id) {
+                    console.log('This is a different user, checking contact status...');
                     const contactStatus = await this.getContactStatus(user.id);
+                    console.log('Contact status for', user.get('username'), ':', contactStatus);
+                    
                     usersWithStatus.push({
                         id: user.id,
                         username: user.get('username'),
@@ -334,10 +349,12 @@ const Backend = {
                         lastSeen: user.get('lastSeen'),
                         ...contactStatus
                     });
+                } else {
+                    console.log('Skipping current user:', user.get('username'));
                 }
             }
             
-            console.log('Returning', usersWithStatus.length, 'users with status');
+            console.log('Final users with status:', usersWithStatus);
             return { success: true, users: usersWithStatus };
         } catch (error) {
             console.error('Get users with contact status error:', error);
@@ -350,21 +367,32 @@ const Backend = {
         return await this.getUsersWithContactStatus();
     },
     
-    // Search users - FIXED VERSION
+    // Search users - IMPROVED VERSION
     async searchUsers(searchTerm) {
         try {
-            if (!searchTerm || searchTerm.length < 2) {
+            console.log('Searching users with term:', searchTerm);
+            
+            if (!searchTerm || searchTerm.length < 1) {
                 return await this.getUsersWithContactStatus();
             }
             
             const query = new Parse.Query(Parse.User);
-            query.contains('username', searchTerm);
-            query.limit(50);
-            query.descending('isOnline');
-            query.descending('lastSeen');
             
-            const users = await query.find();
+            // Try multiple search approaches
+            const query1 = new Parse.Query(Parse.User);
+            query1.startsWith('username', searchTerm);
+            
+            const query2 = new Parse.Query(Parse.User);
+            query2.contains('username', searchTerm);
+            
+            const mainQuery = Parse.Query.or(query1, query2);
+            mainQuery.limit(50);
+            mainQuery.descending('lastSeen');
+            
+            const users = await mainQuery.find();
             const currentUser = this.getCurrentUser();
+            
+            console.log('Search found users:', users.map(u => u.get('username')));
             
             // Filter out current user and add contact status
             const usersWithStatus = [];
