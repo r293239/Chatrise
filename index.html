@@ -570,6 +570,24 @@
             box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
         }
         
+        .char-counter {
+            position: absolute;
+            bottom: 12px;
+            right: 15px;
+            font-size: 11px;
+            color: #999;
+            pointer-events: none;
+        }
+        
+        .char-counter.warning {
+            color: #ffa502;
+        }
+        
+        .char-counter.error {
+            color: #ff4757;
+            font-weight: 600;
+        }
+        
         .send-btn {
             width: 50px;
             height: 50px;
@@ -1087,8 +1105,10 @@
                             id="messageInput" 
                             placeholder="Type a message..." 
                             rows="1"
+                            maxlength="1000"
                             onkeypress="handleKeyPress(event)"
                         ></textarea>
+                        <span class="char-counter" id="charCounter">0/1000</span>
                     </div>
                     <button class="send-btn" onclick="sendMessage()" id="sendBtn" disabled>
                         <i class="fas fa-paper-plane"></i>
@@ -1120,9 +1140,6 @@
     </div>
 
     <script>
-        // Include the enhanced backend script here
-        // (The backend script from the previous artifact would go here)
-        
         let currentChatId = null;
         let currentChatName = '';
         let isGlobalChat = false;
@@ -1722,6 +1739,11 @@
                 return;
             }
             
+            if (message.length > 1000) {
+                showNotification('Message is too long (max 1000 characters)', 'error');
+                return;
+            }
+            
             console.log('Sending message:', { message, currentChatId, isGlobalChat });
             
             const sendBtn = document.getElementById('sendBtn');
@@ -1845,6 +1867,12 @@
                                 actionButtons = `
                                     <button class="user-action-btn accept" onclick="acceptFromUsers('${user.contactId}', '${username}')" title="Accept Request">
                                         <i class="fas fa-check"></i>
+                                     </button>
+                            `;
+                            } else {
+                                actionButtons = `
+                                    <button class="user-action-btn accept" onclick="acceptFromUsers('${user.contactId}', '${username}')" title="Accept Request">
+                                        <i class="fas fa-check"></i>
                                     </button>
                                 `;
                             }
@@ -1912,7 +1940,7 @@
         
         async function acceptFromUsers(contactId, username) {
             await acceptContactRequest(contactId, username);
-            await loadUsers(); // Refresh the users list
+            await loadUsers();
         }
         
         // Search functionality for sidebar content
@@ -1992,7 +2020,24 @@
             textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
             
             const sendBtn = document.getElementById('sendBtn');
+            const charCounter = document.getElementById('charCounter');
+            const currentLength = textarea.value.length;
+            const maxLength = 1000;
             const hasContent = textarea.value.trim().length > 0;
+            
+            // Update character counter
+            charCounter.textContent = `${currentLength}/${maxLength}`;
+            
+            // Update counter color based on character count
+            if (currentLength >= maxLength) {
+                charCounter.classList.add('error');
+                charCounter.classList.remove('warning');
+            } else if (currentLength >= maxLength * 0.9) {
+                charCounter.classList.add('warning');
+                charCounter.classList.remove('error');
+            } else {
+                charCounter.classList.remove('warning', 'error');
+            }
             
             sendBtn.disabled = !hasContent;
             
@@ -2037,7 +2082,7 @@
                 return 'Just now';
             } else if (diffInMinutes < 60) {
                 return `Last seen ${diffInMinutes}m ago`;
-            } else if (diffInMinutes < 1440) { // 24 hours
+            } else if (diffInMinutes < 1440) {
                 const hours = Math.floor(diffInMinutes / 60);
                 return `Last seen ${hours}h ago`;
             } else {
@@ -2218,7 +2263,7 @@
                     contact.set('to', { __type: 'Pointer', className: '_User', objectId: userId });
                     contact.set('fromUsername', currentUser.get('username'));
                     contact.set('toUsername', username);
-                    contact.set('status', 'pending'); // pending, accepted, blocked
+                    contact.set('status', 'pending');
                     contact.set('createdAt', new Date());
                     
                     const result = await contact.save();
@@ -2315,7 +2360,6 @@
                     
                     const Contact = Parse.Object.extend('Contact');
                     
-                    // Get contacts where current user is 'from' or 'to' and status is accepted
                     const query1 = new Parse.Query(Contact);
                     query1.equalTo('from', currentUser);
                     query1.equalTo('status', 'accepted');
@@ -2331,14 +2375,12 @@
                     
                     const contacts = await mainQuery.find();
                     
-                    // Process contacts to get friend info
                     const friends = [];
                     for (const contact of contacts) {
                         const fromUser = contact.get('from');
                         const toUser = contact.get('to');
                         const currentUserId = currentUser.id;
                         
-                        // Determine which user is the friend
                         const friend = fromUser.id === currentUserId ? toUser : fromUser;
                         
                         if (friend) {
@@ -2392,7 +2434,7 @@
                 }
             },
             
-            // Get sent requests (pending requests sent by current user)
+            // Get sent requests
             async getSentRequests() {
                 try {
                     const currentUser = Parse.User.current();
@@ -2435,7 +2477,6 @@
                     const users = await query.find();
                     const currentUser = this.getCurrentUser();
                     
-                    // Filter out current user and add contact status
                     const usersWithStatus = [];
                     for (const user of users) {
                         if (user.id !== currentUser.id) {
@@ -2455,8 +2496,6 @@
                     return { success: false, error: error.message };
                 }
             },
-            
-            // =============== EXISTING FUNCTIONS (Updated for contacts) ===============
             
             // Get all users with online status
             async getUsers() {
@@ -2614,7 +2653,7 @@
                 }
             },
             
-            // Get recent chats - Updated to work with contacts
+            // Get recent chats
             async getChats() {
                 try {
                     const currentUser = Parse.User.current();
@@ -2725,7 +2764,7 @@
                 }
             },
             
-            // Search users - Updated to include contact status
+            // Search users
             async searchUsers(searchTerm) {
                 try {
                     if (!searchTerm || searchTerm.length < 2) {
@@ -2741,7 +2780,6 @@
                     const users = await query.find();
                     const currentUser = this.getCurrentUser();
                     
-                    // Filter out current user and add contact status
                     const usersWithStatus = [];
                     for (const user of users) {
                         if (user.id !== currentUser.id) {
