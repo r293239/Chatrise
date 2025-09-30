@@ -358,7 +358,7 @@ const Backend = {
             }
             
             const query = new Parse.Query(Parse.User);
-            query.contains('username', searchTerm.toLowerCase());
+            query.contains('username', searchTerm);
             query.limit(50);
             query.descending('isOnline');
             query.descending('lastSeen');
