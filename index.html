@@ -1717,6 +1717,13 @@
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
+            // Add character limit check (1000 characters)
+            const MAX_MESSAGE_LENGTH = 1000;
+            if (message.length > MAX_MESSAGE_LENGTH) {
+                showNotification(`Message too long! Maximum ${MAX_MESSAGE_LENGTH} characters allowed.`, 'error');
+                return;
+            }
+            
             if (!message || !currentChatId) {
                 showNotification('Please enter a message', 'error');
                 return;
@@ -2081,7 +2088,7 @@
         // Fix mobile viewport height
         function setViewportHeight() {
             const vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
+            document.documentElement.style.setProperty('--vh', `${vh}px');
         }
         
         setViewportHeight();
