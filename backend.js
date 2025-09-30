@@ -306,45 +306,38 @@ const Backend = {
     
     // =============== USER LISTING FUNCTIONS (FIXED) ===============
     
-// Get all users with contact status - FIXED VERSION WITH DEBUGGING
-async getUsersWithContactStatus() {
-    try {
-        console.log('Loading users with contact status...');
-        
-        const query = new Parse.Query(Parse.User);
-        query.limit(100);
-        query.descending('isOnline');
-        query.descending('lastSeen');
-        
-        const users = await query.find();
-        const currentUser = this.getCurrentUser();
-        
-        console.log('Found', users.length, 'total users');
-        
-        // Filter out current user and add contact status
-        const usersWithStatus = [];
-        for (const user of users) {
-            if (user.id !== currentUser.id) {
-                const contactStatus = await this.getContactStatus(user.id);
-                usersWithStatus.push({
-                    id: user.id,
-                    username: user.get('username'),
-                    email: user.get('email') || '',
-                    isOnline: user.get('isOnline') || false,
-                    lastSeen: user.get('lastSeen'),
-                    ...contactStatus
-                });
-            }
-        }
-        
-        console.log('Returning', usersWithStatus.length, 'users with status');
-        return { success: true, users: usersWithStatus };
-    } catch (error) {
-        console.error('Get users with contact status error:', error);
-        return { success: false, error: error.message };
-    }
-},
+    // Get all users with contact status - FIXED VERSION
+    async getUsersWithContactStatus() {
+        try {
+            console.log('Loading users with contact status...');
             
+            const query = new Parse.Query(Parse.User);
+            query.limit(100);
+            query.descending('isOnline');
+            query.descending('lastSeen');
+            
+            const users = await query.find();
+            const currentUser = this.getCurrentUser();
+            
+            console.log('Found', users.length, 'total users');
+            
+            // Filter out current user and add contact status
+            const usersWithStatus = [];
+            for (const user of users) {
+                if (user.id !== currentUser.id) {
+                    const contactStatus = await this.getContactStatus(user.id);
+                    usersWithStatus.push({
+                        id: user.id,
+                        username: user.get('username'),
+                        email: user.get('email') || '',
+                        isOnline: user.get('isOnline') || false,
+                        lastSeen: user.get('lastSeen'),
+                        ...contactStatus
+                    });
+                }
+            }
+            
+            console.log('Returning', usersWithStatus.length, 'users with status');
             return { success: true, users: usersWithStatus };
         } catch (error) {
             console.error('Get users with contact status error:', error);
