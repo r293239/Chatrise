@@ -1,8 +1,16 @@
-// Initialize Parse immediately
-Parse.initialize('z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT', 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV');
-Parse.serverURL = 'https://parseapi.back4app.com';
+// backend.js - Enhanced Backend Services with EmailJS
+// © 2025 [Reuben Yee]. All rights reserved.
 
-// Enhanced Backend Object with Contact System - FIXED VERSION
+// Initialize Parse with config
+Parse.initialize(CONFIG.PARSE_APP_ID, CONFIG.PARSE_JS_KEY);
+Parse.serverURL = CONFIG.PARSE_SERVER_URL;
+
+// Initialize EmailJS
+if (typeof emailjs !== 'undefined') {
+    emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
+}
+
+// Enhanced Backend Object with Contact System & EmailJS - FIXED VERSION
 const Backend = {
     
     // Check if user is logged in
@@ -15,10 +23,21 @@ const Backend = {
         return Parse.User.current();
     },
     
-    // Login
+    // Login with email verification check
     async login(username, password) {
         try {
             const user = await Parse.User.logIn(username, password);
+            
+            // Check if email is verified
+            if (!user.get('emailVerified')) {
+                // Log them out if email isn't verified
+                await Parse.User.logOut();
+                return { 
+                    success: false, 
+                    error: 'Please verify your email address before logging in. Check your inbox for the verification email.' 
+                };
+            }
+            
             await this.updateUserStatus(true);
             return { success: true, user };
         } catch (error) {
@@ -26,7 +45,7 @@ const Backend = {
         }
     },
     
-    // Register
+    // Register with EmailJS integration
     async register(username, email, password) {
         try {
             const user = new Parse.User();
@@ -38,10 +57,68 @@ const Backend = {
             user.set('joinedAt', new Date());
             user.set('description', '');
             user.set('profilePicture', null);
+            user.set('emailVerified', false); // Track email verification
             
             const result = await user.signUp();
+            
+            // Send verification email via EmailJS
+            const emailResult = await this.sendVerificationEmail(username, email, result.id);
+            
+            if (!emailResult.success) {
+                console.warn('Email sending failed, but user was created:', emailResult.error);
+            }
+            
             await this.updateUserStatus(true);
-            return { success: true, user: result };
+            return { 
+                success: true, 
+                user: result, 
+                emailSent: emailResult.success 
+            };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Send verification email using EmailJS
+    async sendVerificationEmail(username, email, userId) {
+        try {
+            const templateParams = {
+                to_name: username,
+                to_email: email,
+                user_id: userId,
+                app_name: 'ChatRise',
+                verification_link: `${window.location.origin}/verify-email.html?userId=${userId}`,
+                site_url: window.location.origin
+            };
+
+            // Send email using EmailJS with config
+            await emailjs.send(
+                CONFIG.EMAILJS_SERVICE_ID,
+                CONFIG.EMAILJS_TEMPLATE_ID,
+                templateParams
+            );
+
+            return { success: true };
+        } catch (error) {
+            console.error('Email sending failed:', error);
+            // Don't fail registration if email sending fails
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Email verification function
+    async verifyEmail(userId) {
+        try {
+            const query = new Parse.Query(Parse.User);
+            const user = await query.get(userId);
+            
+            if (user) {
+                user.set('emailVerified', true);
+                await user.save();
+                return { success: true, user };
+            } else {
+                return { success: false, error: 'User not found' };
+            }
         } catch (error) {
             return { success: false, error: error.message };
         }
@@ -320,7 +397,6 @@ const Backend = {
             
             const query = new Parse.Query(Parse.User);
             query.limit(100);
-            // Remove the descending by isOnline to show both online and offline users
             query.descending('lastSeen');
             
             const users = await query.find();
@@ -737,3 +813,14 @@ window.addEventListener('beforeunload', async () => {
 
 // Make Backend available globally
 window.Backend = Backend;
+
+// Console branding
+console.log(`
+%cChatRise Backend Services
+%c© 2025 [Reuben Yee]. All rights reserved.
+%cBackend initialized successfully with EmailJS integration.
+`,
+'color: #25d366; font-size: 16px; font-weight: bold;',
+'color: #666; font-size: 12px;',
+'color: #128c7e; font-size: 12px;'
+);
