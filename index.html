@@ -1123,6 +1123,7 @@
     </div>
 
     <script>
+        // =============== GLOBAL VARIABLES ===============
         let currentChatId = null;
         let currentChatName = '';
         let isGlobalChat = false;
@@ -1130,27 +1131,36 @@
         let dataRefreshInterval = null;
         let currentTab = 'chats';
         
-        // Initialize app
+        // =============== INITIALIZATION ===============
         window.addEventListener('load', async function() {
-            console.log('App initializing...');
+            console.log('🚀 ChatRise initializing...');
             
+            // Check if Backend is available
+            if (typeof Backend === 'undefined') {
+                console.error('❌ Backend not found!');
+                showNotification('Backend services failed to load. Please refresh.', 'error');
+                return;
+            }
+            
+            // Check login status
             if (!Backend.isLoggedIn()) {
+                console.log('🔐 Not logged in, redirecting...');
                 window.location.href = 'login.html';
                 return;
             }
             
+            // Initialize user interface
             const user = Backend.getCurrentUser();
-            console.log('Current user:', user.get('username'));
+            if (user) {
+                document.getElementById('username-display').textContent = user.get('username');
+                document.getElementById('userAvatar').textContent = user.get('username')[0].toUpperCase();
+                console.log('✅ User loaded:', user.get('username'));
+            }
             
-            document.getElementById('username-display').textContent = user.get('username');
-            document.getElementById('userAvatar').textContent = user.get('username')[0].toUpperCase();
-            
+            // Start services
             Backend.startActivityTracking();
             await loadAllData();
             startAutoRefresh();
-            
-            // Debug users
-            await debugUsers();
             
             // Initialize input handler
             const messageInput = document.getElementById('messageInput');
@@ -1158,45 +1168,10 @@
                 adjustTextareaHeight(this);
             });
             
-            console.log('App initialized successfully');
+            console.log('✅ ChatRise initialized successfully');
         });
         
-        // Debug function to check users
-        async function debugUsers() {
-            console.log('=== DEBUG USERS ===');
-            
-            // Check if logged in
-            if (!Backend.isLoggedIn()) {
-                console.log('Not logged in');
-                return;
-            }
-            
-            const currentUser = Backend.getCurrentUser();
-            console.log('Current user:', currentUser.id, currentUser.get('username'));
-            
-            // Get all users directly from Parse
-            try {
-                const query = new Parse.Query(Parse.User);
-                const allUsers = await query.find();
-                console.log('All users in database:', allUsers.map(u => ({
-                    id: u.id,
-                    username: u.get('username'),
-                    isOnline: u.get('isOnline'),
-                    isCurrent: u.id === currentUser.id
-                })));
-                
-                // Test the contact status function
-                for (const user of allUsers) {
-                    if (user.id !== currentUser.id) {
-                        const contactStatus = await Backend.getContactStatus(user.id);
-                        console.log('Contact status with', user.get('username'), ':', contactStatus);
-                    }
-                }
-                
-            } catch (error) {
-                console.error('Debug error:', error);
-            }
-        }
+        // =============== CORE FUNCTIONS ===============
         
         // Tab switching
         function switchTab(tabName) {
@@ -1224,6 +1199,7 @@
             }
         }
         
+        // Load all data
         async function loadAllData() {
             await Promise.all([
                 loadChats(),
@@ -1233,6 +1209,7 @@
             ]);
         }
         
+        // Start auto-refresh
         function startAutoRefresh() {
             dataRefreshInterval = setInterval(async () => {
                 if (!document.hidden) {
@@ -1254,6 +1231,365 @@
             }, 5000);
         }
         
+        // =============== CHAT FUNCTIONS ===============
+        
+        // Select global chat - FIXED VERSION
+        window.selectGlobalChat = async function() {
+            console.log('🌍 Selecting global chat...');
+            
+            if (!Backend || !Backend.isLoggedIn()) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            currentChatId = 'global';
+            currentChatName = 'Global Chat';
+            isGlobalChat = true;
+            
+            // Update UI
+            document.querySelectorAll('.chat-item, .global-chat-item, .contact-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.getElementById('globalChatItem').classList.add('active');
+            
+            document.getElementById('welcomeScreen').classList.add('hidden');
+            document.getElementById('chatContent').classList.remove('hidden');
+            
+            document.getElementById('currentChatName').textContent = '🌍 Global Chat';
+            document.getElementById('chatStatus').textContent = 'Everyone is here';
+            document.getElementById('chatHeaderAvatar').innerHTML = '<i class="fas fa-globe"></i>';
+            
+            await loadGlobalMessages();
+            document.getElementById('messageInput').focus();
+            
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('show');
+            }
+            
+            console.log('✅ Global chat selected');
+        };
+        
+        // Select private chat
+        async function selectChat(userId, username) {
+            currentChatId = userId;
+            currentChatName = username;
+            isGlobalChat = false;
+            
+            document.querySelectorAll('.chat-item, .global-chat-item, .contact-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Find and highlight the active chat
+            const chatItems = document.querySelectorAll('.chat-item, .contact-item');
+            chatItems.forEach(item => {
+                if (item.onclick && item.onclick.toString().includes(userId)) {
+                    item.classList.add('active');
+                }
+            });
+            
+            document.getElementById('welcomeScreen').classList.add('hidden');
+            document.getElementById('chatContent').classList.remove('hidden');
+            
+            document.getElementById('currentChatName').textContent = username;
+            document.getElementById('chatStatus').textContent = 'online';
+            document.getElementById('chatHeaderAvatar').textContent = username[0].toUpperCase();
+            
+            await loadMessages();
+            document.getElementById('messageInput').focus();
+            
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('show');
+            }
+        }
+        
+        // Start chat from users list
+        function startChat(userId, username) {
+            if (currentTab !== 'chats') {
+                switchTab('chats');
+            }
+            selectChat(userId, username);
+            showNotification(`Started chat with ${username}! 💬`, 'success', 2000);
+        }
+        
+        // =============== MESSAGE FUNCTIONS ===============
+        
+        // Load private messages
+        async function loadMessages(scrollToBottom = true) {
+            if (!currentChatId || currentChatId === 'global') return;
+            
+            try {
+                const result = await Backend.getMessages(currentChatId);
+                const container = document.getElementById('messagesContainer');
+                
+                const wasAtBottom = isScrolledToBottom(container);
+                
+                if (result.success) {
+                    container.innerHTML = '';
+                    const currentUser = Backend.getCurrentUser();
+                    
+                    if (result.messages.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-comments"></i>
+                                <h3>No messages yet</h3>
+                                <p>Start the conversation!</p>
+                            </div>
+                        `;
+                    } else {
+                        result.messages.forEach(msg => {
+                            const sender = msg.get('sender');
+                            const senderName = msg.get('senderName');
+                            const isOwn = sender && sender.id === currentUser.id;
+                            
+                            let displayName = 'Unknown User';
+                            if (sender && sender.get) {
+                                displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
+                            } else if (senderName) {
+                                displayName = senderName;
+                            }
+                            
+                            const messageDiv = document.createElement('div');
+                            messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+                            
+                            messageDiv.innerHTML = `
+                                ${!isOwn ? `<div class="message-header">${displayName}</div>` : ''}
+                                <div class="message-content">${msg.get('message')}</div>
+                                <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
+                            `;
+                            
+                            container.appendChild(messageDiv);
+                        });
+                        
+                        if (scrollToBottom || wasAtBottom) {
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                showNotification('Failed to load messages', 'error');
+            }
+        }
+        
+        // Load global messages
+        async function loadGlobalMessages() {
+            console.log('📥 Loading global messages...');
+            
+            try {
+                const result = await Backend.getGlobalMessages();
+                const container = document.getElementById('messagesContainer');
+                
+                const wasAtBottom = isScrolledToBottom(container);
+                
+                if (result.success) {
+                    container.innerHTML = '';
+                    const currentUser = Backend.getCurrentUser();
+                    
+                    if (result.messages.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-globe"></i>
+                                <h3>Welcome to Global Chat! 🌍</h3>
+                                <p>Be the first to start the conversation</p>
+                            </div>
+                        `;
+                    } else {
+                        result.messages.forEach(msg => {
+                            const sender = msg.get('sender');
+                            const senderName = msg.get('senderName');
+                            const isOwn = sender && sender.id === currentUser.id;
+                            
+                            let displayName = 'Unknown User';
+                            if (sender && sender.get) {
+                                displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
+                            } else if (senderName) {
+                                displayName = senderName;
+                            }
+                            
+                            const messageDiv = document.createElement('div');
+                            messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+                            
+                            messageDiv.innerHTML = `
+                                ${!isOwn ? `<div class="message-header">${displayName}</div>` : ''}
+                                <div class="message-content">${msg.get('message')}</div>
+                                <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
+                            `;
+                            
+                            container.appendChild(messageDiv);
+                        });
+                        
+                        if (wasAtBottom || result.messages.length <= 5) {
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    }
+                } else {
+                    console.error('Failed to load global messages:', result.error);
+                    showNotification('Failed to load global chat', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading global messages:', error);
+                showNotification('Failed to load global chat', 'error');
+            }
+        }
+        
+        // Send message
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            const MAX_MESSAGE_LENGTH = 1000;
+            if (message.length > MAX_MESSAGE_LENGTH) {
+                showNotification(`Message too long! Maximum ${MAX_MESSAGE_LENGTH} characters allowed.`, 'error');
+                return;
+            }
+            
+            if (!message || !currentChatId) {
+                showNotification('Please enter a message', 'error');
+                return;
+            }
+            
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            try {
+                let result;
+                
+                if (isGlobalChat) {
+                    result = await Backend.sendGlobalMessage(message);
+                } else {
+                    result = await Backend.sendMessage(currentChatId, message);
+                }
+                
+                if (result.success) {
+                    input.value = '';
+                    adjustTextareaHeight(input);
+                    
+                    if (isGlobalChat) {
+                        await loadGlobalMessages();
+                        const container = document.getElementById('messagesContainer');
+                        setTimeout(() => {
+                            container.scrollTop = container.scrollHeight;
+                        }, 100);
+                    } else {
+                        await loadMessages(true);
+                    }
+                    
+                    setTimeout(loadChats, 500);
+                    showNotification('Message sent! ✓', 'success', 2000);
+                } else {
+                    showNotification('Failed to send: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                showNotification('Network error', 'error');
+            }
+            
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+            input.focus();
+        }
+        
+        // =============== CONTACT FUNCTIONS ===============
+        
+        // Add contact
+        async function addContact(userId, username) {
+            try {
+                showNotification('Sending contact request...', 'info', 2000);
+                const result = await Backend.addContact(userId, username);
+                
+                if (result.success) {
+                    showNotification(`Contact request sent to ${username}! 📤`, 'success');
+                    await loadRequests();
+                    hideUsers();
+                } else {
+                    showNotification(result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Add contact error:', error);
+                showNotification('Failed to send contact request', 'error');
+            }
+        }
+        
+        // Accept contact request
+        async function acceptContactRequest(contactId, username) {
+            try {
+                const result = await Backend.acceptContact(contactId);
+                
+                if (result.success) {
+                    showNotification(`${username} added to contacts! 👥`, 'success');
+                    await Promise.all([loadContacts(), loadRequests()]);
+                } else {
+                    showNotification('Failed to accept request', 'error');
+                }
+            } catch (error) {
+                console.error('Accept contact error:', error);
+                showNotification('Failed to accept request', 'error');
+            }
+        }
+        
+        // Reject contact request
+        async function rejectContactRequest(contactId, username) {
+            if (confirm(`Reject contact request from ${username}?`)) {
+                try {
+                    const result = await Backend.removeContact(contactId);
+                    
+                    if (result.success) {
+                        showNotification(`Request from ${username} rejected`, 'info');
+                        await loadRequests();
+                    } else {
+                        showNotification('Failed to reject request', 'error');
+                    }
+                } catch (error) {
+                    console.error('Reject contact error:', error);
+                    showNotification('Failed to reject request', 'error');
+                }
+            }
+        }
+        
+        // Cancel contact request
+        async function cancelContactRequest(contactId, username) {
+            if (confirm(`Cancel contact request to ${username}?`)) {
+                try {
+                    const result = await Backend.removeContact(contactId);
+                    
+                    if (result.success) {
+                        showNotification(`Request to ${username} cancelled`, 'info');
+                        await loadRequests();
+                    } else {
+                        showNotification('Failed to cancel request', 'error');
+                    }
+                } catch (error) {
+                    console.error('Cancel contact error:', error);
+                    showNotification('Failed to cancel request', 'error');
+                }
+            }
+        }
+        
+        // Remove contact
+        async function removeContact(contactId, username) {
+            if (confirm(`Remove ${username} from contacts?`)) {
+                try {
+                    const result = await Backend.removeContact(contactId);
+                    
+                    if (result.success) {
+                        showNotification(`${username} removed from contacts`, 'info');
+                        await loadContacts();
+                    } else {
+                        showNotification('Failed to remove contact', 'error');
+                    }
+                } catch (error) {
+                    console.error('Remove contact error:', error);
+                    showNotification('Failed to remove contact', 'error');
+                }
+            }
+        }
+        
+        // =============== DATA LOADING FUNCTIONS ===============
+        
+        // Load chats
         async function loadChats() {
             try {
                 const result = await Backend.getChats();
@@ -1301,6 +1637,7 @@
             }
         }
         
+        // Load contacts
         async function loadContacts() {
             try {
                 const result = await Backend.getContacts();
@@ -1355,6 +1692,7 @@
             }
         }
         
+        // Load requests
         async function loadRequests() {
             try {
                 const [pendingResult, sentResult] = await Promise.all([
@@ -1458,392 +1796,14 @@
             }
         }
         
-        // Contact management functions
-        async function addContact(userId, username) {
-            try {
-                showNotification('Sending contact request...', 'info', 2000);
-                const result = await Backend.addContact(userId, username);
-                
-                if (result.success) {
-                    showNotification(`Contact request sent to ${username}! 📤`, 'success');
-                    await loadRequests();
-                    hideUsers();
-                } else {
-                    showNotification(result.error, 'error');
-                }
-            } catch (error) {
-                console.error('Add contact error:', error);
-                showNotification('Failed to send contact request', 'error');
-            }
-        }
-        
-        async function acceptContactRequest(contactId, username) {
-            try {
-                const result = await Backend.acceptContact(contactId);
-                
-                if (result.success) {
-                    showNotification(`${username} added to contacts! 👥`, 'success');
-                    await Promise.all([loadContacts(), loadRequests()]);
-                } else {
-                    showNotification('Failed to accept request', 'error');
-                }
-            } catch (error) {
-                console.error('Accept contact error:', error);
-                showNotification('Failed to accept request', 'error');
-            }
-        }
-        
-        async function rejectContactRequest(contactId, username) {
-            if (confirm(`Reject contact request from ${username}?`)) {
-                try {
-                    const result = await Backend.removeContact(contactId);
-                    
-                    if (result.success) {
-                        showNotification(`Request from ${username} rejected`, 'info');
-                        await loadRequests();
-                    } else {
-                        showNotification('Failed to reject request', 'error');
-                    }
-                } catch (error) {
-                    console.error('Reject contact error:', error);
-                    showNotification('Failed to reject request', 'error');
-                }
-            }
-        }
-        
-        async function cancelContactRequest(contactId, username) {
-            if (confirm(`Cancel contact request to ${username}?`)) {
-                try {
-                    const result = await Backend.removeContact(contactId);
-                    
-                    if (result.success) {
-                        showNotification(`Request to ${username} cancelled`, 'info');
-                        await loadRequests();
-                    } else {
-                        showNotification('Failed to cancel request', 'error');
-                    }
-                } catch (error) {
-                    console.error('Cancel contact error:', error);
-                    showNotification('Failed to cancel request', 'error');
-                }
-            }
-        }
-        
-        async function removeContact(contactId, username) {
-            if (confirm(`Remove ${username} from contacts?`)) {
-                try {
-                    const result = await Backend.removeContact(contactId);
-                    
-                    if (result.success) {
-                        showNotification(`${username} removed from contacts`, 'info');
-                        await loadContacts();
-                    } else {
-                        showNotification('Failed to remove contact', 'error');
-                    }
-                } catch (error) {
-                    console.error('Remove contact error:', error);
-                    showNotification('Failed to remove contact', 'error');
-                }
-            }
-        }
-        
-        async function updateOnlineUsersCount() {
-            try {
-                const result = await Backend.getOnlineUsersCount();
-                if (result.success) {
-                    document.getElementById('globalUserCount').textContent = result.count;
-                }
-            } catch (error) {
-                console.error('Error updating online count:', error);
-            }
-        }
-        
-        async function selectGlobalChat() {
-            console.log('Selecting global chat...');
-            
-            currentChatId = 'global';
-            currentChatName = 'Global Chat';
-            isGlobalChat = true;
-            
-            // Update UI
-            document.querySelectorAll('.chat-item, .global-chat-item, .contact-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            document.getElementById('globalChatItem').classList.add('active');
-            
-            document.getElementById('welcomeScreen').classList.add('hidden');
-            document.getElementById('chatContent').classList.remove('hidden');
-            
-            document.getElementById('currentChatName').textContent = '🌍 Global Chat';
-            document.getElementById('chatStatus').textContent = 'Everyone is here';
-            document.getElementById('chatHeaderAvatar').innerHTML = '<i class="fas fa-globe"></i>';
-            
-            await loadGlobalMessages();
-            document.getElementById('messageInput').focus();
-            
-            // Close sidebar on mobile
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.remove('show');
-            }
-            
-            console.log('Global chat selected successfully');
-        }
-        
-        async function selectChat(userId, username) {
-            currentChatId = userId;
-            currentChatName = username;
-            isGlobalChat = false;
-            
-            document.querySelectorAll('.chat-item, .global-chat-item, .contact-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            // Find and highlight the active chat
-            const chatItems = document.querySelectorAll('.chat-item, .contact-item');
-            chatItems.forEach(item => {
-                if (item.onclick && item.onclick.toString().includes(userId)) {
-                    item.classList.add('active');
-                }
-            });
-            
-            document.getElementById('welcomeScreen').classList.add('hidden');
-            document.getElementById('chatContent').classList.remove('hidden');
-            
-            document.getElementById('currentChatName').textContent = username;
-            document.getElementById('chatStatus').textContent = 'online';
-            document.getElementById('chatHeaderAvatar').textContent = username[0].toUpperCase();
-            
-            await loadMessages();
-            document.getElementById('messageInput').focus();
-            
-            // Close sidebar on mobile
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.remove('show');
-            }
-        }
-        
-        function startChat(userId, username) {
-            if (currentTab !== 'chats') {
-                switchTab('chats');
-            }
-            selectChat(userId, username);
-            showNotification(`Started chat with ${username}! 💬`, 'success', 2000);
-        }
-        
-        async function loadMessages(scrollToBottom = true) {
-            if (!currentChatId || currentChatId === 'global') return;
-            
-            try {
-                const result = await Backend.getMessages(currentChatId);
-                const container = document.getElementById('messagesContainer');
-                
-                const wasAtBottom = isScrolledToBottom(container);
-                
-                if (result.success) {
-                    container.innerHTML = '';
-                    const currentUser = Backend.getCurrentUser();
-                    
-                    if (result.messages.length === 0) {
-                        container.innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-comments"></i>
-                                <h3>No messages yet</h3>
-                                <p>Start the conversation!</p>
-                            </div>
-                        `;
-                    } else {
-                        result.messages.forEach(msg => {
-                            const sender = msg.get('sender');
-                            const senderName = msg.get('senderName');
-                            const isOwn = sender && sender.id === currentUser.id;
-                            
-                            let displayName = 'Unknown User';
-                            if (sender && sender.get) {
-                                displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
-                            } else if (senderName) {
-                                displayName = senderName;
-                            }
-                            
-                            const messageDiv = document.createElement('div');
-                            messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
-                            
-                            messageDiv.innerHTML = `
-                                ${!isOwn ? `<div class="message-header">${displayName}</div>` : ''}
-                                <div class="message-content">${msg.get('message')}</div>
-                                <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
-                            `;
-                            
-                            container.appendChild(messageDiv);
-                        });
-                        
-                        if (scrollToBottom || wasAtBottom) {
-                            container.scrollTop = container.scrollHeight;
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading messages:', error);
-                showNotification('Failed to load messages', 'error');
-            }
-        }
-        
-        async function loadGlobalMessages() {
-            console.log('Loading global messages...');
-            
-            try {
-                const result = await Backend.getGlobalMessages();
-                const container = document.getElementById('messagesContainer');
-                
-                const wasAtBottom = isScrolledToBottom(container);
-                
-                console.log('Global messages result:', result);
-                
-                if (result.success) {
-                    container.innerHTML = '';
-                    const currentUser = Backend.getCurrentUser();
-                    
-                    if (result.messages.length === 0) {
-                        container.innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-globe"></i>
-                                <h3>Welcome to Global Chat! 🌍</h3>
-                                <p>Be the first to start the conversation</p>
-                            </div>
-                        `;
-                    } else {
-                        result.messages.forEach(msg => {
-                            const sender = msg.get('sender');
-                            const senderName = msg.get('senderName');
-                            const isOwn = sender && sender.id === currentUser.id;
-                            
-                            let displayName = 'Unknown User';
-                            if (sender && sender.get) {
-                                displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
-                            } else if (senderName) {
-                                displayName = senderName;
-                            }
-                            
-                            const messageDiv = document.createElement('div');
-                            messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
-                            
-                            messageDiv.innerHTML = `
-                                ${!isOwn ? `<div class="message-header">${displayName}</div>` : ''}
-                                <div class="message-content">${msg.get('message')}</div>
-                                <div class="message-time">${formatTime(msg.get('timestamp'))}</div>
-                            `;
-                            
-                            container.appendChild(messageDiv);
-                        });
-                        
-                        if (wasAtBottom || result.messages.length <= 5) {
-                            container.scrollTop = container.scrollHeight;
-                        }
-                    }
-                } else {
-                    console.error('Failed to load global messages:', result.error);
-                    showNotification('Failed to load global chat. Try logging in again or checking your WIFI.', 'error');
-                }
-            } catch (error) {
-                console.error('Error loading global messages:', error);
-                showNotification('Failed to load global chat. Try logging in again or checking your WIFI.', 'error');
-            }
-        }
-        
-        function isScrolledToBottom(container) {
-            if (!container) return true;
-            const threshold = 100;
-            return container.scrollTop >= (container.scrollHeight - container.clientHeight - threshold);
-        }
-        
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-            
-            // Add character limit check (1000 characters)
-            const MAX_MESSAGE_LENGTH = 1000;
-            if (message.length > MAX_MESSAGE_LENGTH) {
-                showNotification(`Message too long! Maximum ${MAX_MESSAGE_LENGTH} characters allowed.`, 'error');
-                return;
-            }
-            
-            if (!message || !currentChatId) {
-                showNotification('Please enter a message', 'error');
-                return;
-            }
-            
-            console.log('Sending message:', { message, currentChatId, isGlobalChat });
-            
-            const sendBtn = document.getElementById('sendBtn');
-            sendBtn.disabled = true;
-            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            
-            try {
-                let result;
-                
-                if (isGlobalChat) {
-                    result = await Backend.sendGlobalMessage(message);
-                    console.log('Global message send result:', result);
-                } else {
-                    result = await Backend.sendMessage(currentChatId, message);
-                }
-                
-                if (result.success) {
-                    input.value = '';
-                    adjustTextareaHeight(input);
-                    
-                    if (isGlobalChat) {
-                        await loadGlobalMessages();
-                        const container = document.getElementById('messagesContainer');
-                        setTimeout(() => {
-                            container.scrollTop = container.scrollHeight;
-                        }, 100);
-                    } else {
-                        await loadMessages(true);
-                    }
-                    
-                    setTimeout(loadChats, 500);
-                    showNotification('Message sent! ✓', 'success', 2000);
-                } else {
-                    console.error('Message send failed:', result.error);
-                    showNotification('Failed to send: ' + result.error, 'error');
-                }
-            } catch (error) {
-                console.error('Error sending message:', error);
-                showNotification('Network error', 'error');
-            }
-            
-            sendBtn.disabled = false;
-            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
-            input.focus();
-        }
-        
-        async function showUsers() {
-            document.getElementById('usersModal').style.display = 'block';
-            document.getElementById('userSearchInput').value = '';
-            
-            document.getElementById('usersList').innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
-            
-            await loadUsers();
-            setTimeout(() => {
-                document.getElementById('userSearchInput').focus();
-            }, 100);
-        }
-        
-        function hideUsers() {
-            document.getElementById('usersModal').style.display = 'none';
-        }
-        
+        // Load users for modal
         async function loadUsers(searchTerm = '') {
             const usersList = document.getElementById('usersList');
             
             try {
-                console.log('Loading users with search term:', searchTerm);
-                
                 const result = searchTerm && searchTerm.length >= 1 ? 
                     await Backend.searchUsers(searchTerm) : 
                     await Backend.getUsersWithContactStatus();
-                
-                console.log('Users loaded:', result);
                 
                 if (result.success) {
                     usersList.innerHTML = '';
@@ -1923,10 +1883,7 @@
                         
                         usersList.appendChild(userDiv);
                     });
-                    
-                    console.log('Users list populated with', result.users.length, 'users');
                 } else {
-                    console.error('Failed to load users:', result.error);
                     usersList.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-exclamation-triangle"></i>
@@ -1947,24 +1904,46 @@
             }
         }
         
+        // =============== UI FUNCTIONS ===============
+        
+        // Show users modal
+        async function showUsers() {
+            document.getElementById('usersModal').style.display = 'block';
+            document.getElementById('userSearchInput').value = '';
+            
+            document.getElementById('usersList').innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
+            
+            await loadUsers();
+            setTimeout(() => {
+                document.getElementById('userSearchInput').focus();
+            }, 100);
+        }
+        
+        // Hide users modal
+        function hideUsers() {
+            document.getElementById('usersModal').style.display = 'none';
+        }
+        
+        // Search users
         async function searchUsers() {
             const searchTerm = document.getElementById('userSearchInput').value.trim();
-            console.log('Searching users:', searchTerm);
             await loadUsers(searchTerm);
         }
         
+        // Start chat from users list
         function startChatFromUsers(userId, username) {
             hideUsers();
             switchTab('chats');
             startChat(userId, username);
         }
         
+        // Accept from users list
         async function acceptFromUsers(contactId, username) {
             await acceptContactRequest(contactId, username);
-            await loadUsers(); // Refresh the users list
+            await loadUsers();
         }
         
-        // Search functionality for sidebar content
+        // Search sidebar content
         function searchContent() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             
@@ -1987,7 +1966,6 @@
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('show');
-            console.log('Sidebar toggled:', sidebar.classList.contains('show');
         }
         
         // Close sidebar when clicking outside on mobile
@@ -1998,16 +1976,17 @@
             if (window.innerWidth <= 768 && sidebar.classList.contains('show')) {
                 if (!sidebar.contains(e.target) && e.target !== toggleBtn && !toggleBtn.contains(e.target)) {
                     sidebar.classList.remove('show');
-                    console.log('Sidebar closed by outside click');
                 }
             }
         });
         
+        // Refresh all data
         async function refreshAll() {
             showNotification('Refreshing...', 'info', 2000);
             await loadAllData();
         }
         
+        // Refresh messages
         async function refreshMessages() {
             if (currentChatId) {
                 if (isGlobalChat) {
@@ -2018,6 +1997,7 @@
             }
         }
         
+        // Logout
         async function logout() {
             if (confirm('Are you sure you want to logout?')) {
                 Backend.stopActivityTracking();
@@ -2029,6 +2009,21 @@
             }
         }
         
+        // Update online users count
+        async function updateOnlineUsersCount() {
+            try {
+                const result = await Backend.getOnlineUsersCount();
+                if (result.success) {
+                    document.getElementById('globalUserCount').textContent = result.count;
+                }
+            } catch (error) {
+                console.error('Error updating online count:', error);
+            }
+        }
+        
+        // =============== UTILITY FUNCTIONS ===============
+        
+        // Handle enter key press
         function handleKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
@@ -2036,6 +2031,7 @@
             }
         }
         
+        // Adjust textarea height
         function adjustTextareaHeight(textarea) {
             textarea.style.height = 'auto';
             textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
@@ -2052,6 +2048,14 @@
             }
         }
         
+        // Check if scrolled to bottom
+        function isScrolledToBottom(container) {
+            if (!container) return true;
+            const threshold = 100;
+            return container.scrollTop >= (container.scrollHeight - container.clientHeight - threshold);
+        }
+        
+        // Format time
         function formatTime(date) {
             if (!date) return '';
             
@@ -2075,6 +2079,7 @@
             }
         }
         
+        // Format last seen
         function formatLastSeen(lastSeen) {
             if (!lastSeen) return 'Last seen long ago';
             
@@ -2086,7 +2091,7 @@
                 return 'Just now';
             } else if (diffInMinutes < 60) {
                 return `Last seen ${diffInMinutes}m ago`;
-            } else if (diffInMinutes < 1440) { // 24 hours
+            } else if (diffInMinutes < 1440) {
                 const hours = Math.floor(diffInMinutes / 60);
                 return `Last seen ${hours}h ago`;
             } else {
@@ -2099,6 +2104,7 @@
             }
         }
         
+        // Show notification
         function showNotification(message, type = 'info', duration = 4000) {
             const existing = document.querySelector('.notification');
             if (existing) existing.remove();
@@ -2119,6 +2125,14 @@
             }, duration);
         }
         
+        // Fix mobile viewport height
+        function setViewportHeight() {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        }
+        
+        // =============== EVENT LISTENERS ===============
+        
         // Handle window resize
         window.addEventListener('resize', function() {
             const sidebar = document.getElementById('sidebar');
@@ -2127,12 +2141,7 @@
             }
         });
         
-        // Fix mobile viewport height
-        function setViewportHeight() {
-            const vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-        }
-        
+        // Set viewport height
         setViewportHeight();
         window.addEventListener('resize', setViewportHeight);
         window.addEventListener('orientationchange', () => {
@@ -2158,7 +2167,7 @@
             }
         });
         
-        // Initialize input handler on page load
+        // Initialize input handler
         window.addEventListener('load', function() {
             const messageInput = document.getElementById('messageInput');
             if (messageInput) {
