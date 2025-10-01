@@ -45,4 +45,6 @@ By using ChatRise, you agree to the following:
 - ChatRise is provided for **personal use only**.  
 - All code, designs, and assets are **copyright © 2025 [Reuben Yee]. All rights reserved.**  
 
+Report infringement - Contact me at reubenyee2012@gmail.com
+
 For full details, see [TERMS.md](./TERMS.md) and [LICENSE.txt](./LICENSE.txt).
