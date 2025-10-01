@@ -3,16 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Verification - ChatRise</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
+    <title>Verify Email - ChatRise</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
@@ -22,34 +15,19 @@
             justify-content: center;
             padding: 20px;
         }
-        
-        .verification-container {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
+        .container {
+            background: white;
             padding: 40px;
-            border-radius: 24px;
+            border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.2);
             max-width: 500px;
             width: 100%;
             text-align: center;
-            animation: slideUp 0.6s ease-out;
         }
-        
-        @keyframes slideUp {
-            from {
-                transform: translateY(50px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-        
         .icon {
             width: 80px;
             height: 80px;
-            background: linear-gradient(135deg, #25d366, #128c7e);
+            background: #25d366;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -58,153 +36,64 @@
             color: white;
             font-size: 32px;
         }
-        
-        .success .icon {
-            background: linear-gradient(135deg, #25d366, #20b858);
-        }
-        
-        .error .icon {
-            background: linear-gradient(135deg, #dc3545, #c82333);
-        }
-        
-        h1 {
-            color: #333;
-            margin-bottom: 16px;
-            font-size: 28px;
-            font-weight: 600;
-        }
-        
-        p {
-            color: #666;
-            margin-bottom: 24px;
-            line-height: 1.6;
-        }
-        
+        h1 { margin-bottom: 16px; color: #333; }
+        p { color: #666; margin-bottom: 24px; line-height: 1.6; }
         .btn {
             display: inline-block;
-            background: linear-gradient(135deg, #25d366, #128c7e);
+            background: #25d366;
             color: white;
             padding: 14px 28px;
             text-decoration: none;
             border-radius: 12px;
             font-weight: 600;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
             margin: 10px;
         }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.3);
-        }
-        
-        .btn-secondary {
-            background: rgba(248, 249, 250, 0.9);
-            color: #333;
-            border: 2px solid #e8ecef;
-        }
-        
-        .btn-secondary:hover {
-            background: rgba(233, 236, 239, 0.9);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-        }
-        
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 8px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .hidden {
-            display: none;
-        }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
-    <div class="verification-container" id="loadingState">
-        <div class="icon">
-            <i class="fas fa-spinner"></i>
-        </div>
+    <div class="container" id="loadingState">
+        <div class="icon">⏳</div>
         <h1>Verifying Your Email</h1>
         <p>Please wait while we verify your email address...</p>
-        <button class="btn" disabled>
-            <span class="loading-spinner"></span>Processing...
-        </button>
     </div>
 
-    <div class="verification-container success hidden" id="successState">
-        <div class="icon">
-            <i class="fas fa-check"></i>
-        </div>
+    <div class="container hidden" id="successState">
+        <div class="icon">✅</div>
         <h1>Email Verified Successfully!</h1>
-        <p>Your email address has been verified successfully. You can now enjoy all features of ChatRise.</p>
-        <div>
-            <a href="index.html" class="btn">Go to Chat</a>
-            <a href="login.html" class="btn btn-secondary">Back to Login</a>
-        </div>
+        <p>Your email has been verified. You can now login to ChatRise.</p>
+        <a href="login.html" class="btn">Go to Login</a>
     </div>
 
-    <div class="verification-container error hidden" id="errorState">
-        <div class="icon">
-            <i class="fas fa-times"></i>
-        </div>
+    <div class="container hidden" id="errorState">
+        <div class="icon">❌</div>
         <h1>Verification Failed</h1>
-        <p id="errorMessage">There was an error verifying your email address. The link may be invalid or expired.</p>
-        <div>
-            <a href="login.html" class="btn">Back to Login</a>
-            <a href="signup.html" class="btn btn-secondary">Create New Account</a>
-        </div>
+        <p id="errorMessage">The verification link is invalid or expired.</p>
+        <a href="login.html" class="btn">Back to Login</a>
     </div>
 
+    <script src="config.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
+    <script src="backend.js"></script>
     <script>
-        // Initialize Parse
-        Parse.initialize('z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT', 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV');
-        Parse.serverURL = 'https://parseapi.back4app.com/';
-
-        // Get URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const userId = urlParams.get('userId');
 
         async function verifyEmail() {
             if (!userId) {
-                showError('Invalid verification link. Missing user ID.');
+                showError('Invalid verification link.');
                 return;
             }
 
             try {
-                // Find the user by ID
-                const query = new Parse.Query(Parse.User);
-                const user = await query.get(userId);
-                
-                if (user) {
-                    // Update user's email verification status
-                    user.set('emailVerified', true);
-                    await user.save();
-                    
+                const result = await Backend.verifyEmail(userId);
+                if (result.success) {
                     showSuccess();
                 } else {
-                    showError('User not found. The verification link may be invalid.');
+                    showError(result.error);
                 }
             } catch (error) {
-                console.error('Verification error:', error);
-                
-                if (error.code === 101) {
-                    showError('User not found. The verification link may be invalid or expired.');
-                } else if (error.code === 209) {
-                    showError('This verification link has already been used.');
-                } else {
-                    showError('An unexpected error occurred. Please try again later.');
-                }
+                showError('Verification failed. Please try again.');
             }
         }
 
@@ -219,7 +108,6 @@
             document.getElementById('errorMessage').textContent = message;
         }
 
-        // Start verification when page loads
         window.addEventListener('load', function() {
             setTimeout(verifyEmail, 1000);
         });
