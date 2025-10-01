@@ -11,13 +11,32 @@ class Backend {
 
     init() {
         try {
+            // Check if CONFIG is available
+            if (typeof CONFIG === 'undefined') {
+                console.error('❌ CONFIG not found - make sure config.js is loaded');
+                this.showConfigError();
+                return;
+            }
+
+            // Check if Parse is available
+            if (typeof Parse === 'undefined') {
+                console.error('❌ Parse SDK not loaded');
+                this.showParseError();
+                return;
+            }
+
             // Initialize Parse
             Parse.initialize(CONFIG.PARSE_APP_ID, CONFIG.PARSE_JS_KEY);
             Parse.serverURL = CONFIG.PARSE_SERVER_URL;
             
-            // Initialize EmailJS
+            // Initialize EmailJS if available
             if (typeof emailjs !== 'undefined') {
-                emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
+                try {
+                    emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
+                    console.log('✅ EmailJS initialized');
+                } catch (emailError) {
+                    console.warn('⚠️ EmailJS initialization failed:', emailError);
+                }
             }
             
             this.isInitialized = true;
@@ -31,6 +50,31 @@ class Backend {
         } catch (error) {
             console.error('❌ Backend initialization failed:', error);
             this.isInitialized = false;
+            this.showInitError(error);
+        }
+    }
+
+    showConfigError() {
+        // Show user-friendly error
+        if (typeof showNotification === 'function') {
+            showNotification('Configuration error. Please refresh the page.', 'error');
+        } else {
+            // Fallback if showNotification not available yet
+            setTimeout(() => {
+                alert('Configuration error. Please refresh the page.');
+            }, 1000);
+        }
+    }
+
+    showParseError() {
+        if (typeof showNotification === 'function') {
+            showNotification('Parse SDK failed to load. Please check your internet connection.', 'error');
+        }
+    }
+
+    showInitError(error) {
+        if (typeof showNotification === 'function') {
+            showNotification('Backend initialization failed: ' + error.message, 'error');
         }
     }
 
@@ -38,7 +82,7 @@ class Backend {
 
     async register(username, email, password) {
         if (!this.isInitialized) {
-            return { success: false, error: 'Backend not initialized' };
+            return { success: false, error: 'Backend not initialized. Please refresh the page.' };
         }
 
         try {
@@ -50,16 +94,15 @@ class Backend {
             user.set('email', email);
             user.set('password', password);
             
-            // Don't set emailVerified here - let cloud code handle it
             console.log('📝 Creating user account...');
             
             const userResult = await user.signUp();
             console.log('✅ User account created successfully');
             
-            // Send verification email using cloud function
-            console.log('📧 Sending verification email...');
-            let emailResult;
+            // Try to send verification email (but don't block registration if it fails)
+            let emailResult = { success: false, error: 'Email service not available' };
             try {
+                console.log('📧 Sending verification email...');
                 emailResult = await Parse.Cloud.run('sendVerificationEmail', {
                     userId: userResult.id,
                     email: email
@@ -67,7 +110,7 @@ class Backend {
                 console.log('✅ Verification email process completed');
             } catch (emailError) {
                 console.warn('⚠️ Email verification service unavailable:', emailError);
-                emailResult = { success: false, error: 'Email service temporarily unavailable' };
+                // Don't fail registration just because email failed
             }
 
             this.currentUser = userResult;
@@ -99,7 +142,7 @@ class Backend {
 
     async login(username, password) {
         if (!this.isInitialized) {
-            return { success: false, error: 'Backend not initialized' };
+            return { success: false, error: 'Backend not initialized. Please refresh the page.' };
         }
 
         try {
@@ -109,12 +152,10 @@ class Backend {
             
             this.currentUser = user;
             
-            // Check if email is verified
+            // Check if email is verified (but don't block login)
             const emailVerified = user.get('emailVerified');
             if (!emailVerified) {
                 console.warn('⚠️ User email not verified');
-                // You can choose to allow login anyway or require verification
-                // return { success: false, error: 'Please verify your email address first' };
             }
             
             // Start activity tracking
@@ -189,7 +230,6 @@ class Backend {
                 return { success: false, error: 'No email address found' };
             }
             
-            // Use cloud function to resend verification
             const result = await Parse.Cloud.run('resendVerificationEmail', {
                 email: email
             });
@@ -208,7 +248,6 @@ class Backend {
         }
 
         try {
-            // Refresh user data to get latest emailVerified status
             await this.currentUser.fetch();
             const isVerified = this.currentUser.get('emailVerified');
             
@@ -216,24 +255,6 @@ class Backend {
 
         } catch (error) {
             console.error('❌ Failed to check email verification:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    async sendVerificationEmail(userId, email) {
-        if (!this.isInitialized) {
-            return { success: false, error: 'Backend not initialized' };
-        }
-
-        try {
-            console.log('📧 Sending verification email to:', email);
-            const result = await Parse.Cloud.run('sendVerificationEmail', {
-                userId: userId,
-                email: email
-            });
-            return result;
-        } catch (error) {
-            console.error('❌ Failed to send verification email:', error);
             return { success: false, error: error.message };
         }
     }
@@ -258,22 +279,19 @@ class Backend {
             user.set('lastSeen', new Date());
             
             await user.save();
-            console.log('✅ User status updated:', isOnline ? 'online' : 'offline');
         } catch (error) {
             console.error('❌ Failed to update user status:', error);
         }
     }
 
     startActivityTracking() {
-        // Update status to online
         this.updateUserStatus(true);
         
-        // Set up periodic status updates
         this.activityInterval = setInterval(() => {
             if (this.isLoggedIn()) {
                 this.updateUserStatus(true);
             }
-        }, 30000); // Update every 30 seconds
+        }, 30000);
         
         console.log('✅ Activity tracking started');
     }
@@ -282,7 +300,6 @@ class Backend {
         if (this.activityInterval) {
             clearInterval(this.activityInterval);
             this.activityInterval = null;
-            console.log('✅ Activity tracking stopped');
         }
     }
 
@@ -304,7 +321,6 @@ class Backend {
             msg.set('isRead', false);
             
             await msg.save();
-            console.log('✅ Message sent to:', receiverId);
             
             return { success: true, message: msg };
 
@@ -329,7 +345,6 @@ class Backend {
             msg.set('timestamp', new Date());
             
             await msg.save();
-            console.log('✅ Global message sent');
             
             return { success: true, message: msg };
 
@@ -348,7 +363,6 @@ class Backend {
             const Message = Parse.Object.extend('Message');
             const query = new Parse.Query(Message);
             
-            // Get messages between current user and target user
             query.containedIn('sender', [
                 this.currentUser,
                 Parse.User.createWithoutData(userId)
@@ -364,7 +378,6 @@ class Backend {
             query.limit(50);
             
             const messages = await query.find();
-            console.log('✅ Loaded messages for user:', userId);
             
             return { success: true, messages: messages.reverse() };
 
@@ -388,7 +401,6 @@ class Backend {
             query.limit(100);
             
             const messages = await query.find();
-            console.log('✅ Loaded global messages');
             
             return { success: true, messages: messages.reverse() };
 
@@ -409,7 +421,6 @@ class Backend {
             const Contact = Parse.Object.extend('Contact');
             const query = new Parse.Query(Contact);
             
-            // Check if contact already exists
             query.equalTo('fromUser', this.currentUser);
             query.equalTo('toUser', Parse.User.createWithoutData(userId));
             
@@ -419,17 +430,15 @@ class Backend {
                 return { success: false, error: 'Contact already exists' };
             }
             
-            // Create new contact request
             const contact = new Contact();
             contact.set('fromUser', this.currentUser);
             contact.set('fromUsername', this.currentUser.get('username'));
             contact.set('toUser', Parse.User.createWithoutData(userId));
             contact.set('toUsername', username);
-            contact.set('status', 'pending'); // pending, accepted, rejected
+            contact.set('status', 'pending');
             contact.set('timestamp', new Date());
             
             await contact.save();
-            console.log('✅ Contact request sent to:', username);
             
             return { success: true, contact: contact };
 
@@ -454,7 +463,6 @@ class Backend {
                 return { success: false, error: 'Contact request not found' };
             }
             
-            // Verify this user is the recipient
             const toUser = contact.get('toUser');
             if (toUser.id !== this.currentUser.id) {
                 return { success: false, error: 'Not authorized to accept this request' };
@@ -463,7 +471,6 @@ class Backend {
             contact.set('status', 'accepted');
             await contact.save();
             
-            console.log('✅ Contact request accepted');
             return { success: true, contact: contact };
 
         } catch (error) {
@@ -487,7 +494,6 @@ class Backend {
                 return { success: false, error: 'Contact not found' };
             }
             
-            // Verify this user is involved in the contact
             const fromUser = contact.get('fromUser');
             const toUser = contact.get('toUser');
             
@@ -496,7 +502,6 @@ class Backend {
             }
             
             await contact.destroy();
-            console.log('✅ Contact removed');
             
             return { success: true };
 
@@ -515,7 +520,6 @@ class Backend {
             const Contact = Parse.Object.extend('Contact');
             const query = new Parse.Query(Contact);
             
-            // Get contacts where current user is involved and status is accepted
             query.containedIn('fromUser', [this.currentUser]);
             query.containedIn('toUser', [this.currentUser]);
             query.equalTo('status', 'accepted');
@@ -528,7 +532,6 @@ class Backend {
                 const fromUser = contact.get('fromUser');
                 const toUser = contact.get('toUser');
                 
-                // Determine which user is the other party
                 const otherUser = fromUser.id === this.currentUser.id ? toUser : fromUser;
                 const otherUsername = fromUser.id === this.currentUser.id ? 
                     contact.get('toUsername') : contact.get('fromUsername');
@@ -542,7 +545,6 @@ class Backend {
                 };
             });
             
-            console.log('✅ Loaded contacts:', formattedContacts.length);
             return { success: true, contacts: formattedContacts };
 
         } catch (error) {
@@ -560,7 +562,6 @@ class Backend {
             const Contact = Parse.Object.extend('Contact');
             const query = new Parse.Query(Contact);
             
-            // Get pending requests sent to current user
             query.equalTo('toUser', this.currentUser);
             query.equalTo('status', 'pending');
             query.include('fromUser');
@@ -579,7 +580,6 @@ class Backend {
                 };
             });
             
-            console.log('✅ Loaded pending requests:', formattedRequests.length);
             return { success: true, requests: formattedRequests };
 
         } catch (error) {
@@ -597,7 +597,6 @@ class Backend {
             const Contact = Parse.Object.extend('Contact');
             const query = new Parse.Query(Contact);
             
-            // Get pending requests sent by current user
             query.equalTo('fromUser', this.currentUser);
             query.equalTo('status', 'pending');
             query.include('toUser');
@@ -616,7 +615,6 @@ class Backend {
                 };
             });
             
-            console.log('✅ Loaded sent requests:', formattedRequests.length);
             return { success: true, requests: formattedRequests };
 
         } catch (error) {
@@ -642,7 +640,6 @@ class Backend {
             
             const users = await query.find();
             
-            // Get contact status for each user
             const usersWithStatus = await Promise.all(
                 users.map(async (user) => {
                     const contactStatus = await this.getContactStatus(user.id);
@@ -656,7 +653,6 @@ class Backend {
                 })
             );
             
-            console.log('✅ User search completed:', usersWithStatus.length, 'results');
             return { success: true, users: usersWithStatus };
 
         } catch (error) {
@@ -679,7 +675,6 @@ class Backend {
             
             const users = await query.find();
             
-            // Get contact status for each user
             const usersWithStatus = await Promise.all(
                 users.map(async (user) => {
                     const contactStatus = await this.getContactStatus(user.id);
@@ -693,7 +688,6 @@ class Backend {
                 })
             );
             
-            console.log('✅ Loaded users with contact status:', usersWithStatus.length);
             return { success: true, users: usersWithStatus };
 
         } catch (error) {
@@ -758,14 +752,12 @@ class Backend {
         }
 
         try {
-            // Get contacts first
             const contactsResult = await this.getContacts();
             
             if (!contactsResult.success) {
                 return { success: true, chats: [] };
             }
             
-            // For each contact, get the last message
             const chats = await Promise.all(
                 contactsResult.contacts.map(async (contact) => {
                     const Message = Parse.Object.extend('Message');
@@ -795,30 +787,12 @@ class Backend {
                 })
             );
             
-            // Sort by timestamp (most recent first)
             chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             
-            console.log('✅ Loaded chats:', chats.length);
             return { success: true, chats: chats };
 
         } catch (error) {
             console.error('❌ Failed to load chats:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    // =============== ADMIN FUNCTIONS ===============
-
-    async getUserStats() {
-        if (!this.isLoggedIn()) {
-            return { success: false, error: 'Not logged in' };
-        }
-
-        try {
-            const result = await Parse.Cloud.run('getUserStats');
-            return result;
-        } catch (error) {
-            console.error('❌ Failed to get user stats:', error);
             return { success: false, error: error.message };
         }
     }
