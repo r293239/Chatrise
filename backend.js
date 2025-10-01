@@ -156,6 +156,88 @@ class Backend {
         }
     }
 
+    // =============== EMAIL VERIFICATION ===============
+
+    async verifyEmail(userId, token) {
+        if (!this.isInitialized) {
+            return { success: false, error: 'Backend not initialized' };
+        }
+
+        try {
+            console.log('🔐 Verifying email for user:', userId);
+            const result = await Parse.Cloud.run('verifyEmail', {
+                userId: userId,
+                token: token
+            });
+            return result;
+        } catch (error) {
+            console.error('❌ Email verification failed:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async resendVerificationEmail() {
+        if (!this.isLoggedIn()) {
+            return { success: false, error: 'Not logged in' };
+        }
+
+        try {
+            const user = this.currentUser;
+            const email = user.get('email');
+            
+            if (!email) {
+                return { success: false, error: 'No email address found' };
+            }
+            
+            // Use cloud function to resend verification
+            const result = await Parse.Cloud.run('resendVerificationEmail', {
+                email: email
+            });
+            
+            return result;
+
+        } catch (error) {
+            console.error('❌ Failed to resend verification email:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async checkEmailVerification() {
+        if (!this.isLoggedIn()) {
+            return { success: false, error: 'Not logged in' };
+        }
+
+        try {
+            // Refresh user data to get latest emailVerified status
+            await this.currentUser.fetch();
+            const isVerified = this.currentUser.get('emailVerified');
+            
+            return { success: true, verified: isVerified };
+
+        } catch (error) {
+            console.error('❌ Failed to check email verification:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async sendVerificationEmail(userId, email) {
+        if (!this.isInitialized) {
+            return { success: false, error: 'Backend not initialized' };
+        }
+
+        try {
+            console.log('📧 Sending verification email to:', email);
+            const result = await Parse.Cloud.run('sendVerificationEmail', {
+                userId: userId,
+                email: email
+            });
+            return result;
+        } catch (error) {
+            console.error('❌ Failed to send verification email:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     // =============== USER MANAGEMENT ===============
 
     getCurrentUser() {
@@ -725,49 +807,18 @@ class Backend {
         }
     }
 
-    // =============== EMAIL VERIFICATION ===============
+    // =============== ADMIN FUNCTIONS ===============
 
-    async resendVerificationEmail() {
+    async getUserStats() {
         if (!this.isLoggedIn()) {
             return { success: false, error: 'Not logged in' };
         }
 
         try {
-            const user = this.currentUser;
-            const email = user.get('email');
-            
-            if (!email) {
-                return { success: false, error: 'No email address found' };
-            }
-            
-            // Use cloud function to resend verification
-            const result = await Parse.Cloud.run('sendVerificationEmail', {
-                userId: user.id,
-                email: email
-            });
-            
+            const result = await Parse.Cloud.run('getUserStats');
             return result;
-
         } catch (error) {
-            console.error('❌ Failed to resend verification email:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    async checkEmailVerification() {
-        if (!this.isLoggedIn()) {
-            return { success: false, error: 'Not logged in' };
-        }
-
-        try {
-            // Refresh user data to get latest emailVerified status
-            await this.currentUser.fetch();
-            const isVerified = this.currentUser.get('emailVerified');
-            
-            return { success: true, verified: isVerified };
-
-        } catch (error) {
-            console.error('❌ Failed to check email verification:', error);
+            console.error('❌ Failed to get user stats:', error);
             return { success: false, error: error.message };
         }
     }
