@@ -1,0 +1,17 @@
+ChatRise Proprietary License
+Copyright (c) 2025 [Reuben Yee]
+
+All rights reserved.
+
+Permission is granted to use this software ONLY for personal, non-commercial purposes.
+
+You may NOT:
+- Copy, modify, or redistribute the source code
+- Use the code in any other project or product
+- Sell, sublicense, or rehost this software
+- Reverse engineer, decompile, or attempt to extract source code
+
+This software is provided "as is," without warranty of any kind.  
+Use at your own risk.
+
+Unauthorized use will result in legal action.
