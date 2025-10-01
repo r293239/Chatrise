@@ -1,24 +1,16 @@
-
 // backend.js - Backend functionality for ChatRise
 // © 2025 [Reuben Yee]. All rights reserved.
 
-// Prevent multiple declarations
+// Check if Backend already exists to prevent duplicate declaration
 if (typeof Backend !== 'undefined') {
-    console.warn('⚠️ Backend already initialized');
-    return;
-}
-
-(function() {
+    console.log('⚠️ Backend already initialized, skipping...');
+} else {
     class Backend {
         constructor() {
             this.isInitialized = false;
             this.currentUser = null;
             this.activityInterval = null;
-            
-            // Delay initialization to ensure everything is loaded
-            setTimeout(() => {
-                this.init();
-            }, 100);
+            this.init();
         }
 
         init() {
@@ -762,8 +754,6 @@ if (typeof Backend !== 'undefined') {
         }
     }
 
-    // Create global instance only if it doesn't exist
-    if (typeof window.Backend === 'undefined') {
-        window.Backend = new Backend();
-    }
-})();
+    // Create global instance
+    window.Backend = new Backend();
+}
