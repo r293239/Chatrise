@@ -6,6 +6,9 @@
     <title>ChatRise - Login</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script src="config.js"></script>
+    <script src="backend.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -300,48 +303,29 @@
             opacity: 0;
         }
         
-        .demo-features {
+        .email-verification-info {
             background: rgba(37, 211, 102, 0.1);
             border: 1px solid rgba(37, 211, 102, 0.3);
             border-radius: 12px;
             padding: 16px;
             margin: 20px 0;
             text-align: left;
-        }
-        
-        .demo-features h4 {
+            font-size: 14px;
             color: #128c7e;
+        }
+
+        .email-verification-info h4 {
             margin-bottom: 8px;
             font-size: 14px;
             font-weight: 600;
         }
-        
-        .demo-features ul {
-            color: #666;
-            font-size: 13px;
+
+        .email-verification-info ul {
             margin-left: 16px;
         }
-        
-        .demo-features li {
+
+        .email-verification-info li {
             margin-bottom: 4px;
-        }
-        
-        /* Responsive */
-        @media (max-width: 480px) {
-            .login-container {
-                margin: 20px;
-                padding: 30px 25px;
-            }
-            
-            .login-header h1 {
-                font-size: 28px;
-            }
-            
-            .app-icon {
-                width: 70px;
-                height: 70px;
-                font-size: 28px;
-            }
         }
         
         /* Form validation styles */
@@ -361,6 +345,24 @@
             margin-top: 6px;
             text-align: left;
             padding-left: 50px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 20px;
+                padding: 30px 25px;
+            }
+            
+            .login-header h1 {
+                font-size: 28px;
+            }
+            
+            .app-icon {
+                width: 70px;
+                height: 70px;
+                font-size: 28px;
+            }
         }
     </style>
 </head>
@@ -394,20 +396,9 @@
             
             <div class="divider"><span>or</span></div>
             
-            <button type="button" class="btn btn-secondary" onclick="createDemoAccount()" id="demoBtn">
-                <i class="fas fa-rocket"></i> Try Quick Demo
+            <button type="button" class="btn btn-secondary" onclick="switchToSignup()" id="signupSwitchBtn">
+                <i class="fas fa-user-plus"></i> Create New Account
             </button>
-            
-            <div class="demo-features">
-                <h4><i class="fas fa-star"></i> Demo Features:</h4>
-                <ul>
-                    <li>🌍 Join the global chat room</li>
-                    <li>💬 Send private messages</li>
-                    <li>👥 Add friends and contacts</li>
-                    <li>📷 Set profile pictures</li>
-                    <li>🚀 Instant setup, no email needed</li>
-                </ul>
-            </div>
             
             <div class="switch-mode">
                 Don't have an account? <a href="#" onclick="switchToSignup()">Create one now</a>
@@ -433,6 +424,11 @@
                 <input type="password" id="signupPassword" placeholder="Create a password" autocomplete="new-password">
                 <div class="error-message" id="signupPasswordError"></div>
             </div>
+
+            <div class="email-verification-info">
+                <h4><i class="fas fa-info-circle"></i> Email Verification</h4>
+                <p>We'll send a verification email to activate your account. Please check your inbox after signing up.</p>
+            </div>
             
             <button type="button" class="btn btn-primary" onclick="handleSignup()" id="signupBtn">
                 <i class="fas fa-user-plus"></i> Create Account
@@ -445,110 +441,26 @@
     </div>
 
     <script>
-        // Initialize Parse immediately
-        Parse.initialize('z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT', 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV');
-        Parse.serverURL = 'https://parseapi.back4app.com';
-
-        // Enhanced Backend Object (simplified for login page)
-        const Backend = {
-            // Check if user is logged in
-            isLoggedIn() {
-                return Parse.User.current() !== null;
-            },
-            
-            // Login
-            async login(username, password) {
-                try {
-                    const user = await Parse.User.logIn(username, password);
-                    await this.updateUserStatus(true);
-                    return { success: true, user };
-                } catch (error) {
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Register with enhanced profile fields
-            async register(username, email, password) {
-                try {
-                    const user = new Parse.User();
-                    user.set('username', username);
-                    user.set('email', email);
-                    user.set('password', password);
-                    user.set('isOnline', true);
-                    user.set('lastSeen', new Date());
-                    user.set('joinedAt', new Date());
-                    user.set('description', ''); // User description/bio
-                    user.set('profilePicture', null); // Profile picture file
-                    
-                    const result = await user.signUp();
-                    await this.updateUserStatus(true);
-                    return { success: true, user: result };
-                } catch (error) {
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Update user online status
-            async updateUserStatus(isOnline) {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) return { success: false, error: 'Not logged in' };
-                    
-                    currentUser.set('isOnline', isOnline);
-                    currentUser.set('lastSeen', new Date());
-                    await currentUser.save();
-                    return { success: true };
-                } catch (error) {
-                    return { success: false, error: error.message };
-                }
-            },
-            
-            // Update user activity
-            async updateActivity() {
-                try {
-                    const currentUser = Parse.User.current();
-                    if (!currentUser) return { success: false };
-                    
-                    currentUser.set('lastSeen', new Date());
-                    currentUser.set('isOnline', true);
-                    await currentUser.save();
-                    
-                    return { success: true };
-                } catch (error) {
-                    return { success: false, error: error.message };
-                }
-            }
-        };
-
-        // Auto-update user activity
-        let activityInterval = null;
-
-        Backend.startActivityTracking = function() {
-            if (activityInterval) clearInterval(activityInterval);
-            
-            activityInterval = setInterval(async () => {
-                if (Backend.isLoggedIn()) {
-                    await Backend.updateActivity();
-                }
-            }, 30000);
-        };
-
-        Backend.stopActivityTracking = function() {
-            if (activityInterval) {
-                clearInterval(activityInterval);
-                activityInterval = null;
-            }
-        };
-
         let isLoading = false;
         
         // Check if already logged in
         window.addEventListener('load', function() {
+            console.log('🔐 Checking login status...');
+            
+            if (typeof Backend === 'undefined') {
+                console.error('❌ Backend not loaded!');
+                showNotification('Backend services failed to load. Please refresh.', 'error');
+                return;
+            }
+            
             if (Backend.isLoggedIn()) {
+                console.log('✅ User already logged in, redirecting...');
                 showNotification('Already logged in, redirecting...', 'info');
                 setTimeout(() => {
                     window.location.href = 'index.html';
                 }, 1000);
+            } else {
+                console.log('✅ Ready for login/signup');
             }
         });
 
@@ -587,6 +499,8 @@
                         setFieldError('username', 'Username not found');
                     } else if (result.error.includes('password')) {
                         setFieldError('password', 'Incorrect password');
+                    } else if (result.error.includes('verify')) {
+                        setFieldError('username', 'Please verify your email first');
                     }
                 }
             } catch (error) {
@@ -595,24 +509,6 @@
             }
             
             setLoading(false, 'loginBtn', '<i class="fas fa-sign-in-alt"></i> Sign In');
-        }
-
-        // Verify email is real using email verification API
-        async function verifyEmailExists(email) {
-            try {
-                // Using AbstractAPI for email verification
-                const response = await fetch(`https://emailvalidation.abstractapi.com/v1/?api_key=YOUR_API_KEY&email=${encodeURIComponent(email)}`);
-                const data = await response.json();
-                
-                // Check if email is deliverable and valid
-                return data.deliverability === 'DELIVERABLE' && 
-                       data.is_valid_format.value && 
-                       !data.is_disposable_email.value;
-            } catch (error) {
-                // If API fails, fall back to basic validation
-                console.warn('Email verification API failed, using basic validation');
-                return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-            }
         }
 
         // Handle signup
@@ -629,31 +525,24 @@
             // Validate inputs
             if (!validateSignup(username, email, password)) return;
             
-            setLoading(true, 'signupBtn', 'Verifying email...');
-            
-            // Verify email exists
-            const emailIsValid = await verifyEmailExists(email);
-            if (!emailIsValid) {
-                setFieldError('signupEmail', 'Please enter a valid, real email address');
-                showNotification('Email verification failed. Please use a real email address.', 'error');
-                setLoading(false, 'signupBtn', '<i class="fas fa-user-plus"></i> Create Account');
-                return;
-            }
-            
             setLoading(true, 'signupBtn', 'Creating account...');
             
             try {
                 const result = await Backend.register(username, email, password);
                 
                 if (result.success) {
-                    showNotification('Account created successfully! Welcome to ChatRise!', 'success');
+                    if (result.emailSent) {
+                        showNotification('Account created! Please check your email to verify your account.', 'success');
+                    } else {
+                        showNotification('Account created! Email verification failed to send, but you can still login.', 'info');
+                    }
                     
-                    // Start activity tracking
-                    Backend.startActivityTracking();
-                    
+                    // Switch back to login form instead of auto-redirect
                     setTimeout(() => {
-                        window.location.href = 'index.html';
-                    }, 1500);
+                        switchToLogin();
+                        document.getElementById('username').value = username;
+                        document.getElementById('username').focus();
+                    }, 3000);
                 } else {
                     showNotification(result.error || 'Registration failed', 'error');
                     
@@ -672,51 +561,6 @@
             }
             
             setLoading(false, 'signupBtn', '<i class="fas fa-user-plus"></i> Create Account');
-        }
-
-        // Create demo account
-        async function createDemoAccount() {
-            if (isLoading) return;
-            
-            setLoading(true, 'demoBtn', 'Creating demo...');
-            
-            try {
-                const demoUsername = 'demo_' + Math.random().toString(36).substr(2, 8);
-                const demoEmail = demoUsername + '@chatrise.demo';
-                const demoPassword = 'demo123456';
-                
-                const result = await Backend.register(demoUsername, demoEmail, demoPassword);
-                
-                if (result.success) {
-                    showNotification('Demo account created! Welcome to ChatRise!', 'success');
-                    
-                    // Start activity tracking
-                    Backend.startActivityTracking();
-                    
-                    setTimeout(() => {
-                        window.location.href = 'index.html';
-                    }, 1500);
-                } else {
-                    // If demo creation fails, try another username
-                    const fallbackDemo = 'demo_' + Date.now().toString(36);
-                    const fallbackResult = await Backend.register(fallbackDemo, fallbackDemo + '@chatrise.demo', demoPassword);
-                    
-                    if (fallbackResult.success) {
-                        showNotification('Demo account created! Welcome to ChatRise!', 'success');
-                        Backend.startActivityTracking();
-                        setTimeout(() => {
-                            window.location.href = 'index.html';
-                        }, 1500);
-                    } else {
-                        showNotification('Demo creation failed. Please try manual signup.', 'error');
-                    }
-                }
-            } catch (error) {
-                showNotification('Connection error. Please try again.', 'error');
-                console.error('Demo creation error:', error);
-            }
-            
-            setLoading(false, 'demoBtn', '<i class="fas fa-rocket"></i> Try Quick Demo');
         }
 
         // Switch between login and signup
@@ -943,9 +787,6 @@
                 await Backend.updateUserStatus(false);
             }
         });
-
-        // Make Backend available globally
-        window.Backend = Backend;
     </script>
 </body>
 </html>
