@@ -1,17 +1,36 @@
-ChatRise Proprietary License
-Copyright (c) 2025 [Reuben Yee]
+ChatRise Proprietary License v1.0
+© 2025 Reuben Yee. All rights reserved.
 
-All rights reserved.
+1. Grant of License
+   You are granted a limited, non-exclusive, non-transferable license to use ChatRise
+   for personal, non-commercial purposes only.
 
-Permission is granted to use this software ONLY for personal, non-commercial purposes.
+2. Restrictions
+   You may NOT:
+   - Copy, modify, merge, publish, distribute, sublicense, or rent any part of the software
+   - Reverse engineer, decompile, or disassemble the software
+   - Use the software in any commercial product or service
+   - Host, re-deploy, or rebrand the software
+   - Remove or alter any copyright or proprietary notices
 
-You may NOT:
-- Copy, modify, or redistribute the source code
-- Use the code in any other project or product
-- Sell, sublicense, or rehost this software
-- Reverse engineer, decompile, or attempt to extract source code
+3. Intellectual Property
+   All source code, designs, and assets remain the exclusive property of Reuben Yee.
+   No rights are granted other than those expressly stated here.
 
-This software is provided "as is," without warranty of any kind.  
-Use at your own risk.
+4. Termination
+   This license terminates automatically if you violate any restrictions.
+   Upon termination, you must immediately stop all use and destroy any copies.
+
+5. Disclaimer of Warranty
+   This software is provided "as is," without warranty of any kind.
+   The author is not responsible for damages of any kind arising from its use.
+
+6. Limitation of Liability
+   In no event shall the author be liable for any damages, including but not limited to
+   loss of data, profits, or business interruption.
+
+7. Governing Law
+   This license is governed by the laws of Singapore, and any disputes shall be resolved
+   exclusively in the courts of Singapore.
 
 Unauthorized use will result in legal action.
