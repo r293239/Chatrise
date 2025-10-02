@@ -346,6 +346,24 @@
             text-align: left;
             padding-left: 50px;
         }
+
+        .resend-verification {
+            margin-top: 15px;
+            text-align: center;
+            padding: 10px;
+            background: rgba(37, 211, 102, 0.05);
+            border-radius: 8px;
+        }
+        
+        .resend-verification a {
+            color: #25d366;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .resend-verification a:hover {
+            text-decoration: underline;
+        }
         
         /* Responsive */
         @media (max-width: 480px) {
@@ -393,6 +411,13 @@
             <button type="button" class="btn btn-primary" onclick="handleLogin()" id="loginBtn">
                 <i class="fas fa-sign-in-alt"></i> Sign In
             </button>
+
+            <div class="resend-verification">
+                <p style="font-size: 14px; color: #666; margin: 0;">
+                    Didn't receive verification email?
+                    <a href="#" onclick="resendVerification()">Resend verification email</a>
+                </p>
+            </div>
             
             <div class="divider"><span>or</span></div>
             
@@ -442,6 +467,12 @@
 
     <script>
         let isLoading = false;
+        
+        // Initialize EmailJS
+        if (typeof emailjs !== 'undefined' && CONFIG.EMAILJS_PUBLIC_KEY) {
+            emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
+            console.log('✅ EmailJS initialized');
+        }
         
         // Check if already logged in
         window.addEventListener('load', function() {
@@ -511,7 +542,7 @@
             setLoading(false, 'loginBtn', '<i class="fas fa-sign-in-alt"></i> Sign In');
         }
 
-        // Handle signup
+        // Handle signup - UPDATED WITH FRONTEND EMAILJS
         async function handleSignup() {
             if (isLoading) return;
             
@@ -531,18 +562,55 @@
                 const result = await Backend.register(username, email, password);
                 
                 if (result.success) {
-                    if (result.emailSent) {
-                        showNotification('Account created! Please check your email to verify your account.', 'success');
-                    } else {
-                        showNotification('Account created! Email verification failed to send, but you can still login.', 'info');
+                    console.log('✅ Registration successful, sending verification email...');
+                    
+                    // Send verification email using FRONTEND EmailJS
+                    try {
+                        const verificationToken = generateVerificationToken();
+                        const verificationLink = `https://r293239.github.io/Chatrise/verify-email.html?token=${verificationToken}&userId=${result.userId}`;
+                        
+                        console.log('📧 Sending email via frontend EmailJS...');
+                        console.log('🔗 Verification link:', verificationLink);
+                        
+                        const emailResult = await emailjs.send(
+                            CONFIG.EMAILJS_SERVICE_ID,
+                            CONFIG.EMAILJS_TEMPLATE_ID,
+                            {
+                                to_email: email,
+                                to_name: username,
+                                verification_link: verificationLink,
+                                username: username,
+                                from_name: 'ChatRise Team',
+                                app_name: 'ChatRise'
+                            }
+                        );
+                        
+                        console.log('✅ Email sent successfully!', emailResult);
+                        showNotification('Account created! Verification email sent. Please check your inbox.', 'success');
+                        
+                        // Save the verification token via cloud function
+                        try {
+                            await Parse.Cloud.run('saveVerificationToken', {
+                                userId: result.userId,
+                                token: verificationToken
+                            });
+                            console.log('✅ Verification token saved');
+                        } catch (tokenError) {
+                            console.warn('⚠️ Could not save verification token:', tokenError);
+                        }
+                        
+                    } catch (emailError) {
+                        console.error('❌ Email sending failed:', emailError);
+                        showNotification('Account created! But verification email failed to send. You can still login.', 'info');
                     }
                     
-                    // Switch back to login form instead of auto-redirect
+                    // Switch back to login form
                     setTimeout(() => {
                         switchToLogin();
                         document.getElementById('username').value = username;
                         document.getElementById('username').focus();
                     }, 3000);
+                    
                 } else {
                     showNotification(result.error || 'Registration failed', 'error');
                     
@@ -556,11 +624,65 @@
                     }
                 }
             } catch (error) {
-                showNotification('Connection error. Please try again.', 'error');
                 console.error('Signup error:', error);
+                showNotification('Connection error. Please try again.', 'error');
             }
             
             setLoading(false, 'signupBtn', '<i class="fas fa-user-plus"></i> Create Account');
+        }
+
+        // Resend verification email
+        async function resendVerification() {
+            const email = prompt('Please enter your email address to resend verification:');
+            if (!email) return;
+            
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                showNotification('Please enter a valid email address', 'error');
+                return;
+            }
+            
+            try {
+                setLoading(true, 'loginBtn', 'Sending email...');
+                showNotification('Sending verification email...', 'info');
+                
+                // Generate new token
+                const verificationToken = generateVerificationToken();
+                const verificationLink = `https://r293239.github.io/Chatrise/verify-email.html?token=${verificationToken}&userId=MANUAL_RESEND`;
+                
+                console.log('📧 Resending verification email to:', email);
+                
+                // Send email using frontend EmailJS
+                await emailjs.send(
+                    CONFIG.EMAILJS_SERVICE_ID,
+                    CONFIG.EMAILJS_TEMPLATE_ID,
+                    {
+                        to_email: email,
+                        to_name: 'User',
+                        verification_link: verificationLink,
+                        username: 'User',
+                        from_name: 'ChatRise Team',
+                        app_name: 'ChatRise'
+                    }
+                );
+                
+                showNotification('Verification email sent! Please check your inbox.', 'success');
+                
+            } catch (error) {
+                console.error('❌ Resend verification error:', error);
+                showNotification('Failed to send verification email. Please try again later.', 'error');
+            } finally {
+                setLoading(false, 'loginBtn', '<i class="fas fa-sign-in-alt"></i> Sign In');
+            }
+        }
+
+        // Generate verification token
+        function generateVerificationToken() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let token = '';
+            for (let i = 0; i < 32; i++) {
+                token += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return token;
         }
 
         // Switch between login and signup
