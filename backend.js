@@ -1,4 +1,4 @@
-// backend.js - Backend functionality for ChatRise
+// backend.js - Backend functionality for ChatRise - DEBUG VERSION
 // © 2025 [Reuben Yee]. All rights reserved.
 
 // Check if Backend already exists to prevent duplicate declaration
@@ -31,15 +31,10 @@ if (typeof Backend !== 'undefined') {
                 Parse.initialize(CONFIG.PARSE_APP_ID, CONFIG.PARSE_JS_KEY);
                 Parse.serverURL = CONFIG.PARSE_SERVER_URL;
                 
-                // Initialize EmailJS if available
-                if (typeof emailjs !== 'undefined' && CONFIG.EMAILJS_PUBLIC_KEY) {
-                    try {
-                        emailjs.init(CONFIG.EMAILJS_PUBLIC_KEY);
-                        console.log('✅ EmailJS initialized');
-                    } catch (emailError) {
-                        console.warn('⚠️ EmailJS initialization failed:', emailError);
-                    }
-                }
+                console.log('🔧 Parse initialized with:', {
+                    appId: CONFIG.PARSE_APP_ID ? '✓ Set' : '✗ Missing',
+                    serverURL: CONFIG.PARSE_SERVER_URL ? '✓ Set' : '✗ Missing'
+                });
                 
                 this.isInitialized = true;
                 console.log('✅ Backend initialized successfully');
@@ -48,6 +43,8 @@ if (typeof Backend !== 'undefined') {
                 this.currentUser = Parse.User.current();
                 if (this.currentUser) {
                     console.log('✅ User session restored:', this.currentUser.get('username'));
+                } else {
+                    console.log('ℹ️ No user session found');
                 }
             } catch (error) {
                 console.error('❌ Backend initialization failed:', error);
@@ -76,28 +73,11 @@ if (typeof Backend !== 'undefined') {
                 const userResult = await user.signUp();
                 console.log('✅ User account created successfully');
                 
-                // Try to send verification email
-                let emailResult = { success: false, error: 'Email service not available' };
-                try {
-                    if (typeof Parse.Cloud.run === 'function') {
-                        console.log('📧 Sending verification email...');
-                        emailResult = await Parse.Cloud.run('sendVerificationEmail', {
-                            userId: userResult.id,
-                            email: email
-                        });
-                        console.log('✅ Verification email process completed');
-                    }
-                } catch (emailError) {
-                    console.warn('⚠️ Email verification service unavailable:', emailError);
-                }
-
                 this.currentUser = userResult;
                 
                 return {
                     success: true,
-                    user: userResult,
-                    emailSent: emailResult.success,
-                    emailError: emailResult.error
+                    user: userResult
                 };
 
             } catch (error) {
@@ -209,106 +189,182 @@ if (typeof Backend !== 'undefined') {
             }
         }
 
-        // =============== MESSAGING ===============
+        // =============== USER SEARCH - DEBUG VERSION ===============
 
-        async sendMessage(receiverId, message) {
+        async getUsersWithContactStatus() {
             if (!this.isLoggedIn()) {
+                console.log('❌ getUsersWithContactStatus: User not logged in');
                 return { success: false, error: 'Not logged in' };
             }
 
             try {
-                const Message = Parse.Object.extend('Message');
-                const msg = new Message();
+                console.log('🔍 DEBUG: Starting getUsersWithContactStatus...');
+                console.log('🔍 DEBUG: Current user:', this.currentUser.id, this.currentUser.get('username'));
                 
-                msg.set('sender', this.currentUser);
-                msg.set('receiver', Parse.User.createWithoutData(receiverId));
-                msg.set('message', message);
-                msg.set('timestamp', new Date());
-                msg.set('isRead', false);
+                const User = Parse.User;
+                const query = new Parse.Query(User);
                 
-                await msg.save();
-                return { success: true, message: msg };
-
-            } catch (error) {
-                console.error('❌ Failed to send message:', error);
-                return { success: false, error: error.message };
-            }
-        }
-
-        async sendGlobalMessage(message) {
-            if (!this.isLoggedIn()) {
-                return { success: false, error: 'Not logged in' };
-            }
-
-            try {
-                const GlobalMessage = Parse.Object.extend('GlobalMessage');
-                const msg = new GlobalMessage();
-                
-                msg.set('sender', this.currentUser);
-                msg.set('senderName', this.currentUser.get('username'));
-                msg.set('message', message);
-                msg.set('timestamp', new Date());
-                
-                await msg.save();
-                return { success: true, message: msg };
-
-            } catch (error) {
-                console.error('❌ Failed to send global message:', error);
-                return { success: false, error: error.message };
-            }
-        }
-
-        async getMessages(userId) {
-            if (!this.isLoggedIn()) {
-                return { success: false, error: 'Not logged in' };
-            }
-
-            try {
-                const Message = Parse.Object.extend('Message');
-                const query = new Parse.Query(Message);
-                
-                query.containedIn('sender', [
-                    this.currentUser,
-                    Parse.User.createWithoutData(userId)
-                ]);
-                query.containedIn('receiver', [
-                    this.currentUser,
-                    Parse.User.createWithoutData(userId)
-                ]);
-                
-                query.include('sender');
-                query.include('receiver');
-                query.descending('timestamp');
-                query.limit(50);
-                
-                const messages = await query.find();
-                return { success: true, messages: messages.reverse() };
-
-            } catch (error) {
-                console.error('❌ Failed to load messages:', error);
-                return { success: false, error: error.message };
-            }
-        }
-
-        async getGlobalMessages() {
-            if (!this.isLoggedIn()) {
-                return { success: false, error: 'Not logged in' };
-            }
-
-            try {
-                const GlobalMessage = Parse.Object.extend('GlobalMessage');
-                const query = new Parse.Query(GlobalMessage);
-                
-                query.include('sender');
-                query.descending('timestamp');
+                // Exclude current user
+                query.notEqualTo('objectId', this.currentUser.id);
                 query.limit(100);
                 
-                const messages = await query.find();
-                return { success: true, messages: messages.reverse() };
+                console.log('🔍 DEBUG: Query setup complete, executing...');
+                
+                const users = await query.find();
+                console.log(`🔍 DEBUG: Query returned ${users.length} users`);
+                
+                if (users.length === 0) {
+                    console.log('ℹ️ DEBUG: No other users found in the system');
+                    return { success: true, users: [] };
+                }
+                
+                console.log('🔍 DEBUG: Found users:', users.map(u => ({
+                    id: u.id,
+                    username: u.get('username'),
+                    email: u.get('email'),
+                    isOnline: u.get('isOnline')
+                })));
+                
+                const usersWithStatus = await Promise.all(
+                    users.map(async (user) => {
+                        try {
+                            const contactStatus = await this.getContactStatus(user.id);
+                            return {
+                                id: user.id,
+                                username: user.get('username'),
+                                email: user.get('email'),
+                                isOnline: user.get('isOnline') || false,
+                                lastSeen: user.get('lastSeen'),
+                                ...contactStatus
+                            };
+                        } catch (error) {
+                            console.error(`❌ Error processing user ${user.id}:`, error);
+                            return {
+                                id: user.id,
+                                username: user.get('username') || 'Unknown',
+                                isOnline: false,
+                                lastSeen: null,
+                                isContact: false,
+                                isPending: false
+                            };
+                        }
+                    })
+                );
+                
+                console.log('✅ DEBUG: Users with status processed:', usersWithStatus);
+                return { success: true, users: usersWithStatus };
 
             } catch (error) {
-                console.error('❌ Failed to load global messages:', error);
-                return { success: false, error: error.message };
+                console.error('❌ DEBUG: Failed to load users:', error);
+                console.error('❌ DEBUG: Error details:', {
+                    message: error.message,
+                    code: error.code,
+                    stack: error.stack
+                });
+                return { 
+                    success: false, 
+                    error: error.message,
+                    users: []
+                };
+            }
+        }
+
+        async searchUsers(searchTerm) {
+            if (!this.isLoggedIn()) {
+                return { success: false, error: 'Not logged in' };
+            }
+
+            try {
+                console.log(`🔍 DEBUG: Searching users: "${searchTerm}"`);
+                
+                const User = Parse.User;
+                const query = new Parse.Query(User);
+                
+                // Use case-insensitive search
+                if (searchTerm && searchTerm.trim() !== '') {
+                    query.matches('username', searchTerm, 'i');
+                }
+                query.notEqualTo('objectId', this.currentUser.id);
+                query.limit(50);
+                
+                const users = await query.find();
+                console.log(`✅ DEBUG: Search found ${users.length} users`);
+                
+                const usersWithStatus = await Promise.all(
+                    users.map(async (user) => {
+                        try {
+                            const contactStatus = await this.getContactStatus(user.id);
+                            return {
+                                id: user.id,
+                                username: user.get('username'),
+                                email: user.get('email'),
+                                isOnline: user.get('isOnline') || false,
+                                lastSeen: user.get('lastSeen'),
+                                ...contactStatus
+                            };
+                        } catch (error) {
+                            console.error(`❌ Error processing user ${user.id}:`, error);
+                            return {
+                                id: user.id,
+                                username: user.get('username') || 'Unknown',
+                                isOnline: false,
+                                lastSeen: null,
+                                isContact: false,
+                                isPending: false
+                            };
+                        }
+                    })
+                );
+                
+                return { success: true, users: usersWithStatus };
+
+            } catch (error) {
+                console.error('❌ User search failed:', error);
+                return { 
+                    success: false, 
+                    error: error.message,
+                    users: []
+                };
+            }
+        }
+
+        async getContactStatus(targetUserId) {
+            try {
+                const Contact = Parse.Object.extend('Contact');
+                const query = new Parse.Query(Contact);
+                
+                query.containedIn('fromUser', [this.currentUser, Parse.User.createWithoutData(targetUserId)]);
+                query.containedIn('toUser', [this.currentUser, Parse.User.createWithoutData(targetUserId)]);
+                
+                const contact = await query.first();
+                
+                if (!contact) {
+                    return { 
+                        isContact: false, 
+                        isPending: false,
+                        sentByMe: false
+                    };
+                }
+                
+                const status = contact.get('status');
+                const isPending = status === 'pending';
+                const isContact = status === 'accepted';
+                const sentByMe = contact.get('fromUser').id === this.currentUser.id;
+                
+                return {
+                    isContact,
+                    isPending,
+                    sentByMe,
+                    contactId: contact.id
+                };
+
+            } catch (error) {
+                console.error('❌ Failed to get contact status:', error);
+                return { 
+                    isContact: false, 
+                    isPending: false,
+                    sentByMe: false
+                };
             }
         }
 
@@ -342,20 +398,6 @@ if (typeof Backend !== 'undefined') {
                     } else if (status === 'accepted') {
                         return { success: false, error: 'Contact already exists' };
                     }
-                }
-                
-                // Also check if the other user already sent a request
-                const reverseQuery = new Parse.Query(Contact);
-                reverseQuery.equalTo('fromUser', Parse.User.createWithoutData(userId));
-                reverseQuery.equalTo('toUser', this.currentUser);
-                reverseQuery.equalTo('status', 'pending');
-                
-                const reverseContact = await reverseQuery.first();
-                if (reverseContact) {
-                    return { 
-                        success: false, 
-                        error: 'This user has already sent you a contact request. Please check your requests tab.' 
-                    };
                 }
                 
                 const contact = new Contact();
@@ -485,7 +527,7 @@ if (typeof Backend !== 'undefined') {
                         console.error('❌ Error processing contact:', error);
                         return null;
                     }
-                }).filter(contact => contact !== null); // Remove null entries
+                }).filter(contact => contact !== null);
                 
                 return { success: true, contacts: formattedContacts };
 
@@ -569,164 +611,106 @@ if (typeof Backend !== 'undefined') {
             }
         }
 
-        // =============== USER SEARCH ===============
+        // =============== MESSAGING ===============
 
-        async searchUsers(searchTerm) {
+        async sendMessage(receiverId, message) {
             if (!this.isLoggedIn()) {
                 return { success: false, error: 'Not logged in' };
             }
 
             try {
-                console.log(`🔍 Searching users: "${searchTerm}"`);
+                const Message = Parse.Object.extend('Message');
+                const msg = new Message();
                 
-                const User = Parse.User;
-                const query = new Parse.Query(User);
+                msg.set('sender', this.currentUser);
+                msg.set('receiver', Parse.User.createWithoutData(receiverId));
+                msg.set('message', message);
+                msg.set('timestamp', new Date());
+                msg.set('isRead', false);
                 
-                // Use case-insensitive search
-                query.matches('username', searchTerm, 'i');
-                query.notEqualTo('objectId', this.currentUser.id);
+                await msg.save();
+                return { success: true, message: msg };
+
+            } catch (error) {
+                console.error('❌ Failed to send message:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        async sendGlobalMessage(message) {
+            if (!this.isLoggedIn()) {
+                return { success: false, error: 'Not logged in' };
+            }
+
+            try {
+                const GlobalMessage = Parse.Object.extend('GlobalMessage');
+                const msg = new GlobalMessage();
+                
+                msg.set('sender', this.currentUser);
+                msg.set('senderName', this.currentUser.get('username'));
+                msg.set('message', message);
+                msg.set('timestamp', new Date());
+                
+                await msg.save();
+                return { success: true, message: msg };
+
+            } catch (error) {
+                console.error('❌ Failed to send global message:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        async getMessages(userId) {
+            if (!this.isLoggedIn()) {
+                return { success: false, error: 'Not logged in' };
+            }
+
+            try {
+                const Message = Parse.Object.extend('Message');
+                const query = new Parse.Query(Message);
+                
+                query.containedIn('sender', [
+                    this.currentUser,
+                    Parse.User.createWithoutData(userId)
+                ]);
+                query.containedIn('receiver', [
+                    this.currentUser,
+                    Parse.User.createWithoutData(userId)
+                ]);
+                
+                query.include('sender');
+                query.include('receiver');
+                query.descending('timestamp');
                 query.limit(50);
                 
-                const users = await query.find();
-                console.log(`✅ Search found ${users.length} users`);
-                
-                const usersWithStatus = await Promise.all(
-                    users.map(async (user) => {
-                        try {
-                            const contactStatus = await this.getContactStatus(user.id);
-                            return {
-                                id: user.id,
-                                username: user.get('username'),
-                                email: user.get('email'),
-                                isOnline: user.get('isOnline') || false,
-                                lastSeen: user.get('lastSeen'),
-                                ...contactStatus
-                            };
-                        } catch (error) {
-                            console.error(`❌ Error processing user ${user.id}:`, error);
-                            return {
-                                id: user.id,
-                                username: user.get('username') || 'Unknown',
-                                isOnline: false,
-                                lastSeen: null,
-                                isContact: false,
-                                isPending: false
-                            };
-                        }
-                    })
-                );
-                
-                return { success: true, users: usersWithStatus };
+                const messages = await query.find();
+                return { success: true, messages: messages.reverse() };
 
             } catch (error) {
-                console.error('❌ User search failed:', error);
-                return { 
-                    success: false, 
-                    error: error.message,
-                    users: []
-                };
+                console.error('❌ Failed to load messages:', error);
+                return { success: false, error: error.message };
             }
         }
 
-        async getUsersWithContactStatus() {
+        async getGlobalMessages() {
             if (!this.isLoggedIn()) {
                 return { success: false, error: 'Not logged in' };
             }
 
             try {
-                console.log('🔍 Loading users with contact status...');
+                const GlobalMessage = Parse.Object.extend('GlobalMessage');
+                const query = new Parse.Query(GlobalMessage);
                 
-                const User = Parse.User;
-                const query = new Parse.Query(User);
+                query.include('sender');
+                query.descending('timestamp');
+                query.limit(100);
                 
-                // Exclude current user
-                query.notEqualTo('objectId', this.currentUser.id);
-                query.limit(100); // Increased limit to show more users
-                
-                const users = await query.find();
-                console.log(`✅ Found ${users.length} users`);
-                
-                if (users.length === 0) {
-                    console.log('ℹ️ No other users found in the system');
-                    return { success: true, users: [] };
-                }
-                
-                const usersWithStatus = await Promise.all(
-                    users.map(async (user) => {
-                        try {
-                            const contactStatus = await this.getContactStatus(user.id);
-                            return {
-                                id: user.id,
-                                username: user.get('username'),
-                                email: user.get('email'),
-                                isOnline: user.get('isOnline') || false,
-                                lastSeen: user.get('lastSeen'),
-                                ...contactStatus
-                            };
-                        } catch (error) {
-                            console.error(`❌ Error processing user ${user.id}:`, error);
-                            return {
-                                id: user.id,
-                                username: user.get('username') || 'Unknown',
-                                isOnline: false,
-                                lastSeen: null,
-                                isContact: false,
-                                isPending: false
-                            };
-                        }
-                    })
-                );
-                
-                console.log('✅ Users with status processed:', usersWithStatus.length);
-                return { success: true, users: usersWithStatus };
+                const messages = await query.find();
+                return { success: true, messages: messages.reverse() };
 
             } catch (error) {
-                console.error('❌ Failed to load users:', error);
-                return { 
-                    success: false, 
-                    error: error.message,
-                    users: [] // Return empty array on error
-                };
-            }
-        }
-
-        async getContactStatus(targetUserId) {
-            try {
-                const Contact = Parse.Object.extend('Contact');
-                const query = new Parse.Query(Contact);
-                
-                query.containedIn('fromUser', [this.currentUser, Parse.User.createWithoutData(targetUserId)]);
-                query.containedIn('toUser', [this.currentUser, Parse.User.createWithoutData(targetUserId)]);
-                
-                const contact = await query.first();
-                
-                if (!contact) {
-                    return { 
-                        isContact: false, 
-                        isPending: false,
-                        sentByMe: false
-                    };
-                }
-                
-                const status = contact.get('status');
-                const isPending = status === 'pending';
-                const isContact = status === 'accepted';
-                const sentByMe = contact.get('fromUser').id === this.currentUser.id;
-                
-                return {
-                    isContact,
-                    isPending,
-                    sentByMe,
-                    contactId: contact.id
-                };
-
-            } catch (error) {
-                console.error('❌ Failed to get contact status:', error);
-                return { 
-                    isContact: false, 
-                    isPending: false,
-                    sentByMe: false
-                };
+                console.error('❌ Failed to load global messages:', error);
+                return { success: false, error: error.message };
             }
         }
 
@@ -793,65 +777,6 @@ if (typeof Backend !== 'undefined') {
 
             } catch (error) {
                 console.error('❌ Failed to load chats:', error);
-                return { success: false, error: error.message };
-            }
-        }
-
-        // =============== EMAIL VERIFICATION ===============
-
-        async verifyEmail(userId, token) {
-            if (!this.isInitialized) {
-                return { success: false, error: 'Backend not initialized' };
-            }
-
-            try {
-                const result = await Parse.Cloud.run('verifyEmail', {
-                    userId: userId,
-                    token: token
-                });
-                return result;
-            } catch (error) {
-                console.error('❌ Email verification failed:', error);
-                return { success: false, error: error.message };
-            }
-        }
-
-        async resendVerificationEmail() {
-            if (!this.isLoggedIn()) {
-                return { success: false, error: 'Not logged in' };
-            }
-
-            try {
-                const user = this.currentUser;
-                const email = user.get('email');
-                
-                if (!email) {
-                    return { success: false, error: 'No email address found' };
-                }
-                
-                const result = await Parse.Cloud.run('resendVerificationEmail', {
-                    email: email
-                });
-                return result;
-
-            } catch (error) {
-                console.error('❌ Failed to resend verification email:', error);
-                return { success: false, error: error.message };
-            }
-        }
-
-        async checkEmailVerification() {
-            if (!this.isLoggedIn()) {
-                return { success: false, error: 'Not logged in' };
-            }
-
-            try {
-                await this.currentUser.fetch();
-                const isVerified = this.currentUser.get('emailVerified');
-                return { success: true, verified: isVerified };
-
-            } catch (error) {
-                console.error('❌ Failed to check email verification:', error);
                 return { success: false, error: error.message };
             }
         }
