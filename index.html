@@ -119,6 +119,14 @@
             transform: scale(1.1);
         }
         
+        .action-btn.debug {
+            background: rgba(255, 107, 107, 0.8);
+        }
+        
+        .action-btn.debug:hover {
+            background: rgba(255, 107, 107, 1);
+        }
+        
         .sidebar-tabs {
             display: flex;
             background: #f8f9fa;
@@ -985,6 +993,9 @@
                     <button class="action-btn" onclick="refreshAll()" title="Refresh">
                         <i class="fas fa-sync-alt"></i>
                     </button>
+                    <button class="action-btn debug" onclick="debugUsers()" title="Debug Users">
+                        <i class="fas fa-bug"></i>
+                    </button>
                     <button class="action-btn" onclick="logout()" title="Logout">
                         <i class="fas fa-sign-out-alt"></i>
                     </button>
@@ -1252,7 +1263,8 @@
             });
             document.getElementById('globalChatItem').classList.add('active');
             
-            document.getElementById('welcomeScreen').classList.add('hidden');
+            document.getElementById('welcomeScreen').class
+                        document.getElementById('welcomeScreen').classList.add('hidden');
             document.getElementById('chatContent').classList.remove('hidden');
             
             document.getElementById('currentChatName').textContent = '🌍 Global Chat';
@@ -1906,6 +1918,57 @@
                         <p>Please check your connection and try again</p>
                     </div>
                 `;
+            }
+        }
+        
+        // =============== DEBUG FUNCTIONS ===============
+        
+        // Debug function to test user loading
+        async function debugUsers() {
+            console.log('🐛 DEBUG: Starting user debug...');
+            
+            if (!Backend.isLoggedIn()) {
+                console.log('❌ DEBUG: User not logged in');
+                showNotification('Not logged in', 'error');
+                return;
+            }
+            
+            try {
+                console.log('🐛 DEBUG: Testing getUsersWithContactStatus...');
+                const result = await Backend.getUsersWithContactStatus();
+                
+                console.log('🐛 DEBUG: Result:', result);
+                
+                if (result.success) {
+                    if (result.users.length === 0) {
+                        showNotification('No other users found in database', 'info');
+                        console.log('🐛 DEBUG: No users found - this means either:');
+                        console.log('🐛 DEBUG: 1. There are no other users in your Parse database');
+                        console.log('🐛 DEBUG: 2. The query is failing');
+                        console.log('🐛 DEBUG: 3. There are permission issues');
+                        console.log('🐛 DEBUG: 4. Parse configuration is incorrect');
+                        
+                        // Test basic Parse connectivity
+                        console.log('🐛 DEBUG: Testing Parse connectivity...');
+                        try {
+                            const testQuery = new Parse.Query(Parse.User);
+                            testQuery.limit(1);
+                            const testResult = await testQuery.find();
+                            console.log('🐛 DEBUG: Parse connectivity test:', testResult.length > 0 ? 'SUCCESS' : 'NO DATA');
+                        } catch (parseError) {
+                            console.error('🐛 DEBUG: Parse connectivity test failed:', parseError);
+                        }
+                    } else {
+                        showNotification(`Found ${result.users.length} users!`, 'success');
+                        console.log('🐛 DEBUG: Users found:', result.users);
+                    }
+                } else {
+                    showNotification(`Error: ${result.error}`, 'error');
+                    console.log('🐛 DEBUG: Error details:', result);
+                }
+            } catch (error) {
+                console.error('🐛 DEBUG: Debug function error:', error);
+                showNotification('Debug failed: ' + error.message, 'error');
             }
         }
         
