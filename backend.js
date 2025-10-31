@@ -1,4 +1,4 @@
-// backend.js - Backend functionality for ChatRise - DEBUG VERSION
+// backend.js - Backend functionality for ChatRise - ENHANCED DEBUG
 // © 2025 [Reuben Yee]. All rights reserved.
 
 // Check if Backend already exists to prevent duplicate declaration
@@ -42,7 +42,7 @@ if (typeof Backend !== 'undefined') {
                 // Set current user if logged in
                 this.currentUser = Parse.User.current();
                 if (this.currentUser) {
-                    console.log('✅ User session restored:', this.currentUser.get('username'));
+                    console.log('✅ User session restored:', this.currentUser.id, this.currentUser.get('username'));
                 } else {
                     console.log('ℹ️ No user session found');
                 }
@@ -189,7 +189,7 @@ if (typeof Backend !== 'undefined') {
             }
         }
 
-        // =============== USER SEARCH - DEBUG VERSION ===============
+        // =============== USER SEARCH - ENHANCED DEBUG ===============
 
         async getUsersWithContactStatus() {
             if (!this.isLoggedIn()) {
@@ -201,20 +201,58 @@ if (typeof Backend !== 'undefined') {
                 console.log('🔍 DEBUG: Starting getUsersWithContactStatus...');
                 console.log('🔍 DEBUG: Current user:', this.currentUser.id, this.currentUser.get('username'));
                 
+                // Test 1: Basic user count
+                console.log('🔍 DEBUG: Test 1 - Counting all users...');
+                const countQuery = new Parse.Query(Parse.User);
+                const totalUsers = await countQuery.count();
+                console.log(`🔍 DEBUG: Total users in database: ${totalUsers}`);
+                
+                // Test 2: Get all users without filtering
+                console.log('🔍 DEBUG: Test 2 - Getting all users without filters...');
+                const allUsersQuery = new Parse.Query(Parse.User);
+                allUsersQuery.limit(50);
+                const allUsers = await allUsersQuery.find();
+                console.log(`🔍 DEBUG: Found ${allUsers.length} users total:`, allUsers.map(u => ({
+                    id: u.id,
+                    username: u.get('username'),
+                    email: u.get('email'),
+                    isCurrent: u.id === this.currentUser.id
+                })));
+                
+                // Test 3: Get users excluding current user (the actual query we use)
+                console.log('🔍 DEBUG: Test 3 - Getting users excluding current user...');
                 const User = Parse.User;
                 const query = new Parse.Query(User);
                 
-                // Exclude current user
                 query.notEqualTo('objectId', this.currentUser.id);
                 query.limit(100);
                 
                 console.log('🔍 DEBUG: Query setup complete, executing...');
                 
                 const users = await query.find();
-                console.log(`🔍 DEBUG: Query returned ${users.length} users`);
+                console.log(`🔍 DEBUG: Query returned ${users.length} users (excluding current user)`);
                 
                 if (users.length === 0) {
-                    console.log('ℹ️ DEBUG: No other users found in the system');
+                    console.log('❌ DEBUG: No other users found despite total users being', totalUsers);
+                    console.log('🔍 DEBUG: This suggests:');
+                    console.log('🔍 DEBUG: 1. Parse security rules blocking user queries');
+                    console.log('🔍 DEBUG: 2. All users might be the current user (unlikely)');
+                    console.log('🔍 DEBUG: 3. Query is not working correctly');
+                    
+                    // Additional debug: Check if we can query specific users
+                    if (totalUsers > 1) {
+                        console.log('🔍 DEBUG: Testing query for specific user fields...');
+                        const testQuery = new Parse.Query(Parse.User);
+                        testQuery.select(['username', 'email']);
+                        testQuery.limit(5);
+                        try {
+                            const testUsers = await testQuery.find();
+                            console.log('🔍 DEBUG: Test query result:', testUsers.map(u => u.get('username')));
+                        } catch (testError) {
+                            console.error('🔍 DEBUG: Test query failed:', testError);
+                        }
+                    }
+                    
                     return { success: true, users: [] };
                 }
                 
