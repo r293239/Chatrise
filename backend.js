@@ -1,4 +1,4 @@
-// backend.js - Backend functionality for ChatRise - ENHANCED DEBUG
+// backend.js - Backend functionality for ChatRise - WITH CLOUD FUNCTIONS
 // © 2025 [Reuben Yee]. All rights reserved.
 
 // Check if Backend already exists to prevent duplicate declaration
@@ -189,7 +189,7 @@ if (typeof Backend !== 'undefined') {
             }
         }
 
-        // =============== USER SEARCH - ENHANCED DEBUG ===============
+        // =============== USER SEARCH - USING CLOUD FUNCTIONS ===============
 
         async getUsersWithContactStatus() {
             if (!this.isLoggedIn()) {
@@ -197,6 +197,20 @@ if (typeof Backend !== 'undefined') {
                 return { success: false, error: 'Not logged in' };
             }
 
+            try {
+                console.log('🔍 Using Cloud Function: getUsersWithContactStatus...');
+                const result = await Parse.Cloud.run('getUsersWithContactStatus');
+                console.log(`✅ Cloud function returned ${result.length} users`);
+                return { success: true, users: result };
+            } catch (error) {
+                console.error('❌ Cloud function getUsersWithContactStatus failed:', error);
+                // Fallback to direct query
+                console.log('🔍 Falling back to direct query...');
+                return await this.getUsersWithContactStatusFallback();
+            }
+        }
+
+        async getUsersWithContactStatusFallback() {
             try {
                 console.log('🔍 DEBUG: Starting getUsersWithContactStatus...');
                 console.log('🔍 DEBUG: Current user:', this.currentUser.id, this.currentUser.get('username'));
@@ -234,25 +248,6 @@ if (typeof Backend !== 'undefined') {
                 
                 if (users.length === 0) {
                     console.log('❌ DEBUG: No other users found despite total users being', totalUsers);
-                    console.log('🔍 DEBUG: This suggests:');
-                    console.log('🔍 DEBUG: 1. Parse security rules blocking user queries');
-                    console.log('🔍 DEBUG: 2. All users might be the current user (unlikely)');
-                    console.log('🔍 DEBUG: 3. Query is not working correctly');
-                    
-                    // Additional debug: Check if we can query specific users
-                    if (totalUsers > 1) {
-                        console.log('🔍 DEBUG: Testing query for specific user fields...');
-                        const testQuery = new Parse.Query(Parse.User);
-                        testQuery.select(['username', 'email']);
-                        testQuery.limit(5);
-                        try {
-                            const testUsers = await testQuery.find();
-                            console.log('🔍 DEBUG: Test query result:', testUsers.map(u => u.get('username')));
-                        } catch (testError) {
-                            console.error('🔍 DEBUG: Test query failed:', testError);
-                        }
-                    }
-                    
                     return { success: true, users: [] };
                 }
                 
@@ -294,11 +289,6 @@ if (typeof Backend !== 'undefined') {
 
             } catch (error) {
                 console.error('❌ DEBUG: Failed to load users:', error);
-                console.error('❌ DEBUG: Error details:', {
-                    message: error.message,
-                    code: error.code,
-                    stack: error.stack
-                });
                 return { 
                     success: false, 
                     error: error.message,
@@ -312,6 +302,19 @@ if (typeof Backend !== 'undefined') {
                 return { success: false, error: 'Not logged in' };
             }
 
+            try {
+                console.log(`🔍 Using Cloud Function: searchUsers with "${searchTerm}"`);
+                const result = await Parse.Cloud.run('searchUsers', { searchTerm });
+                console.log(`✅ Cloud function returned ${result.length} users`);
+                return { success: true, users: result };
+            } catch (error) {
+                console.error('❌ Cloud function searchUsers failed:', error);
+                // Fallback to direct query
+                return await this.searchUsersFallback(searchTerm);
+            }
+        }
+
+        async searchUsersFallback(searchTerm) {
             try {
                 console.log(`🔍 DEBUG: Searching users: "${searchTerm}"`);
                 
@@ -416,6 +419,17 @@ if (typeof Backend !== 'undefined') {
             try {
                 console.log(`👥 Adding contact: ${username} (${userId})`);
                 
+                // Use cloud function if available
+                try {
+                    console.log('🔍 Using Cloud Function: addContact...');
+                    const result = await Parse.Cloud.run('addContact', { userId, username });
+                    console.log('✅ Cloud function addContact succeeded');
+                    return result;
+                } catch (cloudError) {
+                    console.log('🔍 Cloud function failed, falling back to direct method...');
+                    // Fallback to direct method
+                }
+
                 // Prevent adding yourself
                 if (userId === this.currentUser.id) {
                     return { success: false, error: 'Cannot add yourself as a contact' };
@@ -470,6 +484,17 @@ if (typeof Backend !== 'undefined') {
             }
 
             try {
+                // Use cloud function if available
+                try {
+                    console.log('🔍 Using Cloud Function: acceptContact...');
+                    const result = await Parse.Cloud.run('acceptContact', { contactId });
+                    console.log('✅ Cloud function acceptContact succeeded');
+                    return result;
+                } catch (cloudError) {
+                    console.log('🔍 Cloud function failed, falling back to direct method...');
+                    // Fallback to direct method
+                }
+
                 const Contact = Parse.Object.extend('Contact');
                 const query = new Parse.Query(Contact);
                 
@@ -681,6 +706,17 @@ if (typeof Backend !== 'undefined') {
             }
 
             try {
+                // Use cloud function if available
+                try {
+                    console.log('🔍 Using Cloud Function: sendGlobalMessage...');
+                    const result = await Parse.Cloud.run('sendGlobalMessage', { message });
+                    console.log('✅ Cloud function sendGlobalMessage succeeded');
+                    return result;
+                } catch (cloudError) {
+                    console.log('🔍 Cloud function failed, falling back to direct method...');
+                    // Fallback to direct method
+                }
+
                 const GlobalMessage = Parse.Object.extend('GlobalMessage');
                 const msg = new GlobalMessage();
                 
@@ -736,6 +772,17 @@ if (typeof Backend !== 'undefined') {
             }
 
             try {
+                // Use cloud function if available
+                try {
+                    console.log('🔍 Using Cloud Function: getGlobalMessages...');
+                    const result = await Parse.Cloud.run('getGlobalMessages');
+                    console.log(`✅ Cloud function returned ${result.length} messages`);
+                    return { success: true, messages: result };
+                } catch (cloudError) {
+                    console.log('🔍 Cloud function failed, falling back to direct method...');
+                    // Fallback to direct method
+                }
+
                 const GlobalMessage = Parse.Object.extend('GlobalMessage');
                 const query = new Parse.Query(GlobalMessage);
                 
@@ -756,6 +803,17 @@ if (typeof Backend !== 'undefined') {
 
         async getOnlineUsersCount() {
             try {
+                // Use cloud function if available
+                try {
+                    console.log('🔍 Using Cloud Function: getOnlineUsersCount...');
+                    const result = await Parse.Cloud.run('getOnlineUsersCount');
+                    console.log(`✅ Cloud function returned ${result.count} online users`);
+                    return result;
+                } catch (cloudError) {
+                    console.log('🔍 Cloud function failed, falling back to direct method...');
+                    // Fallback to direct method
+                }
+
                 const User = Parse.User;
                 const query = new Parse.Query(User);
                 
