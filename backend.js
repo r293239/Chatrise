@@ -1,4 +1,4 @@
-// backend.js - Backend functionality for ChatRise - WITH CLOUD FUNCTIONS
+// backend.js - Backend functionality for ChatRise
 // © 2025 [Reuben Yee]. All rights reserved.
 
 // Check if Backend already exists to prevent duplicate declaration
@@ -212,46 +212,26 @@ if (typeof Backend !== 'undefined') {
 
         async getUsersWithContactStatusFallback() {
             try {
-                console.log('🔍 DEBUG: Starting getUsersWithContactStatus...');
-                console.log('🔍 DEBUG: Current user:', this.currentUser.id, this.currentUser.get('username'));
+                console.log('🔍 Starting getUsersWithContactStatus...');
+                console.log('🔍 Current user:', this.currentUser.id, this.currentUser.get('username'));
                 
-                // Test 1: Basic user count
-                console.log('🔍 DEBUG: Test 1 - Counting all users...');
-                const countQuery = new Parse.Query(Parse.User);
-                const totalUsers = await countQuery.count();
-                console.log(`🔍 DEBUG: Total users in database: ${totalUsers}`);
-                
-                // Test 2: Get all users without filtering
-                console.log('🔍 DEBUG: Test 2 - Getting all users without filters...');
-                const allUsersQuery = new Parse.Query(Parse.User);
-                allUsersQuery.limit(50);
-                const allUsers = await allUsersQuery.find();
-                console.log(`🔍 DEBUG: Found ${allUsers.length} users total:`, allUsers.map(u => ({
-                    id: u.id,
-                    username: u.get('username'),
-                    email: u.get('email'),
-                    isCurrent: u.id === this.currentUser.id
-                })));
-                
-                // Test 3: Get users excluding current user (the actual query we use)
-                console.log('🔍 DEBUG: Test 3 - Getting users excluding current user...');
                 const User = Parse.User;
                 const query = new Parse.Query(User);
                 
                 query.notEqualTo('objectId', this.currentUser.id);
                 query.limit(100);
                 
-                console.log('🔍 DEBUG: Query setup complete, executing...');
+                console.log('🔍 Query setup complete, executing...');
                 
                 const users = await query.find();
-                console.log(`🔍 DEBUG: Query returned ${users.length} users (excluding current user)`);
+                console.log(`🔍 Query returned ${users.length} users (excluding current user)`);
                 
                 if (users.length === 0) {
-                    console.log('❌ DEBUG: No other users found despite total users being', totalUsers);
+                    console.log('❌ No other users found');
                     return { success: true, users: [] };
                 }
                 
-                console.log('🔍 DEBUG: Found users:', users.map(u => ({
+                console.log('🔍 Found users:', users.map(u => ({
                     id: u.id,
                     username: u.get('username'),
                     email: u.get('email'),
@@ -284,11 +264,11 @@ if (typeof Backend !== 'undefined') {
                     })
                 );
                 
-                console.log('✅ DEBUG: Users with status processed:', usersWithStatus);
+                console.log('✅ Users with status processed:', usersWithStatus);
                 return { success: true, users: usersWithStatus };
 
             } catch (error) {
-                console.error('❌ DEBUG: Failed to load users:', error);
+                console.error('❌ Failed to load users:', error);
                 return { 
                     success: false, 
                     error: error.message,
@@ -316,7 +296,7 @@ if (typeof Backend !== 'undefined') {
 
         async searchUsersFallback(searchTerm) {
             try {
-                console.log(`🔍 DEBUG: Searching users: "${searchTerm}"`);
+                console.log(`🔍 Searching users: "${searchTerm}"`);
                 
                 const User = Parse.User;
                 const query = new Parse.Query(User);
@@ -329,7 +309,7 @@ if (typeof Backend !== 'undefined') {
                 query.limit(50);
                 
                 const users = await query.find();
-                console.log(`✅ DEBUG: Search found ${users.length} users`);
+                console.log(`✅ Search found ${users.length} users`);
                 
                 const usersWithStatus = await Promise.all(
                     users.map(async (user) => {
@@ -873,6 +853,19 @@ if (typeof Backend !== 'undefined') {
 
             } catch (error) {
                 console.error('❌ Failed to load chats:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        // Test user login method
+        async testUserLogin() {
+            try {
+                console.log('🧪 Testing user login: r29');
+                const user = await Parse.User.logIn('r29', '123456');
+                console.log('✅ Test user login successful:', user.get('username'));
+                return { success: true, user: user };
+            } catch (error) {
+                console.error('❌ Test user login failed:', error);
                 return { success: false, error: error.message };
             }
         }
