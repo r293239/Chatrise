@@ -320,6 +320,13 @@ if (typeof Backend !== 'undefined') {
             }
 
             try {
+                console.log(`👥 Adding contact: ${username} (${userId})`);
+                
+                // Prevent adding yourself
+                if (userId === this.currentUser.id) {
+                    return { success: false, error: 'Cannot add yourself as a contact' };
+                }
+
                 const Contact = Parse.Object.extend('Contact');
                 const query = new Parse.Query(Contact);
                 
@@ -329,7 +336,26 @@ if (typeof Backend !== 'undefined') {
                 const existingContact = await query.first();
                 
                 if (existingContact) {
-                    return { success: false, error: 'Contact already exists' };
+                    const status = existingContact.get('status');
+                    if (status === 'pending') {
+                        return { success: false, error: 'Contact request already sent' };
+                    } else if (status === 'accepted') {
+                        return { success: false, error: 'Contact already exists' };
+                    }
+                }
+                
+                // Also check if the other user already sent a request
+                const reverseQuery = new Parse.Query(Contact);
+                reverseQuery.equalTo('fromUser', Parse.User.createWithoutData(userId));
+                reverseQuery.equalTo('toUser', this.currentUser);
+                reverseQuery.equalTo('status', 'pending');
+                
+                const reverseContact = await reverseQuery.first();
+                if (reverseContact) {
+                    return { 
+                        success: false, 
+                        error: 'This user has already sent you a contact request. Please check your requests tab.' 
+                    };
                 }
                 
                 const contact = new Contact();
@@ -341,11 +367,20 @@ if (typeof Backend !== 'undefined') {
                 contact.set('timestamp', new Date());
                 
                 await contact.save();
+                console.log('✅ Contact request sent successfully');
                 return { success: true, contact: contact };
 
             } catch (error) {
                 console.error('❌ Failed to add contact:', error);
-                return { success: false, error: error.message };
+                let errorMessage = 'Failed to send contact request';
+                
+                if (error.code === 101) {
+                    errorMessage = 'User not found';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                
+                return { success: false, error: errorMessage };
             }
         }
 
@@ -416,6 +451,8 @@ if (typeof Backend !== 'undefined') {
             }
 
             try {
+                console.log('👥 Loading contacts...');
+                
                 const Contact = Parse.Object.extend('Contact');
                 const query = new Parse.Query(Contact);
                 
@@ -426,29 +463,39 @@ if (typeof Backend !== 'undefined') {
                 query.include('toUser');
                 
                 const contacts = await query.find();
+                console.log(`✅ Found ${contacts.length} contacts`);
                 
                 const formattedContacts = contacts.map(contact => {
-                    const fromUser = contact.get('fromUser');
-                    const toUser = contact.get('toUser');
-                    
-                    const otherUser = fromUser.id === this.currentUser.id ? toUser : fromUser;
-                    const otherUsername = fromUser.id === this.currentUser.id ? 
-                        contact.get('toUsername') : contact.get('fromUsername');
-                    
-                    return {
-                        contactId: contact.id,
-                        userId: otherUser.id,
-                        username: otherUsername,
-                        isOnline: otherUser.get('isOnline') || false,
-                        lastSeen: otherUser.get('lastSeen')
-                    };
-                });
+                    try {
+                        const fromUser = contact.get('fromUser');
+                        const toUser = contact.get('toUser');
+                        
+                        const otherUser = fromUser.id === this.currentUser.id ? toUser : fromUser;
+                        const otherUsername = fromUser.id === this.currentUser.id ? 
+                            contact.get('toUsername') : contact.get('fromUsername');
+                        
+                        return {
+                            contactId: contact.id,
+                            userId: otherUser.id,
+                            username: otherUsername || otherUser.get('username'),
+                            isOnline: otherUser.get('isOnline') || false,
+                            lastSeen: otherUser.get('lastSeen')
+                        };
+                    } catch (error) {
+                        console.error('❌ Error processing contact:', error);
+                        return null;
+                    }
+                }).filter(contact => contact !== null); // Remove null entries
                 
                 return { success: true, contacts: formattedContacts };
 
             } catch (error) {
                 console.error('❌ Failed to load contacts:', error);
-                return { success: false, error: error.message };
+                return { 
+                    success: false, 
+                    error: error.message,
+                    contacts: []
+                };
             }
         }
 
@@ -530,25 +577,42 @@ if (typeof Backend !== 'undefined') {
             }
 
             try {
+                console.log(`🔍 Searching users: "${searchTerm}"`);
+                
                 const User = Parse.User;
                 const query = new Parse.Query(User);
                 
-                query.matches('username', new RegExp(searchTerm, 'i'));
+                // Use case-insensitive search
+                query.matches('username', searchTerm, 'i');
                 query.notEqualTo('objectId', this.currentUser.id);
-                query.limit(20);
+                query.limit(50);
                 
                 const users = await query.find();
+                console.log(`✅ Search found ${users.length} users`);
                 
                 const usersWithStatus = await Promise.all(
                     users.map(async (user) => {
-                        const contactStatus = await this.getContactStatus(user.id);
-                        return {
-                            id: user.id,
-                            username: user.get('username'),
-                            isOnline: user.get('isOnline') || false,
-                            lastSeen: user.get('lastSeen'),
-                            ...contactStatus
-                        };
+                        try {
+                            const contactStatus = await this.getContactStatus(user.id);
+                            return {
+                                id: user.id,
+                                username: user.get('username'),
+                                email: user.get('email'),
+                                isOnline: user.get('isOnline') || false,
+                                lastSeen: user.get('lastSeen'),
+                                ...contactStatus
+                            };
+                        } catch (error) {
+                            console.error(`❌ Error processing user ${user.id}:`, error);
+                            return {
+                                id: user.id,
+                                username: user.get('username') || 'Unknown',
+                                isOnline: false,
+                                lastSeen: null,
+                                isContact: false,
+                                isPending: false
+                            };
+                        }
                     })
                 );
                 
@@ -556,7 +620,11 @@ if (typeof Backend !== 'undefined') {
 
             } catch (error) {
                 console.error('❌ User search failed:', error);
-                return { success: false, error: error.message };
+                return { 
+                    success: false, 
+                    error: error.message,
+                    users: []
+                };
             }
         }
 
@@ -566,32 +634,59 @@ if (typeof Backend !== 'undefined') {
             }
 
             try {
+                console.log('🔍 Loading users with contact status...');
+                
                 const User = Parse.User;
                 const query = new Parse.Query(User);
                 
+                // Exclude current user
                 query.notEqualTo('objectId', this.currentUser.id);
-                query.limit(50);
+                query.limit(100); // Increased limit to show more users
                 
                 const users = await query.find();
+                console.log(`✅ Found ${users.length} users`);
+                
+                if (users.length === 0) {
+                    console.log('ℹ️ No other users found in the system');
+                    return { success: true, users: [] };
+                }
                 
                 const usersWithStatus = await Promise.all(
                     users.map(async (user) => {
-                        const contactStatus = await this.getContactStatus(user.id);
-                        return {
-                            id: user.id,
-                            username: user.get('username'),
-                            isOnline: user.get('isOnline') || false,
-                            lastSeen: user.get('lastSeen'),
-                            ...contactStatus
-                        };
+                        try {
+                            const contactStatus = await this.getContactStatus(user.id);
+                            return {
+                                id: user.id,
+                                username: user.get('username'),
+                                email: user.get('email'),
+                                isOnline: user.get('isOnline') || false,
+                                lastSeen: user.get('lastSeen'),
+                                ...contactStatus
+                            };
+                        } catch (error) {
+                            console.error(`❌ Error processing user ${user.id}:`, error);
+                            return {
+                                id: user.id,
+                                username: user.get('username') || 'Unknown',
+                                isOnline: false,
+                                lastSeen: null,
+                                isContact: false,
+                                isPending: false
+                            };
+                        }
                     })
                 );
                 
+                console.log('✅ Users with status processed:', usersWithStatus.length);
                 return { success: true, users: usersWithStatus };
 
             } catch (error) {
                 console.error('❌ Failed to load users:', error);
-                return { success: false, error: error.message };
+                return { 
+                    success: false, 
+                    error: error.message,
+                    users: [] // Return empty array on error
+                };
             }
         }
 
@@ -606,7 +701,11 @@ if (typeof Backend !== 'undefined') {
                 const contact = await query.first();
                 
                 if (!contact) {
-                    return { isContact: false, isPending: false };
+                    return { 
+                        isContact: false, 
+                        isPending: false,
+                        sentByMe: false
+                    };
                 }
                 
                 const status = contact.get('status');
@@ -623,7 +722,11 @@ if (typeof Backend !== 'undefined') {
 
             } catch (error) {
                 console.error('❌ Failed to get contact status:', error);
-                return { isContact: false, isPending: false };
+                return { 
+                    isContact: false, 
+                    isPending: false,
+                    sentByMe: false
+                };
             }
         }
 
