@@ -1233,7 +1233,7 @@
         
         // =============== CHAT FUNCTIONS ===============
         
-        // Select global chat - FIXED VERSION
+        // Select global chat
         window.selectGlobalChat = async function() {
             console.log('🌍 Selecting global chat...');
             
@@ -1796,19 +1796,23 @@
             }
         }
         
-        // Load users for modal
+        // Load users for modal - FIXED VERSION
         async function loadUsers(searchTerm = '') {
             const usersList = document.getElementById('usersList');
             
             try {
+                usersList.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
+                
                 const result = searchTerm && searchTerm.length >= 1 ? 
                     await Backend.searchUsers(searchTerm) : 
                     await Backend.getUsersWithContactStatus();
                 
+                console.log('📋 Users result:', result);
+                
                 if (result.success) {
                     usersList.innerHTML = '';
                     
-                    if (result.users.length === 0) {
+                    if (result.users && result.users.length === 0) {
                         usersList.innerHTML = `
                             <div class="empty-state">
                                 <i class="fas fa-user-slash"></i>
@@ -1819,6 +1823,7 @@
                         return;
                     }
                     
+                    // Process and display users
                     result.users.forEach(user => {
                         const isOnline = user.isOnline;
                         const username = user.username || 'Unknown';
