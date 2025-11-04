@@ -189,86 +189,32 @@ if (typeof Backend !== 'undefined') {
             }
         }
 
-        // =============== USER SEARCH - USING CLOUD FUNCTIONS ===============
+        // =============== SIMPLIFIED USER FUNCTIONS ===============
 
-        async getUsersWithContactStatus() {
+        async getUsers(searchTerm = '') {
             if (!this.isLoggedIn()) {
-                console.log('❌ getUsersWithContactStatus: User not logged in');
                 return { success: false, error: 'Not logged in' };
             }
 
             try {
-                console.log('🔍 Using Cloud Function: getUsersWithContactStatus...');
-                const result = await Parse.Cloud.run('getUsersWithContactStatus');
-                console.log(`✅ Cloud function returned ${result.length} users`);
-                return { success: true, users: result };
-            } catch (error) {
-                console.error('❌ Cloud function getUsersWithContactStatus failed:', error);
-                // Fallback to direct query
-                console.log('🔍 Falling back to direct query...');
-                return await this.getUsersWithContactStatusFallback();
-            }
-        }
-
-        async getUsersWithContactStatusFallback() {
-            try {
-                console.log('🔍 Starting getUsersWithContactStatus...');
-                console.log('🔍 Current user:', this.currentUser.id, this.currentUser.get('username'));
+                console.log(`🔍 Getting users with search: "${searchTerm}"`);
                 
-                const User = Parse.User;
-                const query = new Parse.Query(User);
-                
-                query.notEqualTo('objectId', this.currentUser.id);
-                query.limit(100);
-                
-                console.log('🔍 Query setup complete, executing...');
-                
-                const users = await query.find();
-                console.log(`🔍 Query returned ${users.length} users (excluding current user)`);
-                
-                if (users.length === 0) {
-                    console.log('❌ No other users found');
-                    return { success: true, users: [] };
+                if (searchTerm && searchTerm.length >= 1) {
+                    return await this.searchUsers(searchTerm);
+                } else {
+                    // Use cloud function if available
+                    try {
+                        console.log('🔍 Using Cloud Function: getUsersWithContactStatus...');
+                        const result = await Parse.Cloud.run('getUsersWithContactStatus');
+                        console.log(`✅ Cloud function returned ${result.length} users`);
+                        return { success: true, users: result };
+                    } catch (cloudError) {
+                        console.log('🔍 Cloud function failed, falling back to direct method...');
+                        return await this.getUsersWithContactStatusFallback();
+                    }
                 }
-                
-                console.log('🔍 Found users:', users.map(u => ({
-                    id: u.id,
-                    username: u.get('username'),
-                    email: u.get('email'),
-                    isOnline: u.get('isOnline')
-                })));
-                
-                const usersWithStatus = await Promise.all(
-                    users.map(async (user) => {
-                        try {
-                            const contactStatus = await this.getContactStatus(user.id);
-                            return {
-                                id: user.id,
-                                username: user.get('username'),
-                                email: user.get('email'),
-                                isOnline: user.get('isOnline') || false,
-                                lastSeen: user.get('lastSeen'),
-                                ...contactStatus
-                            };
-                        } catch (error) {
-                            console.error(`❌ Error processing user ${user.id}:`, error);
-                            return {
-                                id: user.id,
-                                username: user.get('username') || 'Unknown',
-                                isOnline: false,
-                                lastSeen: null,
-                                isContact: false,
-                                isPending: false
-                            };
-                        }
-                    })
-                );
-                
-                console.log('✅ Users with status processed:', usersWithStatus);
-                return { success: true, users: usersWithStatus };
-
             } catch (error) {
-                console.error('❌ Failed to load users:', error);
+                console.error('❌ Failed to get users:', error);
                 return { 
                     success: false, 
                     error: error.message,
@@ -349,6 +295,73 @@ if (typeof Backend !== 'undefined') {
             }
         }
 
+        async getUsersWithContactStatusFallback() {
+            try {
+                console.log('🔍 Starting getUsersWithContactStatus...');
+                console.log('🔍 Current user:', this.currentUser.id, this.currentUser.get('username'));
+                
+                const User = Parse.User;
+                const query = new Parse.Query(User);
+                
+                query.notEqualTo('objectId', this.currentUser.id);
+                query.limit(100);
+                
+                console.log('🔍 Query setup complete, executing...');
+                
+                const users = await query.find();
+                console.log(`🔍 Query returned ${users.length} users (excluding current user)`);
+                
+                if (users.length === 0) {
+                    console.log('❌ No other users found');
+                    return { success: true, users: [] };
+                }
+                
+                console.log('🔍 Found users:', users.map(u => ({
+                    id: u.id,
+                    username: u.get('username'),
+                    email: u.get('email'),
+                    isOnline: u.get('isOnline')
+                })));
+                
+                const usersWithStatus = await Promise.all(
+                    users.map(async (user) => {
+                        try {
+                            const contactStatus = await this.getContactStatus(user.id);
+                            return {
+                                id: user.id,
+                                username: user.get('username'),
+                                email: user.get('email'),
+                                isOnline: user.get('isOnline') || false,
+                                lastSeen: user.get('lastSeen'),
+                                ...contactStatus
+                            };
+                        } catch (error) {
+                            console.error(`❌ Error processing user ${user.id}:`, error);
+                            return {
+                                id: user.id,
+                                username: user.get('username') || 'Unknown',
+                                isOnline: false,
+                                lastSeen: null,
+                                isContact: false,
+                                isPending: false
+                            };
+                        }
+                    })
+                );
+                
+                console.log('✅ Users with status processed:', usersWithStatus);
+                return { success: true, users: usersWithStatus };
+
+            } catch (error) {
+                console.error('❌ Failed to load users:', error);
+                return { 
+                    success: false, 
+                    error: error.message,
+                    users: []
+                };
+            }
+        }
+
         async getContactStatus(targetUserId) {
             try {
                 const Contact = Parse.Object.extend('Contact');
@@ -389,7 +402,7 @@ if (typeof Backend !== 'undefined') {
             }
         }
 
-        // =============== CONTACTS ===============
+        // =============== SIMPLIFIED CONTACT FUNCTIONS ===============
 
         async addContact(userId, username) {
             if (!this.isLoggedIn()) {
