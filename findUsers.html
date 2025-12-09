@@ -1,0 +1,464 @@
+// findUsers.js
+// Handles user search and contact management functionality
+
+class FindUsers {
+    constructor() {
+        this.currentSearchTerm = '';
+        this.usersData = [];
+        this.isLoading = false;
+        this.init();
+    }
+
+    async init() {
+        console.log('🔍 FindUsers initializing...');
+        await this.attachEventListeners();
+        console.log('✅ FindUsers ready');
+    }
+
+    async attachEventListeners() {
+        // User search input
+        const searchInput = document.getElementById('userSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.currentSearchTerm = e.target.value.trim();
+                this.debouncedSearch();
+            });
+        }
+
+        // Close modal when clicking outside
+        window.addEventListener('click', (event) => {
+            const modal = document.getElementById('usersModal');
+            if (event.target === modal) {
+                this.hideUsers();
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                const modal = document.getElementById('usersModal');
+                if (modal.style.display === 'block') {
+                    this.hideUsers();
+                }
+            }
+        });
+    }
+
+    debouncedSearch() {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = setTimeout(() => {
+            this.loadUsers(this.currentSearchTerm);
+        }, 300);
+    }
+
+    // Show users modal
+    async showUsers() {
+        console.log('👥 Showing users modal...');
+        
+        const modal = document.getElementById('usersModal');
+        const searchInput = document.getElementById('userSearchInput');
+        
+        modal.style.display = 'block';
+        this.currentSearchTerm = '';
+        
+        if (searchInput) {
+            searchInput.value = '';
+            setTimeout(() => searchInput.focus(), 100);
+        }
+        
+        await this.loadUsers();
+    }
+
+    // Hide users modal
+    hideUsers() {
+        console.log('👋 Hiding users modal');
+        const modal = document.getElementById('usersModal');
+        modal.style.display = 'none';
+        this.currentSearchTerm = '';
+    }
+
+    // Load users with search functionality
+    async loadUsers(searchTerm = '') {
+        if (this.isLoading) return;
+        
+        this.isLoading = true;
+        const usersList = document.getElementById('usersList');
+        
+        try {
+            // Show loading state
+            usersList.innerHTML = this.createLoadingHTML();
+            
+            let result;
+            if (searchTerm && searchTerm.length >= 1) {
+                console.log(`🔍 Searching for: "${searchTerm}"`);
+                result = await Backend.searchUsers(searchTerm);
+            } else {
+                console.log('📋 Loading all users...');
+                result = await Backend.getUsersWithContactStatus();
+            }
+            
+            console.log('📊 Users result:', result);
+            
+            if (result.success) {
+                this.usersData = result.users || [];
+                await this.displayUsers(this.usersData);
+            } else {
+                console.error('❌ Failed to load users:', result.error);
+                usersList.innerHTML = this.createErrorHTML(
+                    'Error loading users',
+                    result.error || 'Please try again'
+                );
+            }
+        } catch (error) {
+            console.error('❌ Error in loadUsers:', error);
+            usersList.innerHTML = this.createErrorHTML(
+                'Connection Error',
+                'Please check your connection and try again'
+            );
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    // Display users in the modal
+    async displayUsers(users) {
+        const usersList = document.getElementById('usersList');
+        
+        if (!users || users.length === 0) {
+            const searchTerm = this.currentSearchTerm;
+            usersList.innerHTML = this.createEmptyStateHTML(
+                searchTerm ? 'No users found' : 'No users available',
+                searchTerm ? 'Try a different search' : 'No other users are registered yet'
+            );
+            return;
+        }
+
+        // Get current user to avoid showing self
+        const currentUser = Backend.getCurrentUser();
+        const currentUserId = currentUser ? currentUser.id : null;
+        
+        usersList.innerHTML = '';
+        
+        users.forEach(user => {
+            // Skip current user
+            if (user.id === currentUserId) return;
+            
+            const userElement = this.createUserElement(user);
+            usersList.appendChild(userElement);
+        });
+        
+        // If all users were filtered out (only current user exists)
+        if (usersList.children.length === 0) {
+            usersList.innerHTML = this.createEmptyStateHTML(
+                'No other users',
+                'You are the only user registered'
+            );
+        }
+    }
+
+    // Create user element HTML
+    createUserElement(user) {
+        const userDiv = document.createElement('div');
+        userDiv.className = 'user-result';
+        
+        const isOnline = user.isOnline || false;
+        const username = user.username || 'Unknown';
+        const lastSeen = user.lastSeen;
+        const userId = user.id;
+        const contactId = user.contactId;
+        const isContact = user.isContact || false;
+        const isPending = user.isPending || false;
+        const sentByMe = user.sentByMe || false;
+        
+        // Status text
+        let statusText = isOnline ? 'Online now' : 'Offline';
+        if (!isOnline && lastSeen) {
+            statusText = this.formatLastSeen(lastSeen);
+        }
+        
+        // Action buttons based on contact status
+        let actionButtons = this.createActionButtons(
+            isContact, 
+            isPending, 
+            sentByMe, 
+            userId, 
+            username, 
+            contactId
+        );
+        
+        userDiv.innerHTML = `
+            <div class="user-result-avatar">
+                ${username[0].toUpperCase()}
+                ${isOnline ? '<div class="chat-online-dot"></div>' : ''}
+            </div>
+            <div class="user-result-info">
+                <div class="user-result-name">${this.escapeHTML(username)}</div>
+                <div class="user-result-status ${isOnline ? 'online' : ''}">
+                    ${isOnline ? '🟢' : '⚫'} ${statusText}
+                </div>
+            </div>
+            <div class="user-result-actions">
+                ${actionButtons}
+            </div>
+        `;
+        
+        return userDiv;
+    }
+
+    // Create appropriate action buttons
+    createActionButtons(isContact, isPending, sentByMe, userId, username, contactId) {
+        if (isContact) {
+            return `
+                <button class="user-action-btn friends" title="Already Friends" onclick="findUsers.handleAlreadyFriends()">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button class="user-action-btn message" onclick="findUsers.startChat('${userId}', '${this.escapeHTML(username)}')" title="Message">
+                    <i class="fas fa-comment"></i>
+                </button>
+            `;
+        } else if (isPending) {
+            if (sentByMe) {
+                return `
+                    <button class="user-action-btn pending" title="Request Sent" onclick="findUsers.handlePendingRequest()">
+                        <i class="fas fa-clock"></i>
+                    </button>
+                    <button class="user-action-btn cancel" title="Cancel Request" onclick="findUsers.cancelRequest('${contactId}', '${this.escapeHTML(username)}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+            } else {
+                return `
+                    <button class="user-action-btn accept" onclick="findUsers.acceptRequest('${contactId}', '${this.escapeHTML(username)}')" title="Accept Request">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="user-action-btn reject" onclick="findUsers.rejectRequest('${contactId}', '${this.escapeHTML(username)}')" title="Reject Request">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+            }
+        } else {
+            return `
+                <button class="user-action-btn add" onclick="findUsers.addContact('${userId}', '${this.escapeHTML(username)}')" title="Add Contact">
+                    <i class="fas fa-user-plus"></i>
+                </button>
+            `;
+        }
+    }
+
+    // =============== ACTION HANDLERS ===============
+    
+    // Add contact
+    async addContact(userId, username) {
+        console.log(`➕ Adding contact: ${username} (${userId})`);
+        
+        try {
+            showNotification('Sending contact request...', 'info', 2000);
+            const result = await Backend.addContact(userId, username);
+            
+            if (result.success) {
+                showNotification(`Contact request sent to ${username}! 📤`, 'success');
+                await this.loadUsers(this.currentSearchTerm);
+                
+                // Update sidebar requests badge if exists
+                this.updateRequestsBadge();
+            } else {
+                showNotification(result.error || 'Failed to send request', 'error');
+            }
+        } catch (error) {
+            console.error('Add contact error:', error);
+            showNotification('Failed to send contact request', 'error');
+        }
+    }
+
+    // Accept contact request
+    async acceptRequest(contactId, username) {
+        console.log(`✅ Accepting request from: ${username} (${contactId})`);
+        
+        try {
+            const result = await Backend.acceptContact(contactId);
+            
+            if (result.success) {
+                showNotification(`${username} added to contacts! 👥`, 'success');
+                await this.loadUsers(this.currentSearchTerm);
+                
+                // Update sidebar
+                if (window.loadContacts) await window.loadContacts();
+                this.updateRequestsBadge();
+            } else {
+                showNotification('Failed to accept request', 'error');
+            }
+        } catch (error) {
+            console.error('Accept contact error:', error);
+            showNotification('Failed to accept request', 'error');
+        }
+    }
+
+    // Reject contact request
+    async rejectRequest(contactId, username) {
+        if (!confirm(`Reject contact request from ${username}?`)) return;
+        
+        console.log(`❌ Rejecting request from: ${username} (${contactId})`);
+        
+        try {
+            const result = await Backend.removeContact(contactId);
+            
+            if (result.success) {
+                showNotification(`Request from ${username} rejected`, 'info');
+                await this.loadUsers(this.currentSearchTerm);
+                this.updateRequestsBadge();
+            } else {
+                showNotification('Failed to reject request', 'error');
+            }
+        } catch (error) {
+            console.error('Reject contact error:', error);
+            showNotification('Failed to reject request', 'error');
+        }
+    }
+
+    // Cancel sent request
+    async cancelRequest(contactId, username) {
+        if (!confirm(`Cancel contact request to ${username}?`)) return;
+        
+        console.log(`🚫 Canceling request to: ${username} (${contactId})`);
+        
+        try {
+            const result = await Backend.removeContact(contactId);
+            
+            if (result.success) {
+                showNotification(`Request to ${username} cancelled`, 'info');
+                await this.loadUsers(this.currentSearchTerm);
+                this.updateRequestsBadge();
+            } else {
+                showNotification('Failed to cancel request', 'error');
+            }
+        } catch (error) {
+            console.error('Cancel contact error:', error);
+            showNotification('Failed to cancel request', 'error');
+        }
+    }
+
+    // Start chat with user
+    startChat(userId, username) {
+        console.log(`💬 Starting chat with: ${username} (${userId})`);
+        
+        this.hideUsers();
+        
+        if (window.switchTab && window.startChat) {
+            window.switchTab('chats');
+            window.startChat(userId, username);
+        } else {
+            // Fallback if global functions aren't available
+            showNotification(`Chat with ${username} started!`, 'success');
+            // You might want to implement direct chat opening here
+        }
+    }
+
+    // Handle already friends button click
+    handleAlreadyFriends() {
+        showNotification('Already friends!', 'info');
+    }
+
+    // Handle pending request button click
+    handlePendingRequest() {
+        showNotification('Request pending...', 'info');
+    }
+
+    // =============== UTILITY FUNCTIONS ===============
+    
+    // Update requests badge in sidebar
+    async updateRequestsBadge() {
+        try {
+            if (window.loadRequests) {
+                await window.loadRequests();
+            } else {
+                // Manual badge update if loadRequests not available
+                const badge = document.getElementById('requestsBadge');
+                if (badge) {
+                    // You could fetch requests count here if needed
+                }
+            }
+        } catch (error) {
+            console.error('Error updating badge:', error);
+        }
+    }
+
+    // Format last seen time
+    formatLastSeen(lastSeen) {
+        if (!lastSeen) return 'Last seen long ago';
+        
+        const now = new Date();
+        const seenDate = new Date(lastSeen);
+        const diffInMinutes = Math.floor((now - seenDate) / (1000 * 60));
+        
+        if (diffInMinutes < 1) {
+            return 'Just now';
+        } else if (diffInMinutes < 60) {
+            return `Last seen ${diffInMinutes}m ago`;
+        } else if (diffInMinutes < 1440) {
+            const hours = Math.floor(diffInMinutes / 60);
+            return `Last seen ${hours}h ago`;
+        } else {
+            const days = Math.floor(diffInMinutes / 1440);
+            if (days < 7) {
+                return `Last seen ${days}d ago`;
+            } else {
+                return 'Last seen long ago';
+            }
+        }
+    }
+
+    // Escape HTML to prevent XSS
+    escapeHTML(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Create loading HTML
+    createLoadingHTML() {
+        return `
+            <div class="loading">
+                <div class="spinner"></div>
+                <span>Loading users...</span>
+            </div>
+        `;
+    }
+
+    // Create error HTML
+    createErrorHTML(title, message) {
+        return `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>${this.escapeHTML(title)}</h3>
+                <p>${this.escapeHTML(message)}</p>
+            </div>
+        `;
+    }
+
+    // Create empty state HTML
+    createEmptyStateHTML(title, message) {
+        return `
+            <div class="empty-state">
+                <i class="fas fa-user-slash"></i>
+                <h3>${this.escapeHTML(title)}</h3>
+                <p>${this.escapeHTML(message)}</p>
+            </div>
+        `;
+    }
+}
+
+// Create global instance
+let findUsers;
+
+// Initialize when document is ready
+document.addEventListener('DOMContentLoaded', () => {
+    findUsers = new FindUsers();
+    
+    // Expose methods to global scope for onclick handlers
+    window.showUsers = () => findUsers.showUsers();
+    window.hideUsers = () => findUsers.hideUsers();
+    window.searchUsers = () => findUsers.loadUsers(document.getElementById('userSearchInput')?.value || '');
+});
+
+// Also expose for manual initialization if needed
+window.FindUsers = FindUsers;
