@@ -12,14 +12,23 @@ const CONFIG = {
     EMAILJS_TEMPLATE_ID: 'template_fchb4ci'
 };
 
-// Then initialize Parse
+// Initialize Parse with ALL KEYS
 Parse.initialize(
     CONFIG.PARSE_APP_ID,
-    CONFIG.PARSE_JS_KEY
+    CONFIG.PARSE_JS_KEY,
+    CONFIG.PARSE_CLIENT_KEY  // Add client key here too
 );
 Parse.serverURL = CONFIG.PARSE_SERVER_URL;
-Parse.masterKey = CONFIG.PARSE_MASTER_KEY;
-Parse.clientKey = CONFIG.PARSE_CLIENT_KEY;
 
-// Make CONFIG available globally
+// CRITICAL: Set master key globally
+Parse.masterKey = CONFIG.PARSE_MASTER_KEY;
+
+// Also set it on the Parse object
+Parse.CoreManager.set('MASTER_KEY', CONFIG.PARSE_MASTER_KEY);
+
+// Debug: Verify master key is set
+console.log('✅ Parse initialized');
+console.log('✅ Master Key available:', !!Parse.masterKey);
+console.log('✅ Master Key set globally:', !!Parse.CoreManager.get('MASTER_KEY'));
+
 window.CONFIG = CONFIG;
