@@ -1,30 +1,19 @@
-// findUsers.js
-// Enhanced user search and contact management functionality
-
+// findUsers.js - SIMPLIFIED VERSION
 class FindUsers {
     constructor() {
         this.currentSearchTerm = '';
-        this.usersData = [];
         this.isLoading = false;
         this.debounceTimer = null;
-        this.currentUser = null;
         this.init();
     }
 
     async init() {
         console.log('🔍 FindUsers initializing...');
-        
-        // Get current user
-        if (Backend && Backend.getCurrentUser) {
-            this.currentUser = Backend.getCurrentUser();
-        }
-        
         await this.attachEventListeners();
         console.log('✅ FindUsers ready');
     }
 
     async attachEventListeners() {
-        // User search input - use event delegation
         document.addEventListener('input', (e) => {
             if (e.target.id === 'userSearchInput') {
                 this.currentSearchTerm = e.target.value.trim();
@@ -32,80 +21,10 @@ class FindUsers {
             }
         });
 
-        // Close modal when clicking outside
         document.addEventListener('click', (event) => {
             const modal = document.getElementById('usersModal');
             if (event.target === modal) {
                 this.hideUsers();
-            }
-        });
-
-        // Close modal with Escape key
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                const modal = document.getElementById('usersModal');
-                if (modal.style.display === 'block') {
-                    this.hideUsers();
-                }
-            }
-        });
-
-        // Global event listeners for action buttons
-        document.addEventListener('click', (e) => {
-            // Handle user action buttons
-            if (e.target.closest('.user-action-btn.add')) {
-                const userCard = e.target.closest('.user-result');
-                if (userCard) {
-                    const userId = userCard.dataset.userId;
-                    const username = userCard.dataset.username;
-                    if (userId && username) {
-                        this.addContact(userId, username);
-                    }
-                }
-            }
-            
-            if (e.target.closest('.user-action-btn.message')) {
-                const userCard = e.target.closest('.user-result');
-                if (userCard) {
-                    const userId = userCard.dataset.userId;
-                    const username = userCard.dataset.username;
-                    if (userId && username) {
-                        this.startChat(userId, username);
-                    }
-                }
-            }
-            
-            if (e.target.closest('.user-action-btn.accept')) {
-                const userCard = e.target.closest('.user-result');
-                if (userCard) {
-                    const contactId = userCard.dataset.contactId;
-                    const username = userCard.dataset.username;
-                    if (contactId && username) {
-                        this.acceptRequest(contactId, username);
-                    }
-                }
-            }
-            
-            if (e.target.closest('.user-action-btn.reject')) {
-                const userCard = e.target.closest('.user-result');
-                if (userCard) {
-                    const contactId = userCard.dataset.contactId;
-                    const username = userCard.dataset.username;
-                    if (contactId && username) {
-                        this.rejectRequest(contactId, username);
-                    }
-                }
-            }
-            
-            if (e.target.closest('.user-action-btn.cancel')) {
-                const userCard = e.target.closest('.user-result');
-                if (userCard) {
-                    const contactId = userCard.dataset.contactId;
-                    const username = userCard.dataset.username;
-                    if (contactId && username) {
-                        this.cancelRequest(contactId, username);
-                    }
-                }
             }
         });
     }
@@ -119,7 +38,6 @@ class FindUsers {
 
     // =============== MODAL FUNCTIONS ===============
     
-    // Show users modal
     async showUsers() {
         console.log('👥 Showing users modal...');
         
@@ -137,7 +55,6 @@ class FindUsers {
         await this.loadUsers();
     }
 
-    // Hide users modal
     hideUsers() {
         console.log('👋 Hiding users modal');
         const modal = document.getElementById('usersModal');
@@ -147,7 +64,6 @@ class FindUsers {
 
     // =============== USER LOADING FUNCTIONS ===============
     
-    // Load users with search functionality
     async loadUsers(searchTerm = '') {
         if (this.isLoading) return;
         
@@ -155,300 +71,171 @@ class FindUsers {
         const usersList = document.getElementById('usersList');
         
         try {
-            // Show loading state
-            usersList.innerHTML = this.createLoadingHTML();
+            usersList.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
             
-            console.log('🔍 Loading users from Parse directly...');
+            console.log('🔍 Querying Parse for users...');
             
-            // Always use direct Parse query
-            const result = await this.queryParseUsersDirectly(searchTerm);
-            
-            console.log('📊 Users result:', result);
+            // SIMPLE DIRECT PARSE QUERY
+            const result = await this.simpleParseQuery(searchTerm);
             
             if (result.success) {
-                this.usersData = result.users || [];
-                await this.displayUsers(this.usersData);
+                if (result.users && result.users.length > 0) {
+                    await this.displayUsers(result.users);
+                } else {
+                    usersList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-user-slash"></i>
+                            <h3>No users found</h3>
+                            <p>${searchTerm ? 'Try a different search' : 'No other users are registered yet'}</p>
+                        </div>
+                    `;
+                }
             } else {
-                console.error('❌ Failed to load users:', result.error);
-                usersList.innerHTML = this.createErrorHTML(
-                    'Error loading users',
-                    result.error || 'Please try again'
-                );
+                usersList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Error</h3>
+                        <p>${result.error || 'Please try again'}</p>
+                    </div>
+                `;
             }
         } catch (error) {
-            console.error('❌ Error in loadUsers:', error);
-            usersList.innerHTML = this.createErrorHTML(
-                'Connection Error',
-                `Error: ${error.message || 'Unknown error'}`
-            );
+            console.error('❌ Error:', error);
+            usersList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Connection Error</h3>
+                    <p>Unable to load users. Please check your internet connection.</p>
+                </div>
+            `;
         } finally {
             this.isLoading = false;
         }
     }
 
-    // Direct Parse query for User class
-    async queryParseUsersDirectly(searchTerm = '') {
+    // SIMPLE PARSE QUERY - NO COMPLEX LOGIC
+    async simpleParseQuery(searchTerm = '') {
         try {
-            console.log('🔍 Querying Parse User class directly...');
-            
-            // Check if Parse is available
+            // Check if Parse is initialized
             if (typeof Parse === 'undefined') {
                 throw new Error('Parse SDK not loaded');
             }
             
-            const UserClass = Parse.Object.extend('User');
-            const query = new Parse.Query(UserClass);
+            if (!Parse.User.current()) {
+                throw new Error('Not logged in');
+            }
+            
+            console.log('Current user:', Parse.User.current().id, Parse.User.current().get('username'));
+            
+            // Create simple query
+            const User = Parse.Object.extend('User');
+            const query = new Parse.Query(User);
             
             // Exclude current user
             const currentUser = Parse.User.current();
-            if (currentUser) {
-                query.notEqualTo('objectId', currentUser.id);
-                console.log('Excluding current user:', currentUser.id, currentUser.get('username'));
+            query.notEqualTo('objectId', currentUser.id);
+            
+            // Simple search
+            if (searchTerm && searchTerm.trim() !== '') {
+                query.contains('username', searchTerm);
             }
             
-            // Apply search filter if provided
-            if (searchTerm && searchTerm.length >= 1) {
-                // Try multiple search approaches
-                const searchRegex = new RegExp(searchTerm, 'i');
-                query.matches('username', searchRegex);
-            }
-            
-            // Include additional fields
-            query.select(['username', 'email', 'createdAt']);
-            
-            // Limit results
-            query.limit(100);
-            
-            // Sort by username
+            // Limit and sort
+            query.limit(50);
             query.ascending('username');
             
-            const users = await query.find();
-            console.log(`✅ Found ${users.length} users in Parse User class`);
+            console.log('Executing query...');
+            const results = await query.find();
+            console.log(`Found ${results.length} users`);
             
-            // Log first few users for debugging
-            if (users.length > 0) {
-                console.log('First 5 users:', users.slice(0, 5).map(u => ({
-                    id: u.id,
-                    username: u.get('username'),
-                    email: u.get('email')
-                })));
-            }
-            
-            // Format users for display
-            const formattedUsers = users.map(user => {
-                const username = user.get('username') || 'Unknown';
-                const userId = user.id;
-                
-                // Check contact status if Backend functions are available
-                let isContact = false;
-                let isPending = false;
-                let sentByMe = false;
-                let contactId = null;
-                
-                // You can add contact status checking here if needed
-                
+            // Format results simply
+            const users = results.map(user => {
                 return {
-                    id: userId,
-                    objectId: userId,
-                    username: username,
-                    email: user.get('email'),
-                    createdAt: user.createdAt,
-                    updatedAt: user.updatedAt,
-                    isContact: isContact,
-                    isPending: isPending,
-                    sentByMe: sentByMe,
-                    contactId: contactId
+                    id: user.id,
+                    objectId: user.id,
+                    username: user.get('username') || 'Unknown',
+                    email: user.get('email') || '',
+                    createdAt: user.createdAt
                 };
             });
             
             return {
                 success: true,
-                users: formattedUsers
+                users: users
             };
             
         } catch (error) {
-            console.error('❌ Parse query error:', error);
+            console.error('Parse query error:', error);
             return {
                 success: false,
-                error: error.message || 'Failed to query users',
-                stack: error.stack
+                error: error.message,
+                code: error.code
             };
         }
     }
 
-    // Display users in the modal
     async displayUsers(users) {
         const usersList = document.getElementById('usersList');
-        
-        if (!users || users.length === 0) {
-            const searchTerm = this.currentSearchTerm;
-            usersList.innerHTML = this.createEmptyStateHTML(
-                searchTerm ? 'No users found' : 'No users available',
-                searchTerm ? 'Try a different search' : 'No other users are registered yet'
-            );
-            return;
-        }
-
-        // Get current user to avoid showing self
-        if (!this.currentUser) {
-            if (Backend && Backend.getCurrentUser) {
-                this.currentUser = Backend.getCurrentUser();
-            } else if (Parse && Parse.User.current()) {
-                this.currentUser = Parse.User.current();
-            }
-        }
-        
-        const currentUserId = this.currentUser ? this.currentUser.id : null;
-        
         usersList.innerHTML = '';
+        
+        // Get current user ID
+        const currentUserId = Parse.User.current() ? Parse.User.current().id : null;
         
         users.forEach(user => {
             // Skip current user
-            if (user.id === currentUserId || user.objectId === currentUserId) return;
+            if (user.id === currentUserId) return;
             
-            const userElement = this.createUserElement(user);
-            usersList.appendChild(userElement);
-        });
-        
-        // If all users were filtered out (only current user exists)
-        if (usersList.children.length === 0) {
-            usersList.innerHTML = this.createEmptyStateHTML(
-                'No other users',
-                'You are the only user registered'
-            );
-        }
-    }
-
-    // =============== USER ELEMENT CREATION ===============
-    
-    // Create user element HTML
-    createUserElement(user) {
-        const userDiv = document.createElement('div');
-        userDiv.className = 'user-result';
-        
-        const username = user.username || 'Unknown';
-        const userId = user.id || user.objectId;
-        const contactId = user.contactId;
-        const isContact = user.isContact || false;
-        const isPending = user.isPending || false;
-        const sentByMe = user.sentByMe || false;
-        
-        // Set data attributes for event handling
-        userDiv.dataset.userId = userId;
-        userDiv.dataset.username = username;
-        userDiv.dataset.contactId = contactId;
-        userDiv.dataset.isContact = isContact;
-        userDiv.dataset.isPending = isPending;
-        userDiv.dataset.sentByMe = sentByMe;
-        
-        // Action buttons based on contact status
-        let actionButtons = this.createActionButtonsHTML(
-            isContact, 
-            isPending, 
-            sentByMe, 
-            userId, 
-            username, 
-            contactId
-        );
-        
-        userDiv.innerHTML = `
-            <div class="user-result-avatar">
-                ${username[0].toUpperCase()}
-            </div>
-            <div class="user-result-info">
-                <div class="user-result-name">${this.escapeHTML(username)}</div>
-                <div class="user-result-status">
-                    ${this.getStatusText(user)}
+            const userDiv = document.createElement('div');
+            userDiv.className = 'user-result';
+            
+            const username = user.username || 'Unknown';
+            const userId = user.id;
+            
+            userDiv.innerHTML = `
+                <div class="user-result-avatar">
+                    ${username[0].toUpperCase()}
                 </div>
-            </div>
-            <div class="user-result-actions">
-                ${actionButtons}
-            </div>
-        `;
-        
-        return userDiv;
-    }
-
-    // Create appropriate action buttons HTML
-    createActionButtonsHTML(isContact, isPending, sentByMe, userId, username, contactId) {
-        if (isContact) {
-            return `
-                <button class="user-action-btn friends" title="Already Friends">
-                    <i class="fas fa-check"></i>
-                </button>
-                <button class="user-action-btn message" title="Message">
-                    <i class="fas fa-comment"></i>
-                </button>
+                <div class="user-result-info">
+                    <div class="user-result-name">${this.escapeHTML(username)}</div>
+                    <div class="user-result-status">
+                        Not connected
+                    </div>
+                </div>
+                <div class="user-result-actions">
+                    <button class="user-action-btn add" onclick="findUsers.addContact('${userId}', '${this.escapeString(username)}')" title="Add Contact">
+                        <i class="fas fa-user-plus"></i>
+                    </button>
+                </div>
             `;
-        } else if (isPending) {
-            if (sentByMe) {
-                return `
-                    <button class="user-action-btn pending" title="Request Sent">
-                        <i class="fas fa-clock"></i>
-                    </button>
-                    <button class="user-action-btn cancel" title="Cancel Request">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-            } else {
-                return `
-                    <button class="user-action-btn accept" title="Accept Request">
-                        <i class="fas fa-check"></i>
-                    </button>
-                    <button class="user-action-btn reject" title="Reject Request">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-            }
-        } else {
-            return `
-                <button class="user-action-btn add" title="Add Contact">
-                    <i class="fas fa-user-plus"></i>
-                </button>
-            `;
-        }
+            
+            usersList.appendChild(userDiv);
+        });
     }
 
-    // Get status text for user
-    getStatusText(user) {
-        if (user.isContact) {
-            return 'Already friends';
-        } else if (user.isPending) {
-            if (user.sentByMe) {
-                return 'Request sent';
-            } else {
-                return 'Request received';
-            }
-        } else {
-            return 'Not connected';
-        }
-    }
-
-    // =============== CONTACT ACTION FUNCTIONS ===============
+    // =============== ACTION FUNCTIONS ===============
     
-    // Add contact
     async addContact(userId, username) {
         console.log(`➕ Adding contact: ${username} (${userId})`);
         
         try {
-            showNotification('Sending contact request...', 'info', 2000);
-            
-            // Use Backend function if available
-            if (typeof Backend.addContact === 'function') {
+            // Try Backend function first
+            if (typeof Backend !== 'undefined' && typeof Backend.addContact === 'function') {
+                showNotification('Sending contact request...', 'info', 2000);
                 const result = await Backend.addContact(userId, username);
                 
                 if (result.success) {
                     showNotification(`Contact request sent to ${username}! 📤`, 'success');
                     await this.loadUsers(this.currentSearchTerm);
-                    
-                    // Update sidebar requests badge
-                    this.updateRequestsBadge();
                 } else {
-                    showNotification(result.error, 'error');
+                    showNotification(result.error || 'Failed to send request', 'error');
                 }
             } else {
-                // Fallback: Show message that backend function is not available
-                showNotification('Contact functionality not available', 'error');
+                // Fallback: Create contact directly
+                showNotification(`Would add ${username} as contact`, 'info');
+                
+                // You can implement direct Parse contact creation here
+                // For now, just refresh the list
+                await this.loadUsers(this.currentSearchTerm);
             }
         } catch (error) {
             console.error('Add contact error:', error);
@@ -456,256 +243,66 @@ class FindUsers {
         }
     }
 
-    // Accept contact request
-    async acceptRequest(contactId, username) {
-        console.log(`✅ Accepting request from: ${username} (${contactId})`);
-        
-        try {
-            if (typeof Backend.acceptContact === 'function') {
-                const result = await Backend.acceptContact(contactId);
-                
-                if (result.success) {
-                    showNotification(`${username} added to contacts! 👥`, 'success');
-                    await this.loadUsers(this.currentSearchTerm);
-                    
-                    // Update sidebar contacts and requests
-                    this.updateSidebarData();
-                } else {
-                    showNotification('Failed to accept request', 'error');
-                }
-            } else {
-                showNotification('Contact functionality not available', 'error');
-            }
-        } catch (error) {
-            console.error('Accept contact error:', error);
-            showNotification('Failed to accept request', 'error');
-        }
-    }
-
-    // Reject contact request
-    async rejectRequest(contactId, username) {
-        if (!confirm(`Reject contact request from ${username}?`)) return;
-        
-        console.log(`❌ Rejecting request from: ${username} (${contactId})`);
-        
-        try {
-            if (typeof Backend.removeContact === 'function') {
-                const result = await Backend.removeContact(contactId);
-                
-                if (result.success) {
-                    showNotification(`Request from ${username} rejected`, 'info');
-                    await this.loadUsers(this.currentSearchTerm);
-                    this.updateRequestsBadge();
-                } else {
-                    showNotification('Failed to reject request', 'error');
-                }
-            } else {
-                showNotification('Contact functionality not available', 'error');
-            }
-        } catch (error) {
-            console.error('Reject contact error:', error);
-            showNotification('Failed to reject request', 'error');
-        }
-    }
-
-    // Cancel sent request
-    async cancelRequest(contactId, username) {
-        if (!confirm(`Cancel contact request to ${username}?`)) return;
-        
-        console.log(`🚫 Canceling request to: ${username} (${contactId})`);
-        
-        try {
-            if (typeof Backend.removeContact === 'function') {
-                const result = await Backend.removeContact(contactId);
-                
-                if (result.success) {
-                    showNotification(`Request to ${username} cancelled`, 'info');
-                    await this.loadUsers(this.currentSearchTerm);
-                    this.updateRequestsBadge();
-                } else {
-                    showNotification('Failed to cancel request', 'error');
-                }
-            } else {
-                showNotification('Contact functionality not available', 'error');
-            }
-        } catch (error) {
-            console.error('Cancel contact error:', error);
-            showNotification('Failed to cancel request', 'error');
-        }
-    }
-
-    // Start chat with user
-    async startChat(userId, username) {
+    startChat(userId, username) {
         console.log(`💬 Starting chat with: ${username} (${userId})`);
-        
         this.hideUsers();
         
-        // Call global startChat function if it exists
         if (typeof window.startChat === 'function') {
             window.startChat(userId, username);
         } else {
-            // Fallback
-            showNotification(`Starting chat with ${username}...`, 'info');
-            
-            // You might want to implement direct chat opening here
-            if (typeof window.selectChat === 'function') {
-                window.selectChat(userId, username);
-            }
-        }
-    }
-
-    // =============== SIDEBAR UPDATE FUNCTIONS ===============
-    
-    // Update sidebar data after contact actions
-    async updateSidebarData() {
-        try {
-            // Update contacts tab
-            if (typeof window.loadContacts === 'function') {
-                await window.loadContacts();
-            }
-            
-            // Update requests tab
-            if (typeof window.loadRequests === 'function') {
-                await window.loadRequests();
-            }
-            
-            // Update chats tab
-            if (typeof window.loadChats === 'function') {
-                setTimeout(() => window.loadChats(), 500);
-            }
-            
-            this.updateRequestsBadge();
-        } catch (error) {
-            console.error('Error updating sidebar:', error);
-        }
-    }
-
-    // Update requests badge
-    async updateRequestsBadge() {
-        try {
-            if (typeof window.loadRequests === 'function') {
-                await window.loadRequests();
-            }
-        } catch (error) {
-            console.error('Error updating badge:', error);
+            showNotification(`Would start chat with ${username}`, 'info');
         }
     }
 
     // =============== UTILITY FUNCTIONS ===============
     
-    // Escape HTML to prevent XSS
     escapeHTML(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 
-    // Create loading HTML
-    createLoadingHTML() {
-        return `
-            <div class="loading">
-                <div class="spinner"></div>
-                <span>Loading users...</span>
-            </div>
-        `;
-    }
-
-    // Create error HTML
-    createErrorHTML(title, message) {
-        return `
-            <div class="empty-state">
-                <i class="fas fa-exclamation-triangle"></i>
-                <h3>${this.escapeHTML(title)}</h3>
-                <p>${this.escapeHTML(message)}</p>
-            </div>
-        `;
-    }
-
-    // Create empty state HTML
-    createEmptyStateHTML(title, message) {
-        return `
-            <div class="empty-state">
-                <i class="fas fa-user-slash"></i>
-                <h3>${this.escapeHTML(title)}</h3>
-                <p>${this.escapeHTML(message)}</p>
-            </div>
-        `;
-    }
-
-    // =============== GLOBAL HELPER FUNCTIONS ===============
-    
-    // Show notification (fallback if not available globally)
-    showNotification(message, type = 'info', duration = 4000) {
-        if (typeof window.showNotification === 'function') {
-            window.showNotification(message, type, duration);
-        } else {
-            // Fallback notification
-            console.log(`[${type.toUpperCase()}] ${message}`);
-            alert(`${type.toUpperCase()}: ${message}`);
-        }
+    escapeString(str) {
+        return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
     }
 
     // Debug function
-    debug() {
-        console.log('🐛 DEBUG: Checking Parse and Backend...');
+    testConnection() {
+        console.log('🔧 Testing connection...');
         console.log('Parse available:', typeof Parse !== 'undefined');
-        console.log('Backend available:', typeof Backend !== 'undefined');
+        console.log('Parse.User.current():', Parse.User.current());
         
-        if (typeof Parse !== 'undefined') {
-            console.log('Parse.User.current():', Parse.User.current());
-            if (Parse.User.current()) {
-                console.log('Current user ID:', Parse.User.current().id);
-                console.log('Current username:', Parse.User.current().get('username'));
-            }
+        if (Parse.User.current()) {
+            console.log('Current user ID:', Parse.User.current().id);
+            console.log('Current username:', Parse.User.current().get('username'));
         }
         
-        if (typeof Backend !== 'undefined') {
-            console.log('Backend functions:');
-            console.log('- getUsersWithContactStatus:', typeof Backend.getUsersWithContactStatus);
-            console.log('- getCurrentUser:', typeof Backend.getCurrentUser);
-            console.log('- addContact:', typeof Backend.addContact);
-        }
-        
-        // Test Parse query directly
-        this.queryParseUsersDirectly().then(result => {
-            console.log('Direct Parse query result:', result);
+        // Test query
+        this.simpleParseQuery().then(result => {
+            console.log('Test query result:', result);
         });
     }
 }
 
-// =============== GLOBAL EXPORTS ===============
-
 // Create global instance
 let findUsers;
 
-// Initialize when document is ready
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
     findUsers = new FindUsers();
     
-    // Expose methods to global scope
+    // Expose to global
     window.showUsers = () => findUsers.showUsers();
     window.hideUsers = () => findUsers.hideUsers();
-    window.searchUsers = () => findUsers.loadUsers(document.getElementById('userSearchInput')?.value || '');
-    
-    // Expose action functions for backward compatibility
-    window.addContact = (userId, username) => findUsers.addContact(userId, username);
-    window.acceptContactRequest = (contactId, username) => findUsers.acceptRequest(contactId, username);
-    window.rejectContactRequest = (contactId, username) => findUsers.rejectRequest(contactId, username);
-    window.cancelContactRequest = (contactId, username) => findUsers.cancelRequest(contactId, username);
-    window.startChatFromUsers = (userId, username) => findUsers.startChat(userId, username);
-    window.acceptFromUsers = (contactId, username) => findUsers.acceptRequest(contactId, username);
+    window.findUsers = findUsers; // For debugging
 });
 
-// Expose for manual initialization
-window.FindUsers = FindUsers;
-
-// Make sure it's available immediately for inline onclick handlers
+// Fallback functions
 if (typeof window !== 'undefined') {
-    // Create placeholder functions that will be replaced when DOM is ready
-    window.showUsers = function() {
-        console.warn('FindUsers not initialized yet. Please wait for DOMContentLoaded.');
+    window.showUsers = window.showUsers || function() {
+        console.warn('FindUsers not ready');
     };
-    window.hideUsers = function() {
-        console.warn('FindUsers not initialized yet. Please wait for DOMContentLoaded.');
+    window.hideUsers = window.hideUsers || function() {
+        console.warn('FindUsers not ready');
     };
 }
