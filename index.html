@@ -1145,11 +1145,11 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3><i class="fas fa-users"></i> Find People</h3>
-                <button class="close" onclick="hideUsersModal()">×</button>
+                <button class="close" onclick="hideUsers()">×</button>
             </div>
             <div class="modal-body">
                 <div class="search-box">
-                    <input type="text" placeholder="Search users by name..." id="userSearchInput" oninput="searchUsersModal()">
+                    <input type="text" placeholder="Search users by name..." id="userSearchInput">
                 </div>
                 <div id="usersList">
                     <div class="loading">
@@ -1162,6 +1162,208 @@
     </div>
 
     <script>
+        // =============== SIMPLE USER MODAL FUNCTIONS ===============
+        const UserModal = {
+            currentSearchTerm: '',
+            debounceTimer: null,
+            
+            show: function() {
+                console.log('👥 Showing users modal...');
+                document.getElementById('usersModal').style.display = 'block';
+                this.currentSearchTerm = '';
+                document.getElementById('userSearchInput').value = '';
+                this.loadUsers();
+                setTimeout(() => document.getElementById('userSearchInput').focus(), 100);
+            },
+            
+            hide: function() {
+                console.log('👋 Hiding users modal');
+                document.getElementById('usersModal').style.display = 'none';
+                this.currentSearchTerm = '';
+            },
+            
+            search: function() {
+                const searchTerm = document.getElementById('userSearchInput').value.trim();
+                this.currentSearchTerm = searchTerm;
+                
+                clearTimeout(this.debounceTimer);
+                this.debounceTimer = setTimeout(() => {
+                    this.loadUsers(searchTerm);
+                }, 300);
+            },
+            
+            loadUsers: async function(searchTerm = '') {
+                const usersList = document.getElementById('usersList');
+                
+                try {
+                    usersList.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
+                    
+                    // Simple direct Parse query
+                    const result = await this.simpleParseQuery(searchTerm);
+                    
+                    if (result.success && result.users && result.users.length > 0) {
+                        this.displayUsers(result.users);
+                    } else {
+                        usersList.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-user-slash"></i>
+                                <h3>${result.error ? 'Error' : 'No users found'}</h3>
+                                <p>${result.error || 'No other users are registered yet'}</p>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('Error loading users:', error);
+                    usersList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Error</h3>
+                            <p>${error.message || 'Unable to load users'}</p>
+                        </div>
+                    `;
+                }
+            },
+            
+            simpleParseQuery: async function(searchTerm = '') {
+                try {
+                    console.log('🔍 Querying Parse for users...');
+                    
+                    if (!Parse.User.current()) {
+                        throw new Error('Not logged in');
+                    }
+                    
+                    const User = Parse.Object.extend('User');
+                    const query = new Parse.Query(User);
+                    
+                    // Exclude current user
+                    query.notEqualTo('objectId', Parse.User.current().id);
+                    
+                    // Search
+                    if (searchTerm && searchTerm.trim() !== '') {
+                        query.contains('username', searchTerm);
+                    }
+                    
+                    // Limit results
+                    query.limit(100);
+                    query.ascending('username');
+                    
+                    const results = await query.find();
+                    console.log(`✅ Found ${results.length} users`);
+                    
+                    // Format results
+                    const users = results.map(user => ({
+                        id: user.id,
+                        username: user.get('username') || 'Unknown',
+                        email: user.get('email') || ''
+                    }));
+                    
+                    return {
+                        success: true,
+                        users: users
+                    };
+                    
+                } catch (error) {
+                    console.error('❌ Parse query error:', error);
+                    return {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            },
+            
+            displayUsers: function(users) {
+                const usersList = document.getElementById('usersList');
+                usersList.innerHTML = '';
+                
+                // Get current user ID
+                const currentUserId = Parse.User.current() ? Parse.User.current().id : null;
+                
+                users.forEach(user => {
+                    // Skip current user
+                    if (user.id === currentUserId) return;
+                    
+                    const userDiv = document.createElement('div');
+                    userDiv.className = 'user-result';
+                    
+                    const username = user.username || 'Unknown';
+                    
+                    userDiv.innerHTML = `
+                        <div class="user-result-avatar">
+                            ${username[0].toUpperCase()}
+                        </div>
+                        <div class="user-result-info">
+                            <div class="user-result-name">${this.escapeHTML(username)}</div>
+                            <div class="user-result-status">Not connected</div>
+                        </div>
+                        <div class="user-result-actions">
+                            <button class="user-action-btn add" onclick="UserModal.addContact('${user.id}', '${this.escapeString(username)}')" title="Add Contact">
+                                <i class="fas fa-user-plus"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    usersList.appendChild(userDiv);
+                });
+            },
+            
+            addContact: async function(userId, username) {
+                console.log(`➕ Adding contact: ${username}`);
+                
+                try {
+                    showNotification('Sending contact request...', 'info');
+                    
+                    if (typeof Backend !== 'undefined' && typeof Backend.addContact === 'function') {
+                        const result = await Backend.addContact(userId, username);
+                        
+                        if (result.success) {
+                            showNotification(`Contact request sent to ${username}!`, 'success');
+                            this.loadUsers(this.currentSearchTerm);
+                        } else {
+                            showNotification(result.error || 'Failed to send request', 'error');
+                        }
+                    } else {
+                        showNotification(`Would add ${username} as contact`, 'info');
+                    }
+                } catch (error) {
+                    console.error('Add contact error:', error);
+                    showNotification('Failed to send contact request', 'error');
+                }
+            },
+            
+            escapeHTML: function(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            },
+            
+            escapeString: function(str) {
+                return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+            }
+        };
+        
+        // Attach search input listener
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('userSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    UserModal.search();
+                });
+            }
+        });
+        
+        // =============== GLOBAL FUNCTIONS FOR HTML ===============
+        function showUsers() {
+            UserModal.show();
+        }
+        
+        function hideUsers() {
+            UserModal.hide();
+        }
+        
+        function searchUsers() {
+            UserModal.search();
+        }
+        
         // =============== GLOBAL VARIABLES ===============
         let currentChatId = null;
         let currentChatName = '';
@@ -1209,239 +1411,6 @@
             
             console.log('✅ ChatRise initialized successfully');
         });
-        
-        // =============== MODAL FUNCTIONS ===============
-        
-        // Show users modal
-        function showUsersModal() {
-            console.log('👥 Showing users modal...');
-            document.getElementById('usersModal').style.display = 'block';
-            loadUsersForModal();
-        }
-        
-        // Hide users modal
-        function hideUsersModal() {
-            console.log('👋 Hiding users modal');
-            document.getElementById('usersModal').style.display = 'none';
-            document.getElementById('userSearchInput').value = '';
-        }
-        
-        // Search users in modal
-        async function searchUsersModal() {
-            const searchTerm = document.getElementById('userSearchInput').value.trim();
-            await loadUsersForModal(searchTerm);
-        }
-        
-        // Load users for modal
-        async function loadUsersForModal(searchTerm = '') {
-            const usersList = document.getElementById('usersList');
-            
-            try {
-                usersList.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
-                
-                let result;
-                if (searchTerm && searchTerm.length >= 1) {
-                    result = await Backend.searchUsers(searchTerm);
-                } else {
-                    result = await Backend.getUsersWithContactStatus();
-                }
-                
-                console.log('📋 Users result:', result);
-                
-                if (result.success) {
-                    usersList.innerHTML = '';
-                    
-                    if (result.users && result.users.length === 0) {
-                        usersList.innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-user-slash"></i>
-                                <h3>No users found</h3>
-                                <p>${searchTerm ? 'Try a different search' : 'No other users available right now'}</p>
-                            </div>
-                        `;
-                        return;
-                    }
-                    
-                    // Get current user
-                    const currentUser = Backend.getCurrentUser();
-                    
-                    // Process and display users
-                    result.users.forEach(user => {
-                        // Skip current user
-                        if (user.id === currentUser.id) return;
-                        
-                        const username = user.username || 'Unknown';
-                        const userId = user.id;
-                        const contactId = user.contactId;
-                        const isContact = user.isContact || false;
-                        const isPending = user.isPending || false;
-                        const sentByMe = user.sentByMe || false;
-                        
-                        const userDiv = document.createElement('div');
-                        userDiv.className = 'user-result';
-                        
-                        // Determine action buttons based on contact status
-                        let actionButtons = '';
-                        if (isContact) {
-                            actionButtons = `
-                                <button class="user-action-btn friends" title="Already Friends">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                                <button class="user-action-btn message" onclick="startChatFromModal('${userId}', '${escapeString(username)}')" title="Message">
-                                    <i class="fas fa-comment"></i>
-                                </button>
-                            `;
-                        } else if (isPending) {
-                            if (sentByMe) {
-                                actionButtons = `
-                                    <button class="user-action-btn pending" title="Request Sent">
-                                        <i class="fas fa-clock"></i>
-                                    </button>
-                                    <button class="user-action-btn cancel" onclick="cancelRequestFromModal('${contactId}', '${escapeString(username)}')" title="Cancel Request">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                `;
-                            } else {
-                                actionButtons = `
-                                    <button class="user-action-btn accept" onclick="acceptRequestFromModal('${contactId}', '${escapeString(username)}')" title="Accept Request">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="user-action-btn reject" onclick="rejectRequestFromModal('${contactId}', '${escapeString(username)}')" title="Reject Request">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                `;
-                            }
-                        } else {
-                            actionButtons = `
-                                <button class="user-action-btn add" onclick="addContactFromModal('${userId}', '${escapeString(username)}')" title="Add Contact">
-                                    <i class="fas fa-user-plus"></i>
-                                </button>
-                            `;
-                        }
-                        
-                        userDiv.innerHTML = `
-                            <div class="user-result-avatar">
-                                ${username[0].toUpperCase()}
-                            </div>
-                            <div class="user-result-info">
-                                <div class="user-result-name">${username}</div>
-                                <div class="user-result-status">
-                                    ${isContact ? 'Already friends' : isPending ? (sentByMe ? 'Request sent' : 'Request received') : 'Not connected'}
-                                </div>
-                            </div>
-                            <div class="user-result-actions">
-                                ${actionButtons}
-                            </div>
-                        `;
-                        
-                        usersList.appendChild(userDiv);
-                    });
-                } else {
-                    usersList.innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <h3>Error loading users</h3>
-                            <p>${result.error || 'Please try again'}</p>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                console.error('Error loading users:', error);
-                usersList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <h3>Connection Error</h3>
-                        <p>Please check your connection and try again</p>
-                    </div>
-                `;
-            }
-        }
-        
-        // =============== MODAL ACTION FUNCTIONS ===============
-        
-        // Add contact from modal
-        async function addContactFromModal(userId, username) {
-            try {
-                showNotification('Sending contact request...', 'info', 2000);
-                const result = await Backend.addContact(userId, username);
-                
-                if (result.success) {
-                    showNotification(`Contact request sent to ${username}! 📤`, 'success');
-                    await loadUsersForModal(document.getElementById('userSearchInput').value.trim());
-                    await loadRequests(); // Update requests badge
-                } else {
-                    showNotification(result.error, 'error');
-                }
-            } catch (error) {
-                console.error('Add contact error:', error);
-                showNotification('Failed to send contact request', 'error');
-            }
-        }
-        
-        // Accept request from modal
-        async function acceptRequestFromModal(contactId, username) {
-            try {
-                const result = await Backend.acceptContact(contactId);
-                
-                if (result.success) {
-                    showNotification(`${username} added to contacts! 👥`, 'success');
-                    await loadUsersForModal(document.getElementById('userSearchInput').value.trim());
-                    await Promise.all([loadContacts(), loadRequests()]);
-                } else {
-                    showNotification('Failed to accept request', 'error');
-                }
-            } catch (error) {
-                console.error('Accept contact error:', error);
-                showNotification('Failed to accept request', 'error');
-            }
-        }
-        
-        // Reject request from modal
-        async function rejectRequestFromModal(contactId, username) {
-            if (confirm(`Reject contact request from ${username}?`)) {
-                try {
-                    const result = await Backend.removeContact(contactId);
-                    
-                    if (result.success) {
-                        showNotification(`Request from ${username} rejected`, 'info');
-                        await loadUsersForModal(document.getElementById('userSearchInput').value.trim());
-                        await loadRequests();
-                    } else {
-                        showNotification('Failed to reject request', 'error');
-                    }
-                } catch (error) {
-                    console.error('Reject contact error:', error);
-                    showNotification('Failed to reject request', 'error');
-                }
-            }
-        }
-        
-        // Cancel request from modal
-        async function cancelRequestFromModal(contactId, username) {
-            if (confirm(`Cancel contact request to ${username}?`)) {
-                try {
-                    const result = await Backend.removeContact(contactId);
-                    
-                    if (result.success) {
-                        showNotification(`Request to ${username} cancelled`, 'info');
-                        await loadUsersForModal(document.getElementById('userSearchInput').value.trim());
-                        await loadRequests();
-                    } else {
-                        showNotification('Failed to cancel request', 'error');
-                    }
-                } catch (error) {
-                    console.error('Cancel contact error:', error);
-                    showNotification('Failed to cancel request', 'error');
-                }
-            }
-        }
-        
-        // Start chat from modal
-        function startChatFromModal(userId, username) {
-            hideUsersModal();
-            switchTab('chats');
-            startChat(userId, username);
-        }
         
         // =============== CORE FUNCTIONS ===============
         
@@ -1775,7 +1744,7 @@
                 if (result.success) {
                     showNotification(`Contact request sent to ${username}! 📤`, 'success');
                     await loadRequests();
-                    hideUsersModal();
+                    hideUsers();
                 } else {
                     showNotification(result.error, 'error');
                 }
@@ -2253,7 +2222,7 @@
         window.onclick = function(event) {
             const modal = document.getElementById('usersModal');
             if (event.target === modal) {
-                hideUsersModal();
+                hideUsers();
             }
         }
         
