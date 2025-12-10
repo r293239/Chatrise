@@ -9,7 +9,6 @@
     <script src="config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script src="backend.js"></script>
-    <script src="findUsers.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -1019,7 +1018,7 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button class="action-btn" onclick="showUsers()" title="Find People">
+                    <button class="action-btn" onclick="showUsersModal()" title="Find People">
                         <i class="fas fa-user-plus"></i>
                     </button>
                     <button class="action-btn" onclick="refreshAll()" title="Refresh">
@@ -1146,11 +1145,11 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3><i class="fas fa-users"></i> Find People</h3>
-                <button class="close" onclick="hideUsers()">×</button>
+                <button class="close" onclick="hideUsersModal()">×</button>
             </div>
             <div class="modal-body">
                 <div class="search-box">
-                    <input type="text" placeholder="Search users by name..." id="userSearchInput">
+                    <input type="text" placeholder="Search users by name..." id="userSearchInput" oninput="searchUsersModal()">
                 </div>
                 <div id="usersList">
                     <div class="loading">
@@ -1210,6 +1209,239 @@
             
             console.log('✅ ChatRise initialized successfully');
         });
+        
+        // =============== MODAL FUNCTIONS ===============
+        
+        // Show users modal
+        function showUsersModal() {
+            console.log('👥 Showing users modal...');
+            document.getElementById('usersModal').style.display = 'block';
+            loadUsersForModal();
+        }
+        
+        // Hide users modal
+        function hideUsersModal() {
+            console.log('👋 Hiding users modal');
+            document.getElementById('usersModal').style.display = 'none';
+            document.getElementById('userSearchInput').value = '';
+        }
+        
+        // Search users in modal
+        async function searchUsersModal() {
+            const searchTerm = document.getElementById('userSearchInput').value.trim();
+            await loadUsersForModal(searchTerm);
+        }
+        
+        // Load users for modal
+        async function loadUsersForModal(searchTerm = '') {
+            const usersList = document.getElementById('usersList');
+            
+            try {
+                usersList.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
+                
+                let result;
+                if (searchTerm && searchTerm.length >= 1) {
+                    result = await Backend.searchUsers(searchTerm);
+                } else {
+                    result = await Backend.getUsersWithContactStatus();
+                }
+                
+                console.log('📋 Users result:', result);
+                
+                if (result.success) {
+                    usersList.innerHTML = '';
+                    
+                    if (result.users && result.users.length === 0) {
+                        usersList.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-user-slash"></i>
+                                <h3>No users found</h3>
+                                <p>${searchTerm ? 'Try a different search' : 'No other users available right now'}</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Get current user
+                    const currentUser = Backend.getCurrentUser();
+                    
+                    // Process and display users
+                    result.users.forEach(user => {
+                        // Skip current user
+                        if (user.id === currentUser.id) return;
+                        
+                        const username = user.username || 'Unknown';
+                        const userId = user.id;
+                        const contactId = user.contactId;
+                        const isContact = user.isContact || false;
+                        const isPending = user.isPending || false;
+                        const sentByMe = user.sentByMe || false;
+                        
+                        const userDiv = document.createElement('div');
+                        userDiv.className = 'user-result';
+                        
+                        // Determine action buttons based on contact status
+                        let actionButtons = '';
+                        if (isContact) {
+                            actionButtons = `
+                                <button class="user-action-btn friends" title="Already Friends">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="user-action-btn message" onclick="startChatFromModal('${userId}', '${escapeString(username)}')" title="Message">
+                                    <i class="fas fa-comment"></i>
+                                </button>
+                            `;
+                        } else if (isPending) {
+                            if (sentByMe) {
+                                actionButtons = `
+                                    <button class="user-action-btn pending" title="Request Sent">
+                                        <i class="fas fa-clock"></i>
+                                    </button>
+                                    <button class="user-action-btn cancel" onclick="cancelRequestFromModal('${contactId}', '${escapeString(username)}')" title="Cancel Request">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                `;
+                            } else {
+                                actionButtons = `
+                                    <button class="user-action-btn accept" onclick="acceptRequestFromModal('${contactId}', '${escapeString(username)}')" title="Accept Request">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="user-action-btn reject" onclick="rejectRequestFromModal('${contactId}', '${escapeString(username)}')" title="Reject Request">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                `;
+                            }
+                        } else {
+                            actionButtons = `
+                                <button class="user-action-btn add" onclick="addContactFromModal('${userId}', '${escapeString(username)}')" title="Add Contact">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                            `;
+                        }
+                        
+                        userDiv.innerHTML = `
+                            <div class="user-result-avatar">
+                                ${username[0].toUpperCase()}
+                            </div>
+                            <div class="user-result-info">
+                                <div class="user-result-name">${username}</div>
+                                <div class="user-result-status">
+                                    ${isContact ? 'Already friends' : isPending ? (sentByMe ? 'Request sent' : 'Request received') : 'Not connected'}
+                                </div>
+                            </div>
+                            <div class="user-result-actions">
+                                ${actionButtons}
+                            </div>
+                        `;
+                        
+                        usersList.appendChild(userDiv);
+                    });
+                } else {
+                    usersList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Error loading users</h3>
+                            <p>${result.error || 'Please try again'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                usersList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Connection Error</h3>
+                        <p>Please check your connection and try again</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // =============== MODAL ACTION FUNCTIONS ===============
+        
+        // Add contact from modal
+        async function addContactFromModal(userId, username) {
+            try {
+                showNotification('Sending contact request...', 'info', 2000);
+                const result = await Backend.addContact(userId, username);
+                
+                if (result.success) {
+                    showNotification(`Contact request sent to ${username}! 📤`, 'success');
+                    await loadUsersForModal(document.getElementById('userSearchInput').value.trim());
+                    await loadRequests(); // Update requests badge
+                } else {
+                    showNotification(result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Add contact error:', error);
+                showNotification('Failed to send contact request', 'error');
+            }
+        }
+        
+        // Accept request from modal
+        async function acceptRequestFromModal(contactId, username) {
+            try {
+                const result = await Backend.acceptContact(contactId);
+                
+                if (result.success) {
+                    showNotification(`${username} added to contacts! 👥`, 'success');
+                    await loadUsersForModal(document.getElementById('userSearchInput').value.trim());
+                    await Promise.all([loadContacts(), loadRequests()]);
+                } else {
+                    showNotification('Failed to accept request', 'error');
+                }
+            } catch (error) {
+                console.error('Accept contact error:', error);
+                showNotification('Failed to accept request', 'error');
+            }
+        }
+        
+        // Reject request from modal
+        async function rejectRequestFromModal(contactId, username) {
+            if (confirm(`Reject contact request from ${username}?`)) {
+                try {
+                    const result = await Backend.removeContact(contactId);
+                    
+                    if (result.success) {
+                        showNotification(`Request from ${username} rejected`, 'info');
+                        await loadUsersForModal(document.getElementById('userSearchInput').value.trim());
+                        await loadRequests();
+                    } else {
+                        showNotification('Failed to reject request', 'error');
+                    }
+                } catch (error) {
+                    console.error('Reject contact error:', error);
+                    showNotification('Failed to reject request', 'error');
+                }
+            }
+        }
+        
+        // Cancel request from modal
+        async function cancelRequestFromModal(contactId, username) {
+            if (confirm(`Cancel contact request to ${username}?`)) {
+                try {
+                    const result = await Backend.removeContact(contactId);
+                    
+                    if (result.success) {
+                        showNotification(`Request to ${username} cancelled`, 'info');
+                        await loadUsersForModal(document.getElementById('userSearchInput').value.trim());
+                        await loadRequests();
+                    } else {
+                        showNotification('Failed to cancel request', 'error');
+                    }
+                } catch (error) {
+                    console.error('Cancel contact error:', error);
+                    showNotification('Failed to cancel request', 'error');
+                }
+            }
+        }
+        
+        // Start chat from modal
+        function startChatFromModal(userId, username) {
+            hideUsersModal();
+            switchTab('chats');
+            startChat(userId, username);
+        }
         
         // =============== CORE FUNCTIONS ===============
         
@@ -1543,7 +1775,7 @@
                 if (result.success) {
                     showNotification(`Contact request sent to ${username}! 📤`, 'success');
                     await loadRequests();
-                    hideUsers();
+                    hideUsersModal();
                 } else {
                     showNotification(result.error, 'error');
                 }
@@ -1650,7 +1882,6 @@
                         chatDiv.innerHTML = `
                             <div class="chat-avatar">
                                 ${chat.name[0].toUpperCase()}
-                                ${chat.isOnline ? '<div class="chat-online-dot"></div>' : ''}
                             </div>
                             <div class="chat-info">
                                 <div class="chat-name">${chat.name}</div>
@@ -1691,24 +1922,21 @@
                         const contactDiv = document.createElement('div');
                         contactDiv.className = 'contact-item';
                         
-                        const statusText = contact.isOnline ? 'Online now' : formatLastSeen(contact.lastSeen);
-                        
                         contactDiv.innerHTML = `
                             <div class="contact-avatar">
                                 ${contact.username[0].toUpperCase()}
-                                ${contact.isOnline ? '<div class="chat-online-dot"></div>' : ''}
                             </div>
                             <div class="contact-info">
                                 <div class="contact-name">${contact.username}</div>
-                                <div class="contact-status ${contact.isOnline ? 'online' : ''}">
-                                    ${contact.isOnline ? '🟢' : '⚫'} ${statusText}
+                                <div class="contact-status">
+                                    Contact
                                 </div>
                             </div>
                             <div class="contact-actions">
-                                <button class="contact-btn message" onclick="startChat('${contact.userId}', '${contact.username}')" title="Message">
+                                <button class="contact-btn message" onclick="startChat('${contact.userId}', '${escapeString(contact.username)}')" title="Message">
                                     <i class="fas fa-comment"></i>
                                 </button>
-                                <button class="contact-btn remove" onclick="removeContact('${contact.contactId}', '${contact.username}')" title="Remove Contact">
+                                <button class="contact-btn remove" onclick="removeContact('${contact.contactId}', '${escapeString(contact.username)}')" title="Remove Contact">
                                     <i class="fas fa-user-minus"></i>
                                 </button>
                             </div>
@@ -1761,17 +1989,16 @@
                         requestDiv.innerHTML = `
                             <div class="contact-avatar">
                                 ${request.fromUsername[0].toUpperCase()}
-                                ${request.isOnline ? '<div class="chat-online-dot"></div>' : ''}
                             </div>
                             <div class="contact-info">
                                 <div class="contact-name">${request.fromUsername}</div>
                                 <div class="contact-status">Wants to connect</div>
                             </div>
                             <div class="contact-actions">
-                                <button class="contact-btn accept" onclick="acceptContactRequest('${request.contactId}', '${request.fromUsername}')" title="Accept">
+                                <button class="contact-btn accept" onclick="acceptContactRequest('${request.contactId}', '${escapeString(request.fromUsername)}')" title="Accept">
                                     <i class="fas fa-check"></i>
                                 </button>
-                                <button class="contact-btn reject" onclick="rejectContactRequest('${request.contactId}', '${request.fromUsername}')" title="Reject">
+                                <button class="contact-btn reject" onclick="rejectContactRequest('${request.contactId}', '${escapeString(request.fromUsername)}')" title="Reject">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
@@ -1794,14 +2021,13 @@
                         requestDiv.innerHTML = `
                             <div class="contact-avatar">
                                 ${request.toUsername[0].toUpperCase()}
-                                ${request.isOnline ? '<div class="chat-online-dot"></div>' : ''}
                             </div>
                             <div class="contact-info">
                                 <div class="contact-name">${request.toUsername}</div>
                                 <div class="contact-status">Request pending</div>
                             </div>
                             <div class="contact-actions">
-                                <button class="contact-btn pending" onclick="cancelContactRequest('${request.contactId}', '${request.toUsername}')" title="Cancel Request">
+                                <button class="contact-btn pending" onclick="cancelContactRequest('${request.contactId}', '${escapeString(request.toUsername)}')" title="Cancel Request">
                                     <i class="fas fa-clock"></i>
                                 </button>
                             </div>
@@ -1974,29 +2200,9 @@
             }
         }
         
-        // Format last seen
-        function formatLastSeen(lastSeen) {
-            if (!lastSeen) return 'Last seen long ago';
-            
-            const now = new Date();
-            const seenDate = new Date(lastSeen);
-            const diffInMinutes = Math.floor((now - seenDate) / (1000 * 60));
-            
-            if (diffInMinutes < 1) {
-                return 'Just now';
-            } else if (diffInMinutes < 60) {
-                return `Last seen ${diffInMinutes}m ago`;
-            } else if (diffInMinutes < 1440) {
-                const hours = Math.floor(diffInMinutes / 60);
-                return `Last seen ${hours}h ago`;
-            } else {
-                const days = Math.floor(diffInMinutes / 1440);
-                if (days < 7) {
-                    return `Last seen ${days}d ago`;
-                } else {
-                    return 'Last seen long ago';
-                }
-            }
+        // Escape string for JavaScript
+        function escapeString(str) {
+            return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
         
         // Show notification
@@ -2042,6 +2248,14 @@
         window.addEventListener('orientationchange', () => {
             setTimeout(setViewportHeight, 100);
         });
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('usersModal');
+            if (event.target === modal) {
+                hideUsersModal();
+            }
+        }
         
         // Handle visibility changes
         document.addEventListener('visibilitychange', () => {
