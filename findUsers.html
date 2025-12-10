@@ -1,32 +1,39 @@
 // findUsers.js
-// Handles user search and contact management functionality
+// Enhanced user search and contact management functionality
 
 class FindUsers {
     constructor() {
         this.currentSearchTerm = '';
         this.usersData = [];
         this.isLoading = false;
+        this.debounceTimer = null;
+        this.currentUser = null;
         this.init();
     }
 
     async init() {
         console.log('🔍 FindUsers initializing...');
+        
+        // Get current user
+        if (Backend && Backend.getCurrentUser) {
+            this.currentUser = Backend.getCurrentUser();
+        }
+        
         await this.attachEventListeners();
         console.log('✅ FindUsers ready');
     }
 
     async attachEventListeners() {
-        // User search input
-        const searchInput = document.getElementById('userSearchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
+        // User search input - use event delegation
+        document.addEventListener('input', (e) => {
+            if (e.target.id === 'userSearchInput') {
                 this.currentSearchTerm = e.target.value.trim();
                 this.debouncedSearch();
-            });
-        }
+            }
+        });
 
         // Close modal when clicking outside
-        window.addEventListener('click', (event) => {
+        document.addEventListener('click', (event) => {
             const modal = document.getElementById('usersModal');
             if (event.target === modal) {
                 this.hideUsers();
@@ -42,6 +49,65 @@ class FindUsers {
                 }
             }
         });
+
+        // Global event listeners for action buttons
+        document.addEventListener('click', (e) => {
+            // Handle user action buttons
+            if (e.target.closest('.user-action-btn.add')) {
+                const userCard = e.target.closest('.user-result');
+                if (userCard) {
+                    const userId = userCard.dataset.userId;
+                    const username = userCard.dataset.username;
+                    if (userId && username) {
+                        this.addContact(userId, username);
+                    }
+                }
+            }
+            
+            if (e.target.closest('.user-action-btn.message')) {
+                const userCard = e.target.closest('.user-result');
+                if (userCard) {
+                    const userId = userCard.dataset.userId;
+                    const username = userCard.dataset.username;
+                    if (userId && username) {
+                        this.startChat(userId, username);
+                    }
+                }
+            }
+            
+            if (e.target.closest('.user-action-btn.accept')) {
+                const userCard = e.target.closest('.user-result');
+                if (userCard) {
+                    const contactId = userCard.dataset.contactId;
+                    const username = userCard.dataset.username;
+                    if (contactId && username) {
+                        this.acceptRequest(contactId, username);
+                    }
+                }
+            }
+            
+            if (e.target.closest('.user-action-btn.reject')) {
+                const userCard = e.target.closest('.user-result');
+                if (userCard) {
+                    const contactId = userCard.dataset.contactId;
+                    const username = userCard.dataset.username;
+                    if (contactId && username) {
+                        this.rejectRequest(contactId, username);
+                    }
+                }
+            }
+            
+            if (e.target.closest('.user-action-btn.cancel')) {
+                const userCard = e.target.closest('.user-result');
+                if (userCard) {
+                    const contactId = userCard.dataset.contactId;
+                    const username = userCard.dataset.username;
+                    if (contactId && username) {
+                        this.cancelRequest(contactId, username);
+                    }
+                }
+            }
+        });
     }
 
     debouncedSearch() {
@@ -51,6 +117,8 @@ class FindUsers {
         }, 300);
     }
 
+    // =============== MODAL FUNCTIONS ===============
+    
     // Show users modal
     async showUsers() {
         console.log('👥 Showing users modal...');
@@ -77,6 +145,8 @@ class FindUsers {
         this.currentSearchTerm = '';
     }
 
+    // =============== USER LOADING FUNCTIONS ===============
+    
     // Load users with search functionality
     async loadUsers(searchTerm = '') {
         if (this.isLoading) return;
@@ -134,8 +204,10 @@ class FindUsers {
         }
 
         // Get current user to avoid showing self
-        const currentUser = Backend.getCurrentUser();
-        const currentUserId = currentUser ? currentUser.id : null;
+        if (!this.currentUser && Backend && Backend.getCurrentUser) {
+            this.currentUser = Backend.getCurrentUser();
+        }
+        const currentUserId = this.currentUser ? this.currentUser.id : null;
         
         usersList.innerHTML = '';
         
@@ -156,6 +228,8 @@ class FindUsers {
         }
     }
 
+    // =============== USER ELEMENT CREATION ===============
+    
     // Create user element HTML
     createUserElement(user) {
         const userDiv = document.createElement('div');
@@ -163,21 +237,22 @@ class FindUsers {
         
         const isOnline = user.isOnline || false;
         const username = user.username || 'Unknown';
-        const lastSeen = user.lastSeen;
         const userId = user.id;
         const contactId = user.contactId;
         const isContact = user.isContact || false;
         const isPending = user.isPending || false;
         const sentByMe = user.sentByMe || false;
         
-        // Status text
-        let statusText = isOnline ? 'Online now' : 'Offline';
-        if (!isOnline && lastSeen) {
-            statusText = this.formatLastSeen(lastSeen);
-        }
+        // Set data attributes for event handling
+        userDiv.dataset.userId = userId;
+        userDiv.dataset.username = username;
+        userDiv.dataset.contactId = contactId;
+        userDiv.dataset.isContact = isContact;
+        userDiv.dataset.isPending = isPending;
+        userDiv.dataset.sentByMe = sentByMe;
         
         // Action buttons based on contact status
-        let actionButtons = this.createActionButtons(
+        let actionButtons = this.createActionButtonsHTML(
             isContact, 
             isPending, 
             sentByMe, 
@@ -189,12 +264,11 @@ class FindUsers {
         userDiv.innerHTML = `
             <div class="user-result-avatar">
                 ${username[0].toUpperCase()}
-                ${isOnline ? '<div class="chat-online-dot"></div>' : ''}
             </div>
             <div class="user-result-info">
                 <div class="user-result-name">${this.escapeHTML(username)}</div>
-                <div class="user-result-status ${isOnline ? 'online' : ''}">
-                    ${isOnline ? '🟢' : '⚫'} ${statusText}
+                <div class="user-result-status">
+                    ${this.getStatusText(user)}
                 </div>
             </div>
             <div class="user-result-actions">
@@ -205,47 +279,62 @@ class FindUsers {
         return userDiv;
     }
 
-    // Create appropriate action buttons
-    createActionButtons(isContact, isPending, sentByMe, userId, username, contactId) {
+    // Create appropriate action buttons HTML
+    createActionButtonsHTML(isContact, isPending, sentByMe, userId, username, contactId) {
         if (isContact) {
             return `
-                <button class="user-action-btn friends" title="Already Friends" onclick="findUsers.handleAlreadyFriends()">
+                <button class="user-action-btn friends" title="Already Friends">
                     <i class="fas fa-check"></i>
                 </button>
-                <button class="user-action-btn message" onclick="findUsers.startChat('${userId}', '${this.escapeHTML(username)}')" title="Message">
+                <button class="user-action-btn message" title="Message">
                     <i class="fas fa-comment"></i>
                 </button>
             `;
         } else if (isPending) {
             if (sentByMe) {
                 return `
-                    <button class="user-action-btn pending" title="Request Sent" onclick="findUsers.handlePendingRequest()">
+                    <button class="user-action-btn pending" title="Request Sent">
                         <i class="fas fa-clock"></i>
                     </button>
-                    <button class="user-action-btn cancel" title="Cancel Request" onclick="findUsers.cancelRequest('${contactId}', '${this.escapeHTML(username)}')">
+                    <button class="user-action-btn cancel" title="Cancel Request">
                         <i class="fas fa-times"></i>
                     </button>
                 `;
             } else {
                 return `
-                    <button class="user-action-btn accept" onclick="findUsers.acceptRequest('${contactId}', '${this.escapeHTML(username)}')" title="Accept Request">
+                    <button class="user-action-btn accept" title="Accept Request">
                         <i class="fas fa-check"></i>
                     </button>
-                    <button class="user-action-btn reject" onclick="findUsers.rejectRequest('${contactId}', '${this.escapeHTML(username)}')" title="Reject Request">
+                    <button class="user-action-btn reject" title="Reject Request">
                         <i class="fas fa-times"></i>
                     </button>
                 `;
             }
         } else {
             return `
-                <button class="user-action-btn add" onclick="findUsers.addContact('${userId}', '${this.escapeHTML(username)}')" title="Add Contact">
+                <button class="user-action-btn add" title="Add Contact">
                     <i class="fas fa-user-plus"></i>
                 </button>
             `;
         }
     }
 
-    // =============== ACTION HANDLERS ===============
+    // Get status text for user
+    getStatusText(user) {
+        if (user.isContact) {
+            return 'Already friends';
+        } else if (user.isPending) {
+            if (user.sentByMe) {
+                return 'Request sent';
+            } else {
+                return 'Request received';
+            }
+        } else {
+            return 'Not connected';
+        }
+    }
+
+    // =============== CONTACT ACTION FUNCTIONS ===============
     
     // Add contact
     async addContact(userId, username) {
@@ -259,7 +348,7 @@ class FindUsers {
                 showNotification(`Contact request sent to ${username}! 📤`, 'success');
                 await this.loadUsers(this.currentSearchTerm);
                 
-                // Update sidebar requests badge if exists
+                // Update sidebar requests badge
                 this.updateRequestsBadge();
             } else {
                 showNotification(result.error || 'Failed to send request', 'error');
@@ -281,9 +370,8 @@ class FindUsers {
                 showNotification(`${username} added to contacts! 👥`, 'success');
                 await this.loadUsers(this.currentSearchTerm);
                 
-                // Update sidebar
-                if (window.loadContacts) await window.loadContacts();
-                this.updateRequestsBadge();
+                // Update sidebar contacts and requests
+                this.updateSidebarData();
             } else {
                 showNotification('Failed to accept request', 'error');
             }
@@ -338,75 +426,64 @@ class FindUsers {
     }
 
     // Start chat with user
-    startChat(userId, username) {
+    async startChat(userId, username) {
         console.log(`💬 Starting chat with: ${username} (${userId})`);
         
         this.hideUsers();
         
-        if (window.switchTab && window.startChat) {
-            window.switchTab('chats');
+        // Call global startChat function if it exists
+        if (typeof window.startChat === 'function') {
             window.startChat(userId, username);
         } else {
-            // Fallback if global functions aren't available
-            showNotification(`Chat with ${username} started!`, 'success');
+            // Fallback
+            showNotification(`Starting chat with ${username}...`, 'info');
+            
             // You might want to implement direct chat opening here
+            if (typeof window.selectChat === 'function') {
+                window.selectChat(userId, username);
+            }
         }
     }
 
-    // Handle already friends button click
-    handleAlreadyFriends() {
-        showNotification('Already friends!', 'info');
-    }
-
-    // Handle pending request button click
-    handlePendingRequest() {
-        showNotification('Request pending...', 'info');
-    }
-
-    // =============== UTILITY FUNCTIONS ===============
+    // =============== SIDEBAR UPDATE FUNCTIONS ===============
     
-    // Update requests badge in sidebar
+    // Update sidebar data after contact actions
+    async updateSidebarData() {
+        try {
+            // Update contacts tab
+            if (typeof window.loadContacts === 'function') {
+                await window.loadContacts();
+            }
+            
+            // Update requests tab
+            if (typeof window.loadRequests === 'function') {
+                await window.loadRequests();
+            }
+            
+            // Update chats tab
+            if (typeof window.loadChats === 'function') {
+                setTimeout(() => window.loadChats(), 500);
+            }
+            
+            this.updateRequestsBadge();
+        } catch (error) {
+            console.error('Error updating sidebar:', error);
+        }
+    }
+
+    // Update requests badge
     async updateRequestsBadge() {
         try {
-            if (window.loadRequests) {
+            if (typeof window.loadRequests === 'function') {
                 await window.loadRequests();
-            } else {
-                // Manual badge update if loadRequests not available
-                const badge = document.getElementById('requestsBadge');
-                if (badge) {
-                    // You could fetch requests count here if needed
-                }
             }
         } catch (error) {
             console.error('Error updating badge:', error);
         }
     }
 
-    // Format last seen time
-    formatLastSeen(lastSeen) {
-        if (!lastSeen) return 'Last seen long ago';
-        
-        const now = new Date();
-        const seenDate = new Date(lastSeen);
-        const diffInMinutes = Math.floor((now - seenDate) / (1000 * 60));
-        
-        if (diffInMinutes < 1) {
-            return 'Just now';
-        } else if (diffInMinutes < 60) {
-            return `Last seen ${diffInMinutes}m ago`;
-        } else if (diffInMinutes < 1440) {
-            const hours = Math.floor(diffInMinutes / 60);
-            return `Last seen ${hours}h ago`;
-        } else {
-            const days = Math.floor(diffInMinutes / 1440);
-            if (days < 7) {
-                return `Last seen ${days}d ago`;
-            } else {
-                return 'Last seen long ago';
-            }
-        }
-    }
-
+    // =============== UTILITY FUNCTIONS ===============
+    
     // Escape HTML to prevent XSS
     escapeHTML(text) {
         const div = document.createElement('div');
@@ -445,7 +522,22 @@ class FindUsers {
             </div>
         `;
     }
+
+    // =============== GLOBAL HELPER FUNCTIONS ===============
+    
+    // Show notification (fallback if not available globally)
+    showNotification(message, type = 'info', duration = 4000) {
+        if (typeof window.showNotification === 'function') {
+            window.showNotification(message, type, duration);
+        } else {
+            // Fallback notification
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            alert(`${type.toUpperCase()}: ${message}`);
+        }
+    }
 }
+
+// =============== GLOBAL EXPORTS ===============
 
 // Create global instance
 let findUsers;
@@ -454,11 +546,30 @@ let findUsers;
 document.addEventListener('DOMContentLoaded', () => {
     findUsers = new FindUsers();
     
-    // Expose methods to global scope for onclick handlers
+    // Expose methods to global scope
     window.showUsers = () => findUsers.showUsers();
     window.hideUsers = () => findUsers.hideUsers();
     window.searchUsers = () => findUsers.loadUsers(document.getElementById('userSearchInput')?.value || '');
+    
+    // Expose action functions for backward compatibility
+    window.addContact = (userId, username) => findUsers.addContact(userId, username);
+    window.acceptContactRequest = (contactId, username) => findUsers.acceptRequest(contactId, username);
+    window.rejectContactRequest = (contactId, username) => findUsers.rejectRequest(contactId, username);
+    window.cancelContactRequest = (contactId, username) => findUsers.cancelRequest(contactId, username);
+    window.startChatFromUsers = (userId, username) => findUsers.startChat(userId, username);
+    window.acceptFromUsers = (contactId, username) => findUsers.acceptRequest(contactId, username);
 });
 
-// Also expose for manual initialization if needed
+// Expose for manual initialization
 window.FindUsers = FindUsers;
+
+// Make sure it's available immediately for inline onclick handlers
+if (typeof window !== 'undefined') {
+    // Create placeholder functions that will be replaced when DOM is ready
+    window.showUsers = function() {
+        console.warn('FindUsers not initialized yet. Please wait for DOMContentLoaded.');
+    };
+    window.hideUsers = function() {
+        console.warn('FindUsers not initialized yet. Please wait for DOMContentLoaded.');
+    };
+}
