@@ -158,18 +158,10 @@ class FindUsers {
             // Show loading state
             usersList.innerHTML = this.createLoadingHTML();
             
-            let result;
+            console.log('🔍 Loading users from Parse directly...');
             
-            // Try using Backend functions first
-            if (typeof Backend.getUsersWithContactStatus === 'function') {
-                console.log('Using Backend.getUsersWithContactStatus()');
-                result = await Backend.getUsersWithContactStatus();
-            } 
-            // If Backend function fails or doesn't exist, try direct Parse query
-            else {
-                console.log('Using direct Parse query for User class');
-                result = await this.queryParseUsersDirectly(searchTerm);
-            }
+            // Always use direct Parse query
+            const result = await this.queryParseUsersDirectly(searchTerm);
             
             console.log('📊 Users result:', result);
             
@@ -187,25 +179,100 @@ class FindUsers {
             console.error('❌ Error in loadUsers:', error);
             usersList.innerHTML = this.createErrorHTML(
                 'Connection Error',
-                'Please check your connection and try again'
+                `Error: ${error.message || 'Unknown error'}`
             );
-            
-            // Try alternative method
-            try {
-                console.log('Trying alternative user loading method...');
-                const altResult = await this.queryParseUsersDirectly(searchTerm);
-                if (altResult.success && altResult.users && altResult.users.length > 0) {
-                    console.log('Alternative method found users:', altResult.users.length);
-                    // Reload with alternative result
-                    this.isLoading = false;
-                    await this.loadUsers(searchTerm);
-                    return;
-                }
-            } catch (altError) {
-                console.error('Alternative method also failed:', altError);
-            }
         } finally {
             this.isLoading = false;
+        }
+    }
+
+    // Direct Parse query for User class
+    async queryParseUsersDirectly(searchTerm = '') {
+        try {
+            console.log('🔍 Querying Parse User class directly...');
+            
+            // Check if Parse is available
+            if (typeof Parse === 'undefined') {
+                throw new Error('Parse SDK not loaded');
+            }
+            
+            const UserClass = Parse.Object.extend('User');
+            const query = new Parse.Query(UserClass);
+            
+            // Exclude current user
+            const currentUser = Parse.User.current();
+            if (currentUser) {
+                query.notEqualTo('objectId', currentUser.id);
+                console.log('Excluding current user:', currentUser.id, currentUser.get('username'));
+            }
+            
+            // Apply search filter if provided
+            if (searchTerm && searchTerm.length >= 1) {
+                // Try multiple search approaches
+                const searchRegex = new RegExp(searchTerm, 'i');
+                query.matches('username', searchRegex);
+            }
+            
+            // Include additional fields
+            query.select(['username', 'email', 'createdAt']);
+            
+            // Limit results
+            query.limit(100);
+            
+            // Sort by username
+            query.ascending('username');
+            
+            const users = await query.find();
+            console.log(`✅ Found ${users.length} users in Parse User class`);
+            
+            // Log first few users for debugging
+            if (users.length > 0) {
+                console.log('First 5 users:', users.slice(0, 5).map(u => ({
+                    id: u.id,
+                    username: u.get('username'),
+                    email: u.get('email')
+                })));
+            }
+            
+            // Format users for display
+            const formattedUsers = users.map(user => {
+                const username = user.get('username') || 'Unknown';
+                const userId = user.id;
+                
+                // Check contact status if Backend functions are available
+                let isContact = false;
+                let isPending = false;
+                let sentByMe = false;
+                let contactId = null;
+                
+                // You can add contact status checking here if needed
+                
+                return {
+                    id: userId,
+                    objectId: userId,
+                    username: username,
+                    email: user.get('email'),
+                    createdAt: user.createdAt,
+                    updatedAt: user.updatedAt,
+                    isContact: isContact,
+                    isPending: isPending,
+                    sentByMe: sentByMe,
+                    contactId: contactId
+                };
+            });
+            
+            return {
+                success: true,
+                users: formattedUsers
+            };
+            
+        } catch (error) {
+            console.error('❌ Parse query error:', error);
+            return {
+                success: false,
+                error: error.message || 'Failed to query users',
+                stack: error.stack
+            };
         }
     }
 
@@ -223,9 +290,14 @@ class FindUsers {
         }
 
         // Get current user to avoid showing self
-        if (!this.currentUser && Backend && Backend.getCurrentUser) {
-            this.currentUser = Backend.getCurrentUser();
+        if (!this.currentUser) {
+            if (Backend && Backend.getCurrentUser) {
+                this.currentUser = Backend.getCurrentUser();
+            } else if (Parse && Parse.User.current()) {
+                this.currentUser = Parse.User.current();
+            }
         }
+        
         const currentUserId = this.currentUser ? this.currentUser.id : null;
         
         usersList.innerHTML = '';
@@ -352,81 +424,6 @@ class FindUsers {
         }
     }
 
-    // Direct Parse query for User class
-    queryParseUsersDirectly: async function(searchTerm = '') {
-        try {
-            console.log('🔍 Querying Parse User class directly...');
-            
-            const UserClass = Parse.Object.extend('User');
-            const query = new Parse.Query(UserClass);
-            
-            // Exclude current user
-            const currentUser = Parse.User.current();
-            if (currentUser) {
-                query.notEqualTo('objectId', currentUser.id);
-            }
-            
-            // Apply search filter if provided
-            if (searchTerm && searchTerm.length >= 1) {
-                query.contains('username', searchTerm);
-                query.contains('username', searchTerm.toLowerCase());
-                query.contains('username', searchTerm.toUpperCase());
-            }
-            
-            // Limit results
-            query.limit(50);
-            
-            // Sort by username
-            query.ascending('username');
-            
-            const users = await query.find();
-            console.log(`✅ Found ${users.length} users in Parse User class`);
-            
-            // Format users for display
-            const formattedUsers = users.map(user => ({
-                id: user.id,
-                objectId: user.id,
-                username: user.get('username') || 'Unknown',
-                createdAt: user.createdAt,
-                updatedAt: user.updatedAt
-            }));
-            
-            return {
-                success: true,
-                users: formattedUsers
-            };
-            
-        } catch (error) {
-            console.error('❌ Parse query error:', error);
-            return {
-                success: false,
-                error: error.message || 'Failed to query users'
-            };
-        }
-    },
-    
-    // Test Parse connection
-    testParseConnection: async function() {
-        console.log('🔧 Testing Parse connection...');
-        try {
-            const UserClass = Parse.Object.extend('User');
-            const query = new Parse.Query(UserClass);
-            query.limit(1);
-            const testResult = await query.find();
-            console.log(`✅ Parse connection test: ${testResult.length > 0 ? 'SUCCESS - Found users' : 'SUCCESS - No users found'}`);
-            return {
-                success: true,
-                count: testResult.length
-            };
-        } catch (error) {
-            console.error('❌ Parse connection test failed:', error);
-            return {
-                success: false,
-                error: error.message
-            };
-        }
-    },
-
     // =============== CONTACT ACTION FUNCTIONS ===============
     
     // Add contact
@@ -435,16 +432,23 @@ class FindUsers {
         
         try {
             showNotification('Sending contact request...', 'info', 2000);
-            const result = await Backend.addContact(userId, username);
             
-            if (result.success) {
-                showNotification(`Contact request sent to ${username}! 📤`, 'success');
-                await this.loadUsers(this.currentSearchTerm);
+            // Use Backend function if available
+            if (typeof Backend.addContact === 'function') {
+                const result = await Backend.addContact(userId, username);
                 
-                // Update sidebar requests badge
-                this.updateRequestsBadge();
+                if (result.success) {
+                    showNotification(`Contact request sent to ${username}! 📤`, 'success');
+                    await this.loadUsers(this.currentSearchTerm);
+                    
+                    // Update sidebar requests badge
+                    this.updateRequestsBadge();
+                } else {
+                    showNotification(result.error, 'error');
+                }
             } else {
-                showNotification(result.error || 'Failed to send request', 'error');
+                // Fallback: Show message that backend function is not available
+                showNotification('Contact functionality not available', 'error');
             }
         } catch (error) {
             console.error('Add contact error:', error);
@@ -457,16 +461,20 @@ class FindUsers {
         console.log(`✅ Accepting request from: ${username} (${contactId})`);
         
         try {
-            const result = await Backend.acceptContact(contactId);
-            
-            if (result.success) {
-                showNotification(`${username} added to contacts! 👥`, 'success');
-                await this.loadUsers(this.currentSearchTerm);
+            if (typeof Backend.acceptContact === 'function') {
+                const result = await Backend.acceptContact(contactId);
                 
-                // Update sidebar contacts and requests
-                this.updateSidebarData();
+                if (result.success) {
+                    showNotification(`${username} added to contacts! 👥`, 'success');
+                    await this.loadUsers(this.currentSearchTerm);
+                    
+                    // Update sidebar contacts and requests
+                    this.updateSidebarData();
+                } else {
+                    showNotification('Failed to accept request', 'error');
+                }
             } else {
-                showNotification('Failed to accept request', 'error');
+                showNotification('Contact functionality not available', 'error');
             }
         } catch (error) {
             console.error('Accept contact error:', error);
@@ -481,14 +489,18 @@ class FindUsers {
         console.log(`❌ Rejecting request from: ${username} (${contactId})`);
         
         try {
-            const result = await Backend.removeContact(contactId);
-            
-            if (result.success) {
-                showNotification(`Request from ${username} rejected`, 'info');
-                await this.loadUsers(this.currentSearchTerm);
-                this.updateRequestsBadge();
+            if (typeof Backend.removeContact === 'function') {
+                const result = await Backend.removeContact(contactId);
+                
+                if (result.success) {
+                    showNotification(`Request from ${username} rejected`, 'info');
+                    await this.loadUsers(this.currentSearchTerm);
+                    this.updateRequestsBadge();
+                } else {
+                    showNotification('Failed to reject request', 'error');
+                }
             } else {
-                showNotification('Failed to reject request', 'error');
+                showNotification('Contact functionality not available', 'error');
             }
         } catch (error) {
             console.error('Reject contact error:', error);
@@ -503,14 +515,18 @@ class FindUsers {
         console.log(`🚫 Canceling request to: ${username} (${contactId})`);
         
         try {
-            const result = await Backend.removeContact(contactId);
-            
-            if (result.success) {
-                showNotification(`Request to ${username} cancelled`, 'info');
-                await this.loadUsers(this.currentSearchTerm);
-                this.updateRequestsBadge();
+            if (typeof Backend.removeContact === 'function') {
+                const result = await Backend.removeContact(contactId);
+                
+                if (result.success) {
+                    showNotification(`Request to ${username} cancelled`, 'info');
+                    await this.loadUsers(this.currentSearchTerm);
+                    this.updateRequestsBadge();
+                } else {
+                    showNotification('Failed to cancel request', 'error');
+                }
             } else {
-                showNotification('Failed to cancel request', 'error');
+                showNotification('Contact functionality not available', 'error');
             }
         } catch (error) {
             console.error('Cancel contact error:', error);
@@ -631,23 +647,29 @@ class FindUsers {
 
     // Debug function
     debug() {
-        console.log('🐛 DEBUG: Checking backend functions...');
+        console.log('🐛 DEBUG: Checking Parse and Backend...');
+        console.log('Parse available:', typeof Parse !== 'undefined');
         console.log('Backend available:', typeof Backend !== 'undefined');
-        console.log('Backend functions:');
-        console.log('- getUsersWithContactStatus:', typeof Backend.getUsersWithContactStatus);
-        console.log('- searchUsers:', typeof Backend.searchUsers);
-        console.log('- getCurrentUser:', typeof Backend.getCurrentUser);
         
-        // Test current user
-        const currentUser = Backend.getCurrentUser();
-        console.log('Current user:', currentUser);
-        if (currentUser) {
-            console.log('Current user ID:', currentUser.id);
-            console.log('Current username:', currentUser.get('username'));
+        if (typeof Parse !== 'undefined') {
+            console.log('Parse.User.current():', Parse.User.current());
+            if (Parse.User.current()) {
+                console.log('Current user ID:', Parse.User.current().id);
+                console.log('Current username:', Parse.User.current().get('username'));
+            }
         }
         
-        // Test Parse directly
-        this.testParseConnection();
+        if (typeof Backend !== 'undefined') {
+            console.log('Backend functions:');
+            console.log('- getUsersWithContactStatus:', typeof Backend.getUsersWithContactStatus);
+            console.log('- getCurrentUser:', typeof Backend.getCurrentUser);
+            console.log('- addContact:', typeof Backend.addContact);
+        }
+        
+        // Test Parse query directly
+        this.queryParseUsersDirectly().then(result => {
+            console.log('Direct Parse query result:', result);
+        });
     }
 }
 
