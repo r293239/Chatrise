@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile - ChatRise</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
+    <script src="config.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .profile-container {
+            max-width: 500px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .profile-header {
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            padding: 30px;
+            text-align: center;
+            color: white;
+            position: relative;
+        }
+        
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.1);
+        }
+        
+        .profile-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: white;
+            border: 4px solid white;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .profile-avatar:hover .avatar-overlay {
+            opacity: 1;
+        }
+        
+        .avatar-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .profile-name {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .profile-username {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .profile-body {
+            padding: 30px;
+        }
+        
+        .profile-section {
+            margin-bottom: 25px;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .section-content {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #e1e5e9;
+        }
+        
+        .user-id-display {
+            font-family: monospace;
+            font-size: 14px;
+            color: #666;
+            word-break: break-all;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e1e5e9;
+        }
+        
+        .copy-btn {
+            background: #25d366;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 10px;
+            transition: all 0.2s;
+        }
+        
+        .copy-btn:hover {
+            background: #20b858;
+            transform: translateY(-1px);
+        }
+        
+        .bio-textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px;
+            border: 1px solid #e1e5e9;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 15px;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .bio-textarea:focus {
+            border-color: #25d366;
+            box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
+        }
+        
+        .save-btn {
+            background: #25d366;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .save-btn:hover {
+            background: #20b858;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(37, 211, 102, 0.3);
+        }
+        
+        .save-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e1e5e9;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #25d366;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            z-index: 2000;
+            animation: slideInRight 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .notification.success { background: #25d366; }
+        .notification.error { background: #dc3545; }
+        .notification.info { background: #17a2b8; }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+            color: #666;
+        }
+        
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #25d366;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden { display: none; }
+        
+        @media (max-width: 600px) {
+            .profile-container {
+                margin: 20px auto;
+                border-radius: 15px;
+            }
+            
+            .profile-header {
+                padding: 25px 20px;
+            }
+            
+            .profile-body {
+                padding: 20px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            body {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="profile-container">
+        <div class="profile-header">
+            <button class="back-btn" onclick="goBack()">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            
+            <div class="profile-avatar" id="avatarContainer" onclick="document.getElementById('avatarInput').click()">
+                <div id="avatarContent">
+                    <!-- Avatar will be loaded here -->
+                </div>
+                <div class="avatar-overlay">
+                    <i class="fas fa-camera"></i> Change Photo
+                </div>
+            </div>
+            <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="uploadAvatar(this.files[0])">
+            
+            <div class="profile-name" id="profileName">Loading...</div>
+            <div class="profile-username" id="profileUsername">@username</div>
+        </div>
+        
+        <div class="profile-body">
+            <!-- User ID Section -->
+            <div class="profile-section">
+                <div class="section-title">
+                    <i class="fas fa-id-card"></i> Your User ID
+                </div>
+                <div class="user-id-display" id="userIdDisplay">
+                    Loading...
+                </div>
+                <button class="copy-btn" onclick="copyUserId()">
+                    <i class="fas fa-copy"></i> Copy ID
+                </button>
+            </div>
+            
+            <!-- Bio Section -->
+            <div class="profile-section">
+                <div class="section-title">
+                    <i class="fas fa-user-edit"></i> About Me
+                </div>
+                <textarea 
+                    class="bio-textarea" 
+                    id="bioTextarea" 
+                    placeholder="Tell others about yourself..."
+                    maxlength="500"
+                ></textarea>
+                <div style="text-align: right; margin-top: 5px; font-size: 12px; color: #666;">
+                    <span id="charCount">0</span>/500
+                </div>
+            </div>
+            
+            <!-- Stats Section -->
+            <div class="profile-section">
+                <div class="section-title">
+                    <i class="fas fa-chart-line"></i> Stats
+                </div>
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Save Button -->
+            <div class="profile-section">
+                <button class="save-btn" id="saveBtn" onclick="saveProfile()">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =============== GLOBAL VARIABLES ===============
+        let currentUser = null;
+        let hasUnsavedChanges = false;
+        
+        // =============== INITIALIZATION ===============
+        window.addEventListener('load', async function() {
+            console.log('👤 Profile page loading...');
+            
+            // Check if logged in
+            currentUser = Parse.User.current();
+            if (!currentUser) {
+                showNotification('Please login first', 'error');
+                setTimeout(() => window.location.href = 'login.html', 1500);
+                return;
+            }
+            
+            // Load user data
+            await loadUserProfile();
+            
+            // Setup bio character counter
+            const bioTextarea = document.getElementById('bioTextarea');
+            const charCount = document.getElementById('charCount');
+            
+            bioTextarea.addEventListener('input', function() {
+                const length = this.value.length;
+                charCount.textContent = length;
+                hasUnsavedChanges = true;
+            });
+            
+            // Warn before leaving with unsaved changes
+            window.addEventListener('beforeunload', function(e) {
+                if (hasUnsavedChanges) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+            
+            console.log('✅ Profile page loaded');
+        });
+        
+        // =============== PROFILE FUNCTIONS ===============
+        
+        // Load user profile data
+        async function loadUserProfile() {
+            try {
+                // Refresh user data
+                await currentUser.fetch();
+                
+                // Display basic info
+                document.getElementById('profileName').textContent = currentUser.get('username') || 'User';
+                document.getElementById('profileUsername').textContent = `@${currentUser.get('username') || 'user'}`;
+                document.getElementById('userIdDisplay').textContent = currentUser.id;
+                
+                // Load avatar
+                await loadAvatar();
+                
+                // Load bio
+                const bio = currentUser.get('bio') || '';
+                document.getElementById('bioTextarea').value = bio;
+                document.getElementById('charCount').textContent = bio.length;
+                
+                // Load stats
+                await loadUserStats();
+                
+            } catch (error) {
+                console.error('Error loading profile:', error);
+                showNotification('Failed to load profile', 'error');
+            }
+        }
+        
+        // Load user avatar
+        async function loadAvatar() {
+            const avatarContent = document.getElementById('avatarContent');
+            const avatarFile = currentUser.get('avatar');
+            
+            if (avatarFile) {
+                // User has custom avatar
+                const avatarUrl = avatarFile.url();
+                avatarContent.innerHTML = `<img src="${avatarUrl}" alt="Profile Picture">`;
+            } else {
+                // Default avatar with initials
+                const username = currentUser.get('username') || 'User';
+                const initials = username.substring(0, 2).toUpperCase();
+                avatarContent.innerHTML = `<div style="font-size: 48px; font-weight: bold;">${initials}</div>`;
+            }
+        }
+        
+        // Upload new avatar
+        async function uploadAvatar(file) {
+            if (!file) return;
+            
+            // Check file size (max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                showNotification('Image too large! Maximum 5MB.', 'error');
+                return;
+            }
+            
+            // Check file type
+            if (!file.type.startsWith('image/')) {
+                showNotification('Please select an image file', 'error');
+                return;
+            }
+            
+            const saveBtn = document.getElementById('saveBtn');
+            const originalText = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+            
+            try {
+                // Create Parse file
+                const parseFile = new Parse.File('avatar.jpg', file);
+                await parseFile.save();
+                
+                // Update user avatar
+                currentUser.set('avatar', parseFile);
+                await currentUser.save();
+                
+                // Update avatar display
+                await loadAvatar();
+                
+                hasUnsavedChanges = true;
+                showNotification('Avatar uploaded successfully!', 'success');
+                
+            } catch (error) {
+                console.error('Error uploading avatar:', error);
+                showNotification('Failed to upload avatar', 'error');
+            }
+            
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalText;
+        }
+        
+        // Load user statistics
+        async function loadUserStats() {
+            const statsGrid = document.getElementById('statsGrid');
+            
+            try {
+                // These would come from your backend
+                // For now, we'll use placeholder data
+                const stats = [
+                    { label: 'Contacts', value: '0' },
+                    { label: 'Messages', value: '0' },
+                    { label: 'Online', value: 'Now' }
+                ];
+                
+                statsGrid.innerHTML = '';
+                stats.forEach(stat => {
+                    const statItem = document.createElement('div');
+                    statItem.className = 'stat-item';
+                    statItem.innerHTML = `
+                        <div class="stat-value">${stat.value}</div>
+                        <div class="stat-label">${stat.label}</div>
+                    `;
+                    statsGrid.appendChild(statItem);
+                });
+                
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                statsGrid.innerHTML = '<div class="loading">Failed to load stats</div>';
+            }
+        }
+        
+        // Save profile changes
+        async function saveProfile() {
+            const saveBtn = document.getElementById('saveBtn');
+            const originalText = saveBtn.innerHTML;
+            
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            
+            try {
+                // Update bio
+                const bio = document.getElementById('bioTextarea').value.trim();
+                currentUser.set('bio', bio);
+                
+                // Save all changes
+                await currentUser.save();
+                
+                hasUnsavedChanges = false;
+                showNotification('Profile saved successfully!', 'success');
+                
+                // Update stats
+                await loadUserStats();
+                
+            } catch (error) {
+                console.error('Error saving profile:', error);
+                showNotification('Failed to save profile: ' + error.message, 'error');
+            }
+            
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalText;
+        }
+        
+        // Copy user ID to clipboard
+        function copyUserId() {
+            const userId = document.getElementById('userIdDisplay').textContent;
+            
+            navigator.clipboard.writeText(userId).then(() => {
+                showNotification('User ID copied to clipboard!', 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('Failed to copy ID', 'error');
+            });
+        }
+        
+        // Go back to main app
+        function goBack() {
+            if (hasUnsavedChanges) {
+                if (confirm('You have unsaved changes. Leave without saving?')) {
+                    window.location.href = 'index.html';
+                }
+            } else {
+                window.location.href = 'index.html';
+            }
+        }
+        
+        // =============== UTILITY FUNCTIONS ===============
+        
+        // Show notification
+        function showNotification(message, type = 'info', duration = 4000) {
+            const existing = document.querySelector('.notification');
+            if (existing) existing.remove();
+            
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                ${message}
+                <button style="background:none;border:none;color:white;float:right;cursor:pointer;margin-left:12px;font-size:16px;" onclick="this.parentElement.remove()">×</button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, duration);
+        }
+        
+        // Prevent accidental refresh with unsaved changes
+        window.addEventListener('beforeunload', function(e) {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+            }
+        });
+    </script>
+</body>
+</html>
