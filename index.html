@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1404,6 +1405,8 @@
                 
                 // First, check existing contacts to see who we can add
                 const existingContacts = await this.getExistingContacts();
+                const pendingRequests = await this.getPendingRequests();
+                const receivedRequests = await this.getReceivedRequests();
                 
                 for (const user of users) {
                     // Skip current user
@@ -1418,7 +1421,7 @@
                     const displayEmail = email ? `(${email})` : '';
                     
                     // Check contact status
-                    const contactStatus = this.getContactStatus(user.id, existingContacts);
+                    const contactStatus = this.getContactStatus(user.id, existingContacts, pendingRequests, receivedRequests);
                     const { buttonHtml, buttonClass, buttonTitle, onclickFunction } = this.getContactButtonInfo(user.id, username, contactStatus);
                     
                     userDiv.innerHTML = `
@@ -1458,15 +1461,6 @@
             
             getExistingContacts: async function() {
                 try {
-                    // Try to get contacts from Backend
-                    if (typeof Backend !== 'undefined' && typeof Backend.getContacts === 'function') {
-                        const result = await Backend.getContacts();
-                        if (result.success) {
-                            return result.contacts.map(c => c.userId || c.id);
-                        }
-                    }
-                    
-                    // Fallback: Check if we have a Contact class
                     const Contact = Parse.Object.extend('Contact');
                     const query = new Parse.Query(Contact);
                     query.equalTo('fromUser', Parse.User.current());
@@ -1480,12 +1474,49 @@
                 }
             },
             
-            getContactStatus: function(userId, existingContacts) {
+            getPendingRequests: async function() {
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    query.equalTo('fromUser', Parse.User.current());
+                    query.equalTo('status', 'pending');
+                    const requests = await query.find();
+                    return requests.map(r => r.get('toUser').id);
+                    
+                } catch (error) {
+                    console.log('No pending requests:', error);
+                    return [];
+                }
+            },
+            
+            getReceivedRequests: async function() {
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    query.equalTo('toUser', Parse.User.current());
+                    query.equalTo('status', 'pending');
+                    const requests = await query.find();
+                    return requests.map(r => r.get('fromUser').id);
+                    
+                } catch (error) {
+                    console.log('No received requests:', error);
+                    return [];
+                }
+            },
+            
+            getContactStatus: function(userId, existingContacts, pendingRequests, receivedRequests) {
                 if (existingContacts.includes(userId)) {
                     return 'contact';
                 }
                 
-                // You could also check for pending requests here
+                if (pendingRequests.includes(userId)) {
+                    return 'pending';
+                }
+                
+                if (receivedRequests.includes(userId)) {
+                    return 'received';
+                }
+                
                 return 'none';
             },
             
@@ -1589,6 +1620,9 @@
                             await request.destroy();
                             showNotification(`Request to ${username} cancelled`, 'info');
                             await this.loadUsers(this.currentSearchTerm);
+                            if (typeof loadRequests === 'function') {
+                                await loadRequests();
+                            }
                         }
                         
                     } catch (error) {
@@ -1622,11 +1656,13 @@
                         if (typeof loadRequests === 'function') {
                             await loadRequests();
                         }
+                    } else {
+                        showNotification('Request not found', 'error');
                     }
                     
                 } catch (error) {
                     console.error('Error accepting request:', error);
-                    showNotification('Failed to accept request', 'error');
+                    showNotification('Failed to accept request: ' + error.message, 'error');
                 }
             },
             
@@ -1898,15 +1934,19 @@
                 const contact = Parse.Object.createWithoutData('Contact', contactId);
                 await contact.fetch();
                 
-                contact.set('status', 'accepted');
-                await contact.save();
-                
-                showNotification(`${username} added to contacts!`, 'success');
-                await Promise.all([loadContacts(), loadRequests()]);
+                if (contact.get('status') === 'pending') {
+                    contact.set('status', 'accepted');
+                    await contact.save();
+                    
+                    showNotification(`${username} added to contacts!`, 'success');
+                    await Promise.all([loadContacts(), loadRequests()]);
+                } else {
+                    showNotification('Request already processed', 'info');
+                }
                 
             } catch (error) {
                 console.error('Accept contact error:', error);
-                showNotification('Failed to accept request', 'error');
+                showNotification('Failed to accept request: ' + error.message, 'error');
             }
         }
         
@@ -2328,7 +2368,7 @@
             }
         }
         
-        // Load requests
+        // Load requests - FIXED VERSION
         async function loadRequests() {
             try {
                 const requestsContent = document.getElementById('requestsContent');
@@ -2349,6 +2389,8 @@
                     
                     const receivedRequests = await receivedQuery.find();
                     
+                    console.log(`📥 Received requests: ${receivedRequests.length}`);
+                    
                     if (receivedRequests.length > 0) {
                         const headerDiv = document.createElement('div');
                         headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Received Requests</h4>';
@@ -2357,7 +2399,8 @@
                         receivedRequests.forEach(request => {
                             totalRequests++;
                             const fromUser = request.get('fromUser');
-                            const username = fromUser.get('username') || 'Unknown';
+                            const username = fromUser.get('username') || fromUser.get('email')?.split('@')[0] || 'Unknown';
+                            const fromUserId = fromUser.id;
                             
                             const requestDiv = document.createElement('div');
                             requestDiv.className = 'contact-item';
@@ -2371,7 +2414,7 @@
                                     <div class="contact-status">Wants to connect</div>
                                 </div>
                                 <div class="contact-actions">
-                                    <button class="contact-btn accept" onclick="acceptContactRequest('${request.id}', '${escapeString(username)}')" title="Accept">
+                                    <button class="contact-btn accept" onclick="UserModal.acceptRequest('${fromUserId}', '${escapeString(username)}')" title="Accept">
                                         <i class="fas fa-check"></i>
                                     </button>
                                     <button class="contact-btn reject" onclick="rejectContactRequest('${request.id}', '${escapeString(username)}')" title="Reject">
@@ -2392,6 +2435,8 @@
                     
                     const sentRequests = await sentQuery.find();
                     
+                    console.log(`📤 Sent requests: ${sentRequests.length}`);
+                    
                     if (sentRequests.length > 0) {
                         const headerDiv = document.createElement('div');
                         headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Sent Requests</h4>';
@@ -2399,7 +2444,8 @@
                         
                         sentRequests.forEach(request => {
                             const toUser = request.get('toUser');
-                            const username = toUser.get('username') || 'Unknown';
+                            const username = toUser.get('username') || toUser.get('email')?.split('@')[0] || 'Unknown';
+                            const toUserId = toUser.id;
                             
                             const requestDiv = document.createElement('div');
                             requestDiv.className = 'contact-item';
@@ -2413,7 +2459,7 @@
                                     <div class="contact-status">Request pending</div>
                                 </div>
                                 <div class="contact-actions">
-                                    <button class="contact-btn pending" onclick="UserModal.cancelRequest('${toUser.id}', '${escapeString(username)}')" title="Cancel Request">
+                                    <button class="contact-btn pending" onclick="UserModal.cancelRequest('${toUserId}', '${escapeString(username)}')" title="Cancel Request">
                                         <i class="fas fa-clock"></i>
                                     </button>
                                 </div>
@@ -2423,8 +2469,19 @@
                         });
                     }
                     
+                    // Debug: Log all Contact objects for current user
+                    const debugQuery = new Parse.Query(Contact);
+                    debugQuery.equalTo('fromUser', Parse.User.current());
+                    const debugRequests = await debugQuery.find();
+                    console.log('🔍 Debug - All contacts from current user:', debugRequests.map(r => ({
+                        id: r.id,
+                        toUser: r.get('toUser')?.id,
+                        status: r.get('status')
+                    })));
+                    
                 } catch (error) {
                     console.error('Error loading requests:', error);
+                    showNotification('Error loading requests: ' + error.message, 'error');
                 }
                 
                 // Show empty state if no requests
@@ -2446,6 +2503,8 @@
                 } else {
                     badge.classList.add('hidden');
                 }
+                
+                console.log(`✅ Requests loaded: ${totalRequests} total`);
                 
             } catch (error) {
                 console.error('Error loading requests:', error);
