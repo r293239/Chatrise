@@ -108,6 +108,12 @@
             font-size: 18px;
             border: 2px solid rgba(255,255,255,0.3);
             position: relative;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.05);
         }
         
         .online-indicator {
@@ -405,6 +411,11 @@
         
         .contact-btn.pending {
             background: #ffa502;
+            color: white;
+        }
+        
+        .contact-btn.friends {
+            background: #2ed573;
             color: white;
         }
         
@@ -1053,7 +1064,7 @@
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="user-info">
-                    <div class="user-avatar" id="userAvatar">
+                    <div class="user-avatar" id="userAvatar" onclick="window.location.href='profile.html'">
                         <div class="online-indicator"></div>
                     </div>
                     <div class="user-details">
@@ -1250,7 +1261,7 @@
                     
                     if (result.success && result.users && result.users.length > 0) {
                         console.log(`✅ Displaying ${result.users.length} users`);
-                        this.displayUsers(result.users);
+                        await this.displayUsers(result.users);
                     } else {
                         let message = 'No users found';
                         if (searchTerm) {
@@ -1363,7 +1374,7 @@
                 }
             },
             
-            displayUsers: function(users) {
+            displayUsers: async function(users) {
                 const usersList = document.getElementById('usersList');
                 usersList.innerHTML = '';
                 
@@ -1391,9 +1402,12 @@
                     return;
                 }
                 
-                users.forEach(user => {
+                // First, check existing contacts to see who we can add
+                const existingContacts = await this.getExistingContacts();
+                
+                for (const user of users) {
                     // Skip current user
-                    if (user.id === currentUser.id) return;
+                    if (user.id === currentUser.id) continue;
                     
                     const userDiv = document.createElement('div');
                     userDiv.className = 'user-result';
@@ -1403,17 +1417,23 @@
                     const displayName = username;
                     const displayEmail = email ? `(${email})` : '';
                     
+                    // Check contact status
+                    const contactStatus = this.getContactStatus(user.id, existingContacts);
+                    const { buttonHtml, buttonClass, buttonTitle, onclickFunction } = this.getContactButtonInfo(user.id, username, contactStatus);
+                    
                     userDiv.innerHTML = `
                         <div class="user-result-avatar">
                             ${username[0].toUpperCase()}
                         </div>
                         <div class="user-result-info">
                             <div class="user-result-name">${this.escapeHTML(displayName)}</div>
-                            <div class="user-result-status">${this.escapeHTML(displayEmail)}</div>
+                            <div class="user-result-status ${contactStatus === 'contact' ? 'online' : ''}">
+                                ${this.getStatusText(contactStatus)}
+                            </div>
                         </div>
                         <div class="user-result-actions">
-                            <button class="user-action-btn add" onclick="UserModal.addContact('${user.id}', '${this.escapeString(username)}')" title="Add Contact">
-                                <i class="fas fa-user-plus"></i>
+                            <button class="user-action-btn ${buttonClass}" onclick="${onclickFunction}" title="${buttonTitle}">
+                                ${buttonHtml}
                             </button>
                             <button class="user-action-btn message" onclick="startDirectChat('${user.id}', '${this.escapeString(username)}')" title="Send Message">
                                 <i class="fas fa-comment"></i>
@@ -1422,7 +1442,7 @@
                     `;
                     
                     usersList.appendChild(userDiv);
-                });
+                }
                 
                 // Add info
                 const infoDiv = document.createElement('div');
@@ -1432,8 +1452,186 @@
                 infoDiv.style.textAlign = 'center';
                 infoDiv.style.borderTop = '1px solid #eee';
                 infoDiv.style.marginTop = '10px';
-                infoDiv.innerHTML = `Showing ${users.length} user(s)`;
+                infoDiv.innerHTML = `Showing ${users.length} user(s) • Click + to add as contact`;
                 usersList.appendChild(infoDiv);
+            },
+            
+            getExistingContacts: async function() {
+                try {
+                    // Try to get contacts from Backend
+                    if (typeof Backend !== 'undefined' && typeof Backend.getContacts === 'function') {
+                        const result = await Backend.getContacts();
+                        if (result.success) {
+                            return result.contacts.map(c => c.userId || c.id);
+                        }
+                    }
+                    
+                    // Fallback: Check if we have a Contact class
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    query.equalTo('fromUser', Parse.User.current());
+                    query.equalTo('status', 'accepted');
+                    const contacts = await query.find();
+                    return contacts.map(c => c.get('toUser').id);
+                    
+                } catch (error) {
+                    console.log('No contacts found or error loading:', error);
+                    return [];
+                }
+            },
+            
+            getContactStatus: function(userId, existingContacts) {
+                if (existingContacts.includes(userId)) {
+                    return 'contact';
+                }
+                
+                // You could also check for pending requests here
+                return 'none';
+            },
+            
+            getStatusText: function(status) {
+                switch(status) {
+                    case 'contact': return 'In contacts';
+                    case 'pending': return 'Request sent';
+                    case 'received': return 'Request received';
+                    default: return 'Not connected';
+                }
+            },
+            
+            getContactButtonInfo: function(userId, username, status) {
+                switch(status) {
+                    case 'contact':
+                        return {
+                            buttonHtml: '<i class="fas fa-check"></i>',
+                            buttonClass: 'friends',
+                            buttonTitle: 'Already in contacts',
+                            onclickFunction: `UserModal.showContactInfo('${userId}', '${this.escapeString(username)}')`
+                        };
+                    case 'pending':
+                        return {
+                            buttonHtml: '<i class="fas fa-clock"></i>',
+                            buttonClass: 'pending',
+                            buttonTitle: 'Request pending',
+                            onclickFunction: `UserModal.cancelRequest('${userId}', '${this.escapeString(username)}')`
+                        };
+                    case 'received':
+                        return {
+                            buttonHtml: '<i class="fas fa-user-check"></i>',
+                            buttonClass: 'accept',
+                            buttonTitle: 'Accept request',
+                            onclickFunction: `UserModal.acceptRequest('${userId}', '${this.escapeString(username)}')`
+                        };
+                    default:
+                        return {
+                            buttonHtml: '<i class="fas fa-user-plus"></i>',
+                            buttonClass: 'add',
+                            buttonTitle: 'Add to contacts',
+                            onclickFunction: `UserModal.sendContactRequest('${userId}', '${this.escapeString(username)}')`
+                        };
+                }
+            },
+            
+            sendContactRequest: async function(userId, username) {
+                console.log(`📤 Sending contact request to ${username}...`);
+                
+                try {
+                    showNotification(`Sending request to ${username}...`, 'info');
+                    
+                    // Create Contact object
+                    const Contact = Parse.Object.extend('Contact');
+                    const contact = new Contact();
+                    
+                    const currentUser = Parse.User.current();
+                    const toUser = Parse.User.createWithoutData(userId);
+                    
+                    contact.set('fromUser', currentUser);
+                    contact.set('toUser', toUser);
+                    contact.set('status', 'pending');
+                    contact.set('fromUsername', currentUser.get('username'));
+                    contact.set('toUsername', username);
+                    
+                    await contact.save();
+                    
+                    showNotification(`Contact request sent to ${username}!`, 'success');
+                    
+                    // Refresh the users list
+                    await this.loadUsers(this.currentSearchTerm);
+                    
+                    // Refresh requests tab
+                    if (typeof loadRequests === 'function') {
+                        await loadRequests();
+                    }
+                    
+                } catch (error) {
+                    console.error('Error sending contact request:', error);
+                    
+                    if (error.code === 137) {
+                        // Duplicate request
+                        showNotification(`You already sent a request to ${username}`, 'info');
+                    } else {
+                        showNotification('Failed to send contact request: ' + error.message, 'error');
+                    }
+                }
+            },
+            
+            cancelRequest: async function(userId, username) {
+                if (confirm(`Cancel contact request to ${username}?`)) {
+                    try {
+                        const Contact = Parse.Object.extend('Contact');
+                        const query = new Parse.Query(Contact);
+                        query.equalTo('fromUser', Parse.User.current());
+                        query.equalTo('toUser', Parse.User.createWithoutData(userId));
+                        query.equalTo('status', 'pending');
+                        
+                        const request = await query.first();
+                        
+                        if (request) {
+                            await request.destroy();
+                            showNotification(`Request to ${username} cancelled`, 'info');
+                            await this.loadUsers(this.currentSearchTerm);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error cancelling request:', error);
+                        showNotification('Failed to cancel request', 'error');
+                    }
+                }
+            },
+            
+            acceptRequest: async function(userId, username) {
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    query.equalTo('fromUser', Parse.User.createWithoutData(userId));
+                    query.equalTo('toUser', Parse.User.current());
+                    query.equalTo('status', 'pending');
+                    
+                    const request = await query.first();
+                    
+                    if (request) {
+                        request.set('status', 'accepted');
+                        await request.save();
+                        
+                        showNotification(`${username} added to contacts!`, 'success');
+                        
+                        // Refresh
+                        await this.loadUsers(this.currentSearchTerm);
+                        if (typeof loadContacts === 'function') {
+                            await loadContacts();
+                        }
+                        if (typeof loadRequests === 'function') {
+                            await loadRequests();
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Error accepting request:', error);
+                    showNotification('Failed to accept request', 'error');
+                }
+            },
+            
+            showContactInfo: function(userId, username) {
+                showNotification(`${username} is already in your contacts`, 'info');
             },
             
             escapeHTML: function(text) {
@@ -1684,6 +1882,68 @@
         // Start chat from contacts
         function startChat(userId, username) {
             startDirectChat(userId, username);
+        }
+        
+        // =============== CONTACT FUNCTIONS (for existing code compatibility) ===============
+        
+        // Add contact (for backward compatibility)
+        async function addContact(userId, username) {
+            await UserModal.sendContactRequest(userId, username);
+        }
+        
+        // Accept contact request
+        async function acceptContactRequest(contactId, username) {
+            try {
+                const Contact = Parse.Object.extend('Contact');
+                const contact = Parse.Object.createWithoutData('Contact', contactId);
+                await contact.fetch();
+                
+                contact.set('status', 'accepted');
+                await contact.save();
+                
+                showNotification(`${username} added to contacts!`, 'success');
+                await Promise.all([loadContacts(), loadRequests()]);
+                
+            } catch (error) {
+                console.error('Accept contact error:', error);
+                showNotification('Failed to accept request', 'error');
+            }
+        }
+        
+        // Reject contact request
+        async function rejectContactRequest(contactId, username) {
+            if (confirm(`Reject contact request from ${username}?`)) {
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const contact = Parse.Object.createWithoutData('Contact', contactId);
+                    await contact.destroy();
+                    
+                    showNotification(`Request from ${username} rejected`, 'info');
+                    await loadRequests();
+                    
+                } catch (error) {
+                    console.error('Reject contact error:', error);
+                    showNotification('Failed to reject request', 'error');
+                }
+            }
+        }
+        
+        // Remove contact
+        async function removeContact(contactId, username) {
+            if (confirm(`Remove ${username} from contacts?`)) {
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const contact = Parse.Object.createWithoutData('Contact', contactId);
+                    await contact.destroy();
+                    
+                    showNotification(`${username} removed from contacts`, 'info');
+                    await loadContacts();
+                    
+                } catch (error) {
+                    console.error('Remove contact error:', error);
+                    showNotification('Failed to remove contact', 'error');
+                }
+            }
         }
         
         // =============== MESSAGE FUNCTIONS ===============
@@ -1991,16 +2251,24 @@
                 
                 contactsContent.innerHTML = '';
                 
-                if (typeof Backend !== 'undefined' && typeof Backend.getContacts === 'function') {
-                    const result = await Backend.getContacts();
+                // Try to get contacts from Contact class
+                try {
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
+                    query.equalTo('fromUser', Parse.User.current());
+                    query.equalTo('status', 'accepted');
+                    query.include('toUser');
                     
-                    if (result.success && result.contacts.length > 0) {
-                        result.contacts.forEach(contact => {
+                    const contacts = await query.find();
+                    
+                    if (contacts.length > 0) {
+                        contacts.forEach(contact => {
+                            const toUser = contact.get('toUser');
+                            const username = toUser.get('username') || 'Unknown';
+                            const userId = toUser.id;
+                            
                             const contactDiv = document.createElement('div');
                             contactDiv.className = 'contact-item';
-                            
-                            const username = contact.username || 'Unknown';
-                            const userId = contact.userId || contact.id;
                             
                             contactDiv.innerHTML = `
                                 <div class="contact-avatar">
@@ -2016,7 +2284,7 @@
                                     <button class="contact-btn message" onclick="startChat('${userId}', '${escapeString(username)}')" title="Message">
                                         <i class="fas fa-comment"></i>
                                     </button>
-                                    <button class="contact-btn remove" onclick="removeContact('${contact.contactId || contact.id}', '${escapeString(username)}')" title="Remove Contact">
+                                    <button class="contact-btn remove" onclick="removeContact('${contact.id}', '${escapeString(username)}')" title="Remove Contact">
                                         <i class="fas fa-user-minus"></i>
                                     </button>
                                 </div>
@@ -2035,8 +2303,9 @@
                         `;
                         contactsContent.appendChild(emptyDiv);
                     }
-                } else {
-                    // Show empty state if Backend not available
+                } catch (error) {
+                    console.error('Error loading contacts:', error);
+                    // Show empty state if error
                     const emptyDiv = document.createElement('div');
                     emptyDiv.className = 'empty-state';
                     emptyDiv.innerHTML = `
@@ -2069,33 +2338,43 @@
                 
                 let totalRequests = 0;
                 
-                // Try to get pending requests
-                if (typeof Backend !== 'undefined' && typeof Backend.getPendingRequests === 'function') {
-                    const pendingResult = await Backend.getPendingRequests();
+                try {
+                    const Contact = Parse.Object.extend('Contact');
                     
-                    if (pendingResult.success && pendingResult.requests.length > 0) {
+                    // Get received requests (pending to current user)
+                    const receivedQuery = new Parse.Query(Contact);
+                    receivedQuery.equalTo('toUser', Parse.User.current());
+                    receivedQuery.equalTo('status', 'pending');
+                    receivedQuery.include('fromUser');
+                    
+                    const receivedRequests = await receivedQuery.find();
+                    
+                    if (receivedRequests.length > 0) {
                         const headerDiv = document.createElement('div');
                         headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Received Requests</h4>';
                         requestsContent.appendChild(headerDiv);
                         
-                        pendingResult.requests.forEach(request => {
+                        receivedRequests.forEach(request => {
                             totalRequests++;
+                            const fromUser = request.get('fromUser');
+                            const username = fromUser.get('username') || 'Unknown';
+                            
                             const requestDiv = document.createElement('div');
                             requestDiv.className = 'contact-item';
                             
                             requestDiv.innerHTML = `
                                 <div class="contact-avatar">
-                                    ${(request.fromUsername || '')[0].toUpperCase()}
+                                    ${username[0].toUpperCase()}
                                 </div>
                                 <div class="contact-info">
-                                    <div class="contact-name">${escapeHTML(request.fromUsername)}</div>
+                                    <div class="contact-name">${escapeHTML(username)}</div>
                                     <div class="contact-status">Wants to connect</div>
                                 </div>
                                 <div class="contact-actions">
-                                    <button class="contact-btn accept" onclick="acceptContactRequest('${request.contactId}', '${escapeString(request.fromUsername)}')" title="Accept">
+                                    <button class="contact-btn accept" onclick="acceptContactRequest('${request.id}', '${escapeString(username)}')" title="Accept">
                                         <i class="fas fa-check"></i>
                                     </button>
-                                    <button class="contact-btn reject" onclick="rejectContactRequest('${request.contactId}', '${escapeString(request.fromUsername)}')" title="Reject">
+                                    <button class="contact-btn reject" onclick="rejectContactRequest('${request.id}', '${escapeString(username)}')" title="Reject">
                                         <i class="fas fa-times"></i>
                                     </button>
                                 </div>
@@ -2104,31 +2383,37 @@
                             requestsContent.appendChild(requestDiv);
                         });
                     }
-                }
-                
-                // Try to get sent requests
-                if (typeof Backend !== 'undefined' && typeof Backend.getSentRequests === 'function') {
-                    const sentResult = await Backend.getSentRequests();
                     
-                    if (sentResult.success && sentResult.requests.length > 0) {
+                    // Get sent requests (pending from current user)
+                    const sentQuery = new Parse.Query(Contact);
+                    sentQuery.equalTo('fromUser', Parse.User.current());
+                    sentQuery.equalTo('status', 'pending');
+                    sentQuery.include('toUser');
+                    
+                    const sentRequests = await sentQuery.find();
+                    
+                    if (sentRequests.length > 0) {
                         const headerDiv = document.createElement('div');
                         headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Sent Requests</h4>';
                         requestsContent.appendChild(headerDiv);
                         
-                        sentResult.requests.forEach(request => {
+                        sentRequests.forEach(request => {
+                            const toUser = request.get('toUser');
+                            const username = toUser.get('username') || 'Unknown';
+                            
                             const requestDiv = document.createElement('div');
                             requestDiv.className = 'contact-item';
                             
                             requestDiv.innerHTML = `
                                 <div class="contact-avatar">
-                                    ${(request.toUsername || '')[0].toUpperCase()}
+                                    ${username[0].toUpperCase()}
                                 </div>
                                 <div class="contact-info">
-                                    <div class="contact-name">${escapeHTML(request.toUsername)}</div>
+                                    <div class="contact-name">${escapeHTML(username)}</div>
                                     <div class="contact-status">Request pending</div>
                                 </div>
                                 <div class="contact-actions">
-                                    <button class="contact-btn pending" onclick="cancelContactRequest('${request.contactId}', '${escapeString(request.toUsername)}')" title="Cancel Request">
+                                    <button class="contact-btn pending" onclick="UserModal.cancelRequest('${toUser.id}', '${escapeString(username)}')" title="Cancel Request">
                                         <i class="fas fa-clock"></i>
                                     </button>
                                 </div>
@@ -2137,6 +2422,9 @@
                             requestsContent.appendChild(requestDiv);
                         });
                     }
+                    
+                } catch (error) {
+                    console.error('Error loading requests:', error);
                 }
                 
                 // Show empty state if no requests
