@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2304,8 +2303,13 @@
                     if (contacts.length > 0) {
                         contacts.forEach(contact => {
                             const toUser = contact.get('toUser');
-                            const username = toUser.get('username') || 'Unknown';
-                            const userId = toUser.id;
+                            const username = toUser ? (toUser.get('username') || 'Unknown') : 'Unknown';
+                            const userId = toUser ? toUser.id : null;
+                            
+                            if (!userId) {
+                                console.warn('Contact has no valid toUser:', contact.id);
+                                return; // Skip this contact
+                            }
                             
                             const contactDiv = document.createElement('div');
                             contactDiv.className = 'contact-item';
@@ -2368,7 +2372,7 @@
             }
         }
         
-        // Load requests - FIXED VERSION
+        // Load requests - FIXED VERSION with null checks
         async function loadRequests() {
             try {
                 const requestsContent = document.getElementById('requestsContent');
@@ -2397,33 +2401,48 @@
                         requestsContent.appendChild(headerDiv);
                         
                         receivedRequests.forEach(request => {
-                            totalRequests++;
-                            const fromUser = request.get('fromUser');
-                            const username = fromUser.get('username') || fromUser.get('email')?.split('@')[0] || 'Unknown';
-                            const fromUserId = fromUser.id;
-                            
-                            const requestDiv = document.createElement('div');
-                            requestDiv.className = 'contact-item';
-                            
-                            requestDiv.innerHTML = `
-                                <div class="contact-avatar">
-                                    ${username[0].toUpperCase()}
-                                </div>
-                                <div class="contact-info">
-                                    <div class="contact-name">${escapeHTML(username)}</div>
-                                    <div class="contact-status">Wants to connect</div>
-                                </div>
-                                <div class="contact-actions">
-                                    <button class="contact-btn accept" onclick="UserModal.acceptRequest('${fromUserId}', '${escapeString(username)}')" title="Accept">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="contact-btn reject" onclick="rejectContactRequest('${request.id}', '${escapeString(username)}')" title="Reject">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </div>
-                            `;
-                            
-                            requestsContent.appendChild(requestDiv);
+                            try {
+                                const fromUser = request.get('fromUser');
+                                if (!fromUser) {
+                                    console.warn('Request has no fromUser:', request.id);
+                                    return;
+                                }
+                                
+                                const username = fromUser.get('username') || fromUser.get('email')?.split('@')[0] || 'Unknown';
+                                const fromUserId = fromUser.id;
+                                
+                                if (!fromUserId) {
+                                    console.warn('Request has no valid fromUser ID:', request.id);
+                                    return;
+                                }
+                                
+                                totalRequests++;
+                                
+                                const requestDiv = document.createElement('div');
+                                requestDiv.className = 'contact-item';
+                                
+                                requestDiv.innerHTML = `
+                                    <div class="contact-avatar">
+                                        ${username[0].toUpperCase()}
+                                    </div>
+                                    <div class="contact-info">
+                                        <div class="contact-name">${escapeHTML(username)}</div>
+                                        <div class="contact-status">Wants to connect</div>
+                                    </div>
+                                    <div class="contact-actions">
+                                        <button class="contact-btn accept" onclick="UserModal.acceptRequest('${fromUserId}', '${escapeString(username)}')" title="Accept">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="contact-btn reject" onclick="rejectContactRequest('${request.id}', '${escapeString(username)}')" title="Reject">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                `;
+                                
+                                requestsContent.appendChild(requestDiv);
+                            } catch (error) {
+                                console.error('Error processing received request:', error);
+                            }
                         });
                     }
                     
@@ -2443,41 +2462,45 @@
                         requestsContent.appendChild(headerDiv);
                         
                         sentRequests.forEach(request => {
-                            const toUser = request.get('toUser');
-                            const username = toUser.get('username') || toUser.get('email')?.split('@')[0] || 'Unknown';
-                            const toUserId = toUser.id;
-                            
-                            const requestDiv = document.createElement('div');
-                            requestDiv.className = 'contact-item';
-                            
-                            requestDiv.innerHTML = `
-                                <div class="contact-avatar">
-                                    ${username[0].toUpperCase()}
-                                </div>
-                                <div class="contact-info">
-                                    <div class="contact-name">${escapeHTML(username)}</div>
-                                    <div class="contact-status">Request pending</div>
-                                </div>
-                                <div class="contact-actions">
-                                    <button class="contact-btn pending" onclick="UserModal.cancelRequest('${toUserId}', '${escapeString(username)}')" title="Cancel Request">
-                                        <i class="fas fa-clock"></i>
-                                    </button>
-                                </div>
-                            `;
-                            
-                            requestsContent.appendChild(requestDiv);
+                            try {
+                                const toUser = request.get('toUser');
+                                if (!toUser) {
+                                    console.warn('Sent request has no toUser:', request.id);
+                                    return;
+                                }
+                                
+                                const username = toUser.get('username') || toUser.get('email')?.split('@')[0] || 'Unknown';
+                                const toUserId = toUser.id;
+                                
+                                if (!toUserId) {
+                                    console.warn('Sent request has no valid toUser ID:', request.id);
+                                    return;
+                                }
+                                
+                                const requestDiv = document.createElement('div');
+                                requestDiv.className = 'contact-item';
+                                
+                                requestDiv.innerHTML = `
+                                    <div class="contact-avatar">
+                                        ${username[0].toUpperCase()}
+                                    </div>
+                                    <div class="contact-info">
+                                        <div class="contact-name">${escapeHTML(username)}</div>
+                                        <div class="contact-status">Request pending</div>
+                                    </div>
+                                    <div class="contact-actions">
+                                        <button class="contact-btn pending" onclick="UserModal.cancelRequest('${toUserId}', '${escapeString(username)}')" title="Cancel Request">
+                                            <i class="fas fa-clock"></i>
+                                        </button>
+                                    </div>
+                                `;
+                                
+                                requestsContent.appendChild(requestDiv);
+                            } catch (error) {
+                                console.error('Error processing sent request:', error);
+                            }
                         });
                     }
-                    
-                    // Debug: Log all Contact objects for current user
-                    const debugQuery = new Parse.Query(Contact);
-                    debugQuery.equalTo('fromUser', Parse.User.current());
-                    const debugRequests = await debugQuery.find();
-                    console.log('🔍 Debug - All contacts from current user:', debugRequests.map(r => ({
-                        id: r.id,
-                        toUser: r.get('toUser')?.id,
-                        status: r.get('status')
-                    })));
                     
                 } catch (error) {
                     console.error('Error loading requests:', error);
