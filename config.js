@@ -31,4 +31,16 @@ console.log('✅ Parse initialized');
 console.log('✅ Master Key available:', !!Parse.masterKey);
 console.log('✅ Master Key set globally:', !!Parse.CoreManager.get('MASTER_KEY'));
 
+Parse.Cloud.beforeSave('_User', function(request, response) {
+    const user = request.object;
+    
+    // Ensure bio is never too long
+    if (user.get('bio') && user.get('bio').length > 500) {
+        user.set('bio', user.get('bio').substring(0, 500));
+    }
+    
+    // Can add more validation here when needed
+    response.success();
+});
+
 window.CONFIG = CONFIG;
