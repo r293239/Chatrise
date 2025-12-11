@@ -9,6 +9,51 @@
     <script src="config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script src="backend.js"></script>
+    
+    <!-- MASTER KEY FIX SCRIPT -->
+    <script>
+    // =============== FORCE MASTER KEY FIX ===============
+    (function() {
+        console.log('🔧 Applying master key fix...');
+        
+        // Wait for Parse to be loaded from config.js
+        setTimeout(() => {
+            // Store original request method
+            const originalRequest = Parse._request;
+            
+            // Override to add master key header
+            Parse._request = function(method, path, data, options) {
+                options = options || {};
+                options.headers = options.headers || {};
+                
+                // Add master key header to ALL requests
+                options.headers['X-Parse-Master-Key'] = 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz';
+                
+                // Also add JavaScript key if not present
+                if (!options.headers['X-Parse-JavaScript-Key']) {
+                    options.headers['X-Parse-JavaScript-Key'] = 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV';
+                }
+                
+                console.log('📤 Request:', method, path.substring(0, 50));
+                return originalRequest.call(this, method, path, data, options);
+            };
+            
+            console.log('✅ Master key fix applied');
+            
+            // Test if it works
+            setTimeout(() => {
+                const testQuery = new Parse.Query(Parse.User);
+                testQuery.limit(5);
+                testQuery.find().then(users => {
+                    console.log(`✅ Test successful! Found ${users.length} users`);
+                }).catch(err => {
+                    console.error('❌ Test failed:', err);
+                });
+            }, 1000);
+        }, 500);
+    })();
+    </script>
+    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -374,7 +419,6 @@
             flex-direction: column;
             min-width: 0;
             min-height: 0;
-
         }
         
         .chat-header {
@@ -1200,7 +1244,7 @@
                     
                     console.log(`🔍 Loading users with search term: "${searchTerm}"`);
                     
-                    const result = await this.simpleParseQuery(searchTerm);
+                    const result = await this.getAllUsersFromParse(searchTerm);
                     
                     console.log('Query result:', result);
                     
@@ -1213,8 +1257,6 @@
                             message = `No users found matching "${searchTerm}"`;
                         } else if (result.error) {
                             message = `Error: ${result.error}`;
-                        } else {
-                            message = 'No other users registered yet. Create more accounts!';
                         }
                         
                         usersList.innerHTML = `
@@ -1222,7 +1264,6 @@
                                 <i class="fas fa-user-slash"></i>
                                 <h3>${result.error ? 'Error' : 'No users found'}</h3>
                                 <p>${message}</p>
-                                ${!searchTerm ? '<p style="margin-top:10px;font-size:12px;color:#666;">Try creating more user accounts first</p>' : ''}
                             </div>
                         `;
                     }
@@ -1238,9 +1279,9 @@
                 }
             },
             
-            simpleParseQuery: async function(searchTerm = '') {
+            getAllUsersFromParse: async function(searchTerm = '') {
                 try {
-                    console.log('🔍 Querying Parse for users...');
+                    console.log('🔍 Querying ALL Parse users...');
                     
                     if (!Parse.User.current()) {
                         throw new Error('Not logged in');
@@ -1249,58 +1290,63 @@
                     const currentUser = Parse.User.current();
                     console.log('Current user ID:', currentUser.id);
                     
-                    // Query Parse User class directly
-                    const User = Parse.User;
-                    const query = new Parse.Query(User);
-                    
-                    // Always exclude current user
-                    query.notEqualTo('objectId', currentUser.id);
-                    
-                    // If we have a search term, search in username and email
-                    if (searchTerm && searchTerm.trim() !== '') {
-                        const term = searchTerm.toLowerCase();
+                    // Method 1: Try direct Parse query first
+                    try {
+                        const query = new Parse.Query(Parse.User);
+                        query.notEqualTo('objectId', currentUser.id);
                         
-                        // Create OR query for username and email
-                        const usernameQuery = new Parse.Query(User);
-                        usernameQuery.contains('username', term);
+                        if (searchTerm && searchTerm.trim() !== '') {
+                            query.contains('username', searchTerm);
+                        }
                         
-                        const emailQuery = new Parse.Query(User);
-                        emailQuery.contains('email', term);
+                        query.limit(100);
+                        query.ascending('username');
                         
-                        const orQuery = Parse.Query.or(usernameQuery, emailQuery);
-                        orQuery.notEqualTo('objectId', currentUser.id);
+                        console.log('Executing Parse query with master key header...');
+                        const results = await query.find();
                         
-                        // Use the OR query
-                        query._orQuery([usernameQuery, emailQuery]);
-                        console.log(`Searching for users with term: "${term}"`);
+                        console.log(`✅ Found ${results.length} users via Parse SDK`);
+                        
+                        if (results.length > 0) {
+                            return {
+                                success: true,
+                                users: results.map(user => ({
+                                    id: user.id,
+                                    username: user.get('username') || user.get('email')?.split('@')[0] || 'User',
+                                    email: user.get('email') || ''
+                                }))
+                            };
+                        }
+                    } catch (parseError) {
+                        console.log('Parse SDK failed, trying REST API...', parseError);
                     }
                     
-                    // Limit results for performance
-                    query.limit(100);
-                    query.ascending('username');
-                    
-                    console.log('Executing Parse query...');
-                    const results = await query.find();
-                    
-                    console.log(`✅ Found ${results.length} users total`);
-                    
-                    // Filter out current user again (just in case)
-                    const filteredUsers = results.filter(user => user.id !== currentUser.id);
-                    
-                    // Log first few users for debugging
-                    filteredUsers.slice(0, 5).forEach((user, i) => {
-                        const username = user.get('username') || user.get('email')?.split('@')[0] || 'User';
-                        const email = user.get('email') || 'No email';
-                        console.log(`User ${i + 1}: ID=${user.id.substring(0, 8)}..., Username="${username}", Email="${email}"`);
+                    // Method 2: Fallback to REST API with master key
+                    console.log('🔄 Falling back to REST API...');
+                    const response = await fetch(`https://parseapi.back4app.com/classes/_User?limit=100&order=username${searchTerm ? `&where={"username":{"$regex":"${searchTerm}"}}` : ''}`, {
+                        headers: {
+                            'X-Parse-Application-Id': 'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
+                            'X-Parse-Master-Key': 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz',
+                            'Content-Type': 'application/json'
+                        }
                     });
                     
-                    // Format results
-                    const users = filteredUsers.map(user => ({
-                        id: user.id,
-                        username: user.get('username') || user.get('email')?.split('@')[0] || 'User',
-                        email: user.get('email') || '',
-                        rawUser: user // Keep the raw Parse user object
-                    }));
+                    const data = await response.json();
+                    
+                    if (!data.results || data.results.length === 0) {
+                        return { success: false, error: 'No users found', users: [] };
+                    }
+                    
+                    // Filter out current user and format results
+                    const users = data.results
+                        .filter(user => user.objectId !== currentUser.id)
+                        .map(user => ({
+                            id: user.objectId,
+                            username: user.username || user.email?.split('@')[0] || 'User',
+                            email: user.email || ''
+                        }));
+                    
+                    console.log(`✅ Found ${users.length} users via REST API`);
                     
                     return {
                         success: true,
@@ -1308,17 +1354,10 @@
                     };
                     
                 } catch (error) {
-                    console.error('❌ Parse query error:', error);
-                    
-                    // Provide detailed error info
-                    let errorMessage = error.message;
-                    if (error.code) {
-                        errorMessage = `Parse Error ${error.code}: ${errorMessage}`;
-                    }
-                    
+                    console.error('❌ All query methods failed:', error);
                     return {
                         success: false,
-                        error: errorMessage,
+                        error: error.message || 'Unable to load users',
                         users: []
                     };
                 }
@@ -1353,7 +1392,7 @@
                 }
                 
                 users.forEach(user => {
-                    // Skip current user (just in case)
+                    // Skip current user
                     if (user.id === currentUser.id) return;
                     
                     const userDiv = document.createElement('div');
@@ -1385,51 +1424,16 @@
                     usersList.appendChild(userDiv);
                 });
                 
-                // Add some instructions
+                // Add info
                 const infoDiv = document.createElement('div');
                 infoDiv.style.padding = '10px 15px';
                 infoDiv.style.fontSize = '12px';
                 infoDiv.style.color = '#666';
                 infoDiv.style.textAlign = 'center';
-                infoDiv.innerHTML = 'Showing ' + users.length + ' user(s). Click the plus icon to add as contact.';
+                infoDiv.style.borderTop = '1px solid #eee';
+                infoDiv.style.marginTop = '10px';
+                infoDiv.innerHTML = `Showing ${users.length} user(s)`;
                 usersList.appendChild(infoDiv);
-            },
-            
-            addContact: async function(userId, username) {
-                console.log(`➕ Adding contact: ${username} (ID: ${userId})`);
-                
-                try {
-                    showNotification(`Sending contact request to ${username}...`, 'info');
-                    
-                    // Check if we have Backend.addContact function
-                    if (typeof Backend !== 'undefined' && typeof Backend.addContact === 'function') {
-                        const result = await Backend.addContact(userId, username);
-                        
-                        if (result.success) {
-                            showNotification(`Contact request sent to ${username}! 📤`, 'success');
-                            this.loadUsers(this.currentSearchTerm);
-                            
-                            // Refresh the requests tab
-                            if (typeof loadRequests === 'function') {
-                                await loadRequests();
-                            }
-                        } else {
-                            showNotification(result.error || 'Failed to send request', 'error');
-                        }
-                    } else {
-                        // Fallback: Show success message
-                        showNotification(`Would add ${username} as contact (Backend not available)`, 'info');
-                        
-                        // Simulate successful add
-                        setTimeout(() => {
-                            showNotification(`Contact request to ${username} sent!`, 'success');
-                            this.loadUsers(this.currentSearchTerm);
-                        }, 500);
-                    }
-                } catch (error) {
-                    console.error('Add contact error:', error);
-                    showNotification('Failed to send contact request: ' + error.message, 'error');
-                }
             },
             
             escapeHTML: function(text) {
@@ -1449,6 +1453,49 @@
                     .replace(/\t/g, '\\t');
             }
         };
+        
+        // =============== DEBUG FUNCTIONS ===============
+        function debugTestAllUsers() {
+            console.log('🔍 DEBUG: Testing ALL users...');
+            
+            // REST API test
+            fetch('https://parseapi.back4app.com/classes/_User?limit=1000', {
+                headers: {
+                    'X-Parse-Application-Id': 'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
+                    'X-Parse-Master-Key': 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('📊 REST API Total users:', data.results?.length || 0);
+                console.log('First 10 users:');
+                data.results?.slice(0, 10).forEach((user, i) => {
+                    console.log(`${i + 1}. ${user.username || 'No username'} (${user.email || 'No email'})`);
+                });
+            })
+            .catch(error => console.error('REST API error:', error));
+        }
+        
+        // =============== GLOBAL FUNCTIONS ===============
+        window.showUsers = UserModal.show.bind(UserModal);
+        window.hideUsers = UserModal.hide.bind(UserModal);
+        window.searchUsers = UserModal.search.bind(UserModal);
+        
+        // Run debug on page load
+        window.addEventListener('load', function() {
+            setTimeout(debugTestAllUsers, 2000);
+        });
+        
+        // Attach search input listener
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('userSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    UserModal.search();
+                });
+            }
+        });
         
         // =============== GLOBAL VARIABLES ===============
         let currentChatId = null;
@@ -1482,14 +1529,6 @@
             messageInput.addEventListener('input', function() {
                 adjustTextareaHeight(this);
             });
-            
-            // Setup search input listener
-            const searchInput = document.getElementById('userSearchInput');
-            if (searchInput) {
-                searchInput.addEventListener('input', function() {
-                    UserModal.search();
-                });
-            }
             
             // Load initial data
             await loadAllData();
@@ -1601,6 +1640,21 @@
             console.log('✅ Global chat selected');
         };
         
+        // Start direct chat from users list
+        function startDirectChat(userId, username) {
+            console.log(`💬 Starting direct chat with ${username}`);
+            
+            // Close the users modal
+            UserModal.hide();
+            
+            // Switch to chats tab and start the chat
+            switchTab('chats');
+            setTimeout(() => {
+                selectChat(userId, username);
+                showNotification(`Started chat with ${username}! 💬`, 'success', 2000);
+            }, 300);
+        }
+        
         // Select private chat
         async function selectChat(userId, username) {
             currentChatId = userId;
@@ -1618,13 +1672,6 @@
             document.getElementById('chatStatus').textContent = 'online';
             document.getElementById('chatHeaderAvatar').textContent = username[0].toUpperCase();
             
-            // Mark the chat as active (we'll need to find it)
-            const chatSelector = `[onclick*="${userId}"]`;
-            const activeChat = document.querySelector(`.chat-item${chatSelector}, .contact-item${chatSelector}`);
-            if (activeChat) {
-                activeChat.classList.add('active');
-            }
-            
             await loadMessages();
             document.getElementById('messageInput').focus();
             
@@ -1632,21 +1679,6 @@
             if (window.innerWidth <= 768) {
                 document.getElementById('sidebar').classList.remove('show');
             }
-        }
-        
-        // Start direct chat from users list
-        function startDirectChat(userId, username) {
-            console.log(`💬 Starting direct chat with ${username}`);
-            
-            // Close the users modal
-            UserModal.hide();
-            
-            // Switch to chats tab and start the chat
-            switchTab('chats');
-            setTimeout(() => {
-                selectChat(userId, username);
-                showNotification(`Started chat with ${username}! 💬`, 'success', 2000);
-            }, 300);
         }
         
         // Start chat from contacts
@@ -1886,120 +1918,6 @@
             sendBtn.disabled = false;
             sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
             input.focus();
-        }
-        
-        // =============== CONTACT FUNCTIONS ===============
-        
-        // Add contact
-        async function addContact(userId, username) {
-            try {
-                showNotification('Sending contact request...', 'info');
-                
-                if (typeof Backend !== 'undefined' && typeof Backend.addContact === 'function') {
-                    const result = await Backend.addContact(userId, username);
-                    
-                    if (result.success) {
-                        showNotification(`Contact request sent to ${username}! 📤`, 'success');
-                    } else {
-                        showNotification(result.error, 'error');
-                    }
-                } else {
-                    showNotification(`Would add ${username} as contact (Backend not available)`, 'info');
-                }
-            } catch (error) {
-                console.error('Add contact error:', error);
-                showNotification('Failed to send contact request', 'error');
-            }
-        }
-        
-        // Accept contact request
-        async function acceptContactRequest(contactId, username) {
-            try {
-                if (typeof Backend !== 'undefined' && typeof Backend.acceptContact === 'function') {
-                    const result = await Backend.acceptContact(contactId);
-                    
-                    if (result.success) {
-                        showNotification(`${username} added to contacts! 👥`, 'success');
-                        await Promise.all([loadContacts(), loadRequests()]);
-                    } else {
-                        showNotification('Failed to accept request', 'error');
-                    }
-                } else {
-                    showNotification(`Would accept contact from ${username}`, 'info');
-                }
-            } catch (error) {
-                console.error('Accept contact error:', error);
-                showNotification('Failed to accept request', 'error');
-            }
-        }
-        
-        // Reject contact request
-        async function rejectContactRequest(contactId, username) {
-            if (confirm(`Reject contact request from ${username}?`)) {
-                try {
-                    if (typeof Backend !== 'undefined' && typeof Backend.removeContact === 'function') {
-                        const result = await Backend.removeContact(contactId);
-                        
-                        if (result.success) {
-                            showNotification(`Request from ${username} rejected`, 'info');
-                            await loadRequests();
-                        } else {
-                            showNotification('Failed to reject request', 'error');
-                        }
-                    } else {
-                        showNotification(`Would reject request from ${username}`, 'info');
-                    }
-                } catch (error) {
-                    console.error('Reject contact error:', error);
-                    showNotification('Failed to reject request', 'error');
-                }
-            }
-        }
-        
-        // Cancel contact request
-        async function cancelContactRequest(contactId, username) {
-            if (confirm(`Cancel contact request to ${username}?`)) {
-                try {
-                    if (typeof Backend !== 'undefined' && typeof Backend.removeContact === 'function') {
-                        const result = await Backend.removeContact(contactId);
-                        
-                        if (result.success) {
-                            showNotification(`Request to ${username} cancelled`, 'info');
-                            await loadRequests();
-                        } else {
-                            showNotification('Failed to cancel request', 'error');
-                        }
-                    } else {
-                        showNotification(`Would cancel request to ${username}`, 'info');
-                    }
-                } catch (error) {
-                    console.error('Cancel contact error:', error);
-                    showNotification('Failed to cancel request', 'error');
-                }
-            }
-        }
-        
-        // Remove contact
-        async function removeContact(contactId, username) {
-            if (confirm(`Remove ${username} from contacts?`)) {
-                try {
-                    if (typeof Backend !== 'undefined' && typeof Backend.removeContact === 'function') {
-                        const result = await Backend.removeContact(contactId);
-                        
-                        if (result.success) {
-                            showNotification(`${username} removed from contacts`, 'info');
-                            await loadContacts();
-                        } else {
-                            showNotification('Failed to remove contact', 'error');
-                        }
-                    } else {
-                        showNotification(`Would remove ${username} from contacts`, 'info');
-                    }
-                } catch (error) {
-                    console.error('Remove contact error:', error);
-                    showNotification('Failed to remove contact', 'error');
-                }
-            }
         }
         
         // =============== DATA LOADING FUNCTIONS ===============
@@ -2255,19 +2173,6 @@
         }
         
         // =============== UI FUNCTIONS ===============
-        
-        // Global functions for HTML
-        function showUsers() {
-            UserModal.show();
-        }
-        
-        function hideUsers() {
-            UserModal.hide();
-        }
-        
-        function searchUsers() {
-            UserModal.search();
-        }
         
         // Search sidebar content
         function searchContent() {
