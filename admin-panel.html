@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatRise - Admin Panel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f6fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .admin-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .admin-header {
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            color: white;
+            padding: 25px 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .admin-header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .admin-header h1 i {
+            font-size: 32px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        
+        .user-role {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .user-role.super-admin {
+            background: #ff4757;
+        }
+        
+        .user-role.admin {
+            background: #ffa502;
+        }
+        
+        .back-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+        
+        .admin-tabs {
+            display: flex;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .admin-tab {
+            flex: 1;
+            padding: 18px 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .admin-tab.active {
+            background: #25d366;
+            color: white;
+        }
+        
+        .admin-tab:hover:not(.active) {
+            background: #f8f9fa;
+        }
+        
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f2f5;
+        }
+        
+        .section-header h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .search-box {
+            position: relative;
+            width: 300px;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 12px 15px 12px 45px;
+            border: 1px solid #e1e5e9;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        
+        .search-box input:focus {
+            border-color: #25d366;
+            box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
+        }
+        
+        .search-box i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            margin-bottom: 15px;
+        }
+        
+        .stat-card.users .stat-icon { background: #25d366; }
+        .stat-card.messages .stat-icon { background: #007bff; }
+        .stat-card.global .stat-icon { background: #ffa502; }
+        .stat-card.contacts .stat-icon { background: #9c88ff; }
+        
+        .stat-card h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .stat-card .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .stat-trend {
+            font-size: 12px;
+            color: #25d366;
+            font-weight: 600;
+        }
+        
+        .stat-card .stat-trend.negative {
+            color: #ff4757;
+        }
+        
+        .user-list {
+            margin-top: 20px;
+        }
+        
+        .user-item {
+            display: flex;
+            align-items: center;
+            padding: 18px;
+            border-bottom: 1px solid #f0f2f5;
+            transition: background 0.2s;
+        }
+        
+        .user-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .user-avatar-large {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #25d366;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            margin-right: 15px;
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .user-details {
+            flex: 1;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            margin-bottom: 3px;
+            font-size: 16px;
+        }
+        
+        .user-email {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+        
+        .user-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .user-role-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .user-role-badge.user {
+            background: #f1f2f6;
+            color: #666;
+        }
+        
+        .user-role-badge.admin {
+            background: #ffeaa7;
+            color: #e17055;
+        }
+        
+        .user-role-badge.super-admin {
+            background: #ff7675;
+            color: white;
+        }
+        
+        .user-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .action-btn {
+            width: 35px;
+            height: 35px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .action-btn.delete {
+            background: #ff4757;
+            color: white;
+        }
+        
+        .action-btn.promote {
+            background: #25d366;
+            color: white;
+        }
+        
+        .action-btn.demote {
+            background: #ffa502;
+            color: white;
+        }
+        
+        .action-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .messages-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .message-item {
+            display: flex;
+            padding: 15px;
+            border-bottom: 1px solid #f0f2f5;
+            transition: background 0.2s;
+        }
+        
+        .message-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .message-content {
+            flex: 1;
+        }
+        
+        .message-sender {
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 15px;
+        }
+        
+        .message-text {
+            color: #333;
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .message-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .message-time {
+            color: #25d366;
+            font-weight: 600;
+        }
+        
+        .message-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .message-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .message-btn.delete {
+            background: #ff4757;
+            color: white;
+        }
+        
+        .message-btn.view {
+            background: #007bff;
+            color: white;
+        }
+        
+        .message-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #25d366;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            color: #ddd;
+            margin-bottom: 16px;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            z-index: 2000;
+            animation: slideInRight 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .notification.success { background: #25d366; }
+        .notification.error { background: #dc3545; }
+        .notification.info { background: #17a2b8; }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            backdrop-filter: blur(3px);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80%;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            animation: modalSlideIn 0.3s ease;
+        }
+        
+        @keyframes modalSlideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .modal-header {
+            padding: 25px 30px;
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .close {
+            width: 35px;
+            height: 35px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .close:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.1);
+        }
+        
+        .modal-body {
+            padding: 25px 30px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+        }
+        
+        .form-group select:focus {
+            border-color: #25d366;
+            box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #f0f2f5;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+        
+        .btn.primary {
+            background: #25d366;
+            color: white;
+        }
+        
+        .btn.secondary {
+            background: #f1f2f6;
+            color: #666;
+        }
+        
+        .btn.danger {
+            background: #ff4757;
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #f0f2f5;
+        }
+        
+        .page-btn {
+            width: 40px;
+            height: 40px;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .page-btn.active {
+            background: #25d366;
+            color: white;
+            border-color: #25d366;
+        }
+        
+        .page-btn:hover:not(.active) {
+            background: #f8f9fa;
+        }
+        
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .alert.warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+        }
+        
+        .alert.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        @media (max-width: 768px) {
+            .admin-container {
+                padding: 15px;
+            }
+            
+            .admin-header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .admin-tabs {
+                flex-direction: column;
+            }
+            
+            .search-box {
+                width: 100%;
+                margin-top: 10px;
+            }
+            
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            
+            .user-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            
+            .user-actions {
+                align-self: flex-end;
+            }
+            
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>
+                <i class="fas fa-shield-alt"></i>
+                ChatRise Admin Panel
+            </h1>
+            <div class="user-info">
+                <div class="user-avatar" id="adminAvatar">A</div>
+                <div>
+                    <div id="adminUsername">Loading...</div>
+                    <div class="user-role" id="adminRole">Loading...</div>
+                </div>
+                <button class="back-btn" onclick="goToChat()">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Chat
+                </button>
+            </div>
+        </div>
+        
+        <div class="admin-tabs">
+            <button class="admin-tab active" onclick="switchAdminTab('dashboard')">
+                <i class="fas fa-tachometer-alt"></i>
+                Dashboard
+            </button>
+            <button class="admin-tab" onclick="switchAdminTab('users')">
+                <i class="fas fa-users"></i>
+                User Management
+            </button>
+            <button class="admin-tab" onclick="switchAdminTab('messages')">
+                <i class="fas fa-comments"></i>
+                Global Messages
+            </button>
+            <button class="admin-tab" onclick="switchAdminTab('system')">
+                <i class="fas fa-cog"></i>
+                System Settings
+            </button>
+        </div>
+        
+        <!-- Dashboard Tab -->
+        <div class="tab-content active" id="dashboardContent">
+            <div class="stats-grid">
+                <div class="stat-card users">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>Total Users</h3>
+                    <div class="stat-number" id="totalUsers">0</div>
+                    <div class="stat-trend" id="usersTrend">+0 today</div>
+                </div>
+                
+                <div class="stat-card messages">
+                    <div class="stat-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <h3>Total Messages</h3>
+                    <div class="stat-number" id="totalMessages">0</div>
+                    <div class="stat-trend" id="messagesTrend">+0 today</div>
+                </div>
+                
+                <div class="stat-card global">
+                    <div class="stat-icon">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <h3>Global Messages</h3>
+                    <div class="stat-number" id="totalGlobalMessages">0</div>
+                    <div class="stat-trend" id="globalTrend">+0 today</div>
+                </div>
+                
+                <div class="stat-card contacts">
+                    <div class="stat-icon">
+                        <i class="fas fa-user-friends"></i>
+                    </div>
+                    <h3>Total Contacts</h3>
+                    <div class="stat-number" id="totalContacts">0</div>
+                    <div class="stat-trend" id="contactsTrend">+0 today</div>
+                </div>
+            </div>
+            
+            <div class="section-header">
+                <h2><i class="fas fa-chart-line"></i> Recent Activity</h2>
+            </div>
+            
+            <div class="alert info">
+                <i class="fas fa-info-circle"></i>
+                Welcome to the Admin Panel. As an administrator, you can manage users, delete inappropriate messages, and monitor system activity.
+            </div>
+            
+            <div class="loading" id="dashboardLoading">
+                <div class="spinner"></div>
+                Loading dashboard data...
+            </div>
+            
+            <div id="recentActivity" class="hidden">
+                <!-- Recent activity will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Users Management Tab -->
+        <div class="tab-content" id="usersContent">
+            <div class="section-header">
+                <h2><i class="fas fa-user-cog"></i> User Management</h2>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="userSearch" placeholder="Search users..." oninput="searchUsers()">
+                </div>
+            </div>
+            
+            <div class="alert warning" id="adminWarning" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="warningText"></span>
+            </div>
+            
+            <div class="loading" id="usersLoading">
+                <div class="spinner"></div>
+                Loading users...
+            </div>
+            
+            <div id="usersList" class="hidden">
+                <!-- Users will be loaded here -->
+            </div>
+            
+            <div class="pagination" id="usersPagination" style="display: none;">
+                <button class="page-btn" onclick="changePage(-1)" id="prevPage">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <span id="pageInfo">Page 1 of 1</span>
+                <button class="page-btn" onclick="changePage(1)" id="nextPage">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Messages Management Tab -->
+        <div class="tab-content" id="messagesContent">
+            <div class="section-header">
+                <h2><i class="fas fa-comment-dots"></i> Global Messages Management</h2>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="messageSearch" placeholder="Search messages..." oninput="searchMessages()">
+                </div>
+            </div>
+            
+            <div class="loading" id="messagesLoading">
+                <div class="spinner"></div>
+                Loading messages...
+            </div>
+            
+            <div id="messagesList" class="hidden">
+                <!-- Messages will be loaded here -->
+            </div>
+            
+            <div class="pagination" id="messagesPagination" style="display: none;">
+                <button class="page-btn" onclick="changeMessagePage(-1)" id="prevMessagePage">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <span id="messagePageInfo">Page 1 of 1</span>
+                <button class="page-btn" onclick="changeMessagePage(1)" id="nextMessagePage">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- System Settings Tab -->
+        <div class="tab-content" id="systemContent">
+            <div class="section-header">
+                <h2><i class="fas fa-sliders-h"></i> System Settings</h2>
+            </div>
+            
+            <div class="alert info">
+                <i class="fas fa-info-circle"></i>
+                System settings allow you to configure various aspects of the ChatRise platform.
+            </div>
+            
+            <div id="systemSettings">
+                <div class="form-group">
+                    <label><i class="fas fa-bell"></i> Maintenance Mode</label>
+                    <select id="maintenanceMode">
+                        <option value="false">Disabled</option>
+                        <option value="true">Enabled</option>
+                    </select>
+                    <small style="color: #666; display: block; margin-top: 5px;">
+                        When enabled, only administrators can access the chat.
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-user-plus"></i> New User Registration</label>
+                    <select id="registrationStatus">
+                        <option value="open">Open - Anyone can register</option>
+                        <option value="invite">Invite Only</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-comment-slash"></i> Message Moderation</label>
+                    <select id="messageModeration">
+                        <option value="none">No moderation</option>
+                        <option value="keyword">Keyword filtering</option>
+                        <option value="manual">Manual approval</option>
+                    </select>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="btn secondary" onclick="resetSettings()">
+                        <i class="fas fa-undo"></i> Reset
+                    </button>
+                    <button class="btn primary" onclick="saveSettings()">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete User Modal -->
+    <div id="deleteUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Delete User</h3>
+                <button class="close" onclick="closeDeleteModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteUserMessage">Are you sure you want to delete this user?</p>
+                <div class="modal-actions">
+                    <button class="btn secondary" onclick="closeDeleteModal()">
+                        Cancel
+                    </button>
+                    <button class="btn danger" onclick="confirmDeleteUser()">
+                        <i class="fas fa-trash"></i> Delete User
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Message Modal -->
+    <div id="deleteMessageModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Delete Message</h3>
+                <button class="close" onclick="closeDeleteMessageModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteMessageText"></p>
+                <div class="modal-actions">
+                    <button class="btn secondary" onclick="closeDeleteMessageModal()">
+                        Cancel
+                    </button>
+                    <button class="btn danger" onclick="confirmDeleteMessage()">
+                        <i class="fas fa-trash"></i> Delete Message
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Role Change Modal -->
+    <div id="roleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-tag"></i> Change User Role</h3>
+                <button class="close" onclick="closeRoleModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Select New Role for <span id="targetUserName"></span></label>
+                    <select id="newUserRole">
+                        <option value="user">User</option>
+                        <option value="admin">Administrator</option>
+                        <option value="super-admin">Super Administrator</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn secondary" onclick="closeRoleModal()">
+                        Cancel
+                    </button>
+                    <button class="btn primary" onclick="confirmRoleChange()">
+                        <i class="fas fa-save"></i> Update Role
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =============== PARSE INITIALIZATION ===============
+        Parse.initialize(
+            'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
+            'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV'
+        );
+        Parse.serverURL = 'https://parseapi.back4app.com/';
+        
+        // =============== GLOBAL VARIABLES ===============
+        let currentAdmin = null;
+        let currentAdminRole = 'user';
+        let currentUserId = null;
+        let currentUsername = '';
+        let userPage = 1;
+        let messagePage = 1;
+        const usersPerPage = 10;
+        const messagesPerPage = 20;
+        
+        // =============== HELPER FUNCTIONS ===============
+        function escapeHTML(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function showNotification(message, type = 'info', duration = 3000) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = message;
+            notification.style.animation = 'slideInRight 0.3s ease';
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, duration);
+        }
+        
+        function makeRequestWithMasterKey(method, endpoint, data = {}) {
+            const url = `https://parseapi.back4app.com/${endpoint}`;
+            console.log(`🔐 Making ${method} request to ${endpoint} with master key`);
+            
+            return fetch(url, {
+                method: method,
+                headers: {
+                    'X-Parse-Application-Id': 'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
+                    'X-Parse-Master-Key': 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz',
+                    'Content-Type': 'application/json'
+                },
+                body: method !== 'GET' ? JSON.stringify(data) : undefined
+            });
+        }
+        
+        async function loadProfilePicture(userId, avatarElement, username = null) {
+            try {
+                const query = encodeURIComponent(JSON.stringify({
+                    "user": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": userId
+                    }
+                }));
+                
+                const response = await makeRequestWithMasterKey('GET', `classes/Avatar?where=${query}&order=-createdAt&limit=1`);
+                const result = await response.json();
+                
+                if (result.results && result.results.length > 0) {
+                    const avatar = result.results[0];
+                    const imageFile = avatar.image;
+                    
+                    if (imageFile && imageFile.url) {
+                        avatarElement.style.backgroundImage = `url('${imageFile.url}')`;
+                        avatarElement.textContent = '';
+                        return imageFile.url;
+                    }
+                }
+                
+                if (username) {
+                    avatarElement.textContent = username[0].toUpperCase();
+                    avatarElement.style.backgroundImage = 'none';
+                    avatarElement.style.backgroundColor = '#25d366';
+                }
+                return null;
+                
+            } catch (error) {
+                console.error('Error loading profile picture:', error);
+                if (username) {
+                    avatarElement.textContent = username[0].toUpperCase();
+                    avatarElement.style.backgroundImage = 'none';
+                    avatarElement.style.backgroundColor = '#25d366';
+                }
+                return null;
+            }
+        }
+        
+        // =============== ADMIN INITIALIZATION ===============
+        window.addEventListener('load', async function() {
+            console.log('🚀 Admin Panel initializing...');
+            
+            // Check login status
+            currentAdmin = Parse.User.current();
+            if (!currentAdmin) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Get current user info
+            await currentAdmin.fetch();
+            currentUserId = currentAdmin.id;
+            currentUsername = currentAdmin.get('username') || 'User';
+            
+            // Check if user is admin or super admin
+            const userRole = currentAdmin.get('role') || 'user';
+            currentAdminRole = userRole;
+            
+            // Check if user has admin privileges
+            const superAdminId = 'r29'; // Hardcoded super admin ID
+            
+            if (userRole === 'super-admin' || userRole === 'admin' || currentUserId === superAdminId) {
+                // User has admin access
+                if (currentUserId === superAdminId && userRole !== 'super-admin') {
+                    // Auto-promote r29 to super admin if not already
+                    await makeUserSuperAdmin(superAdminId);
+                }
+                
+                // Update UI with admin info
+                document.getElementById('adminUsername').textContent = currentUsername;
+                document.getElementById('adminRole').textContent = userRole === 'super-admin' ? 'Super Admin' : 'Admin';
+                document.getElementById('adminRole').className = `user-role ${userRole === 'super-admin' ? 'super-admin' : 'admin'}`;
+                
+                // Load admin avatar
+                await loadProfilePicture(currentUserId, document.getElementById('adminAvatar'), currentUsername);
+                
+                // Load dashboard data
+                await loadDashboardData();
+                
+                // Hide loading
+                document.getElementById('dashboardLoading').classList.add('hidden');
+                document.getElementById('recentActivity').classList.remove('hidden');
+                
+                console.log('✅ Admin Panel initialized');
+            } else {
+                // User doesn't have admin privileges
+                showNotification('Access Denied: Admin privileges required', 'error');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+            }
+        });
+        
+        async function makeUserSuperAdmin(userId) {
+            try {
+                // Update user role to super-admin
+                const updateData = {
+                    role: "super-admin"
+                };
+                
+                const response = await makeRequestWithMasterKey('PUT', `classes/_User/${userId}`, updateData);
+                
+                if (response.ok) {
+                    console.log('✅ User promoted to super admin');
+                    currentAdminRole = 'super-admin';
+                    document.getElementById('adminRole').textContent = 'Super Admin';
+                    document.getElementById('adminRole').className = 'user-role super-admin';
+                    
+                    // Update current user object
+                    currentAdmin.set('role', 'super-admin');
+                    await currentAdmin.save();
+                }
+            } catch (error) {
+                console.error('Error promoting to super admin:', error);
+            }
+        }
+        
+        // =============== TAB MANAGEMENT ===============
+        function switchAdminTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.admin-tab').forEach(btn => btn.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName + 'Content').classList.add('active');
+            
+            // Load appropriate data
+            switch(tabName) {
+                case 'dashboard':
+                    loadDashboardData();
+                    break;
+                case 'users':
+                    loadUsers();
+                    break;
+                case 'messages':
+                    loadGlobalMessages();
+                    break;
+                case 'system':
+                    loadSystemSettings();
+                    break;
+            }
+        }
+        
+        // =============== DASHBOARD FUNCTIONS ===============
+        async function loadDashboardData() {
+            try {
+                // Load all stats
+                await Promise.all([
+                    loadUserStats(),
+                    loadMessageStats(),
+                    loadGlobalMessageStats(),
+                    loadContactStats(),
+                    loadRecentActivity()
+                ]);
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+            }
+        }
+        
+        async function loadUserStats() {
+            try {
+                // Get total users count
+                const userResponse = await makeRequestWithMasterKey('GET', 'classes/_User?count=1&limit=0');
+                const userResult = await userResponse.json();
+                
+                // Get today's new users
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const todayISO = today.toISOString();
+                
+                const todayQuery = encodeURIComponent(JSON.stringify({
+                    "createdAt": {"$gte": {"__type": "Date", "iso": todayISO}}
+                }));
+                
+                const todayResponse = await makeRequestWithMasterKey('GET', `classes/_User?where=${todayQuery}&count=1&limit=0`);
+                const todayResult = await todayResponse.json();
+                
+                // Update UI
+                document.getElementById('totalUsers').textContent = userResult.count || 0;
+                document.getElementById('usersTrend').textContent = `+${todayResult.count || 0} today`;
+                
+            } catch (error) {
+                console.error('Error loading user stats:', error);
+            }
+        }
+        
+        async function loadMessageStats() {
+            try {
+                // Get total messages count
+                const messageResponse = await makeRequestWithMasterKey('GET', 'classes/Message?count=1&limit=0');
+                const messageResult = await messageResponse.json();
+                
+                // Get today's messages
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const todayISO = today.toISOString();
+                
+                const todayQuery = encodeURIComponent(JSON.stringify({
+                    "createdAt": {"$gte": {"__type": "Date", "iso": todayISO}}
+                }));
+                
+                const todayResponse = await makeRequestWithMasterKey('GET', `classes/Message?where=${todayQuery}&count=1&limit=0`);
+                const todayResult = await todayResponse.json();
+                
+                // Update UI
+                document.getElementById('totalMessages').textContent = messageResult.count || 0;
+                document.getElementById('messagesTrend').textContent = `+${todayResult.count || 0} today`;
+                
+            } catch (error) {
+                console.error('Error loading message stats:', error);
+            }
+        }
+        
+        async function loadGlobalMessageStats() {
+            try {
+                // Get total global messages count
+                const globalResponse = await makeRequestWithMasterKey('GET', 'classes/GlobalMessage?count=1&limit=0');
+                const globalResult = await globalResponse.json();
+                
+                // Get today's global messages
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const todayISO = today.toISOString();
+                
+                const todayQuery = encodeURIComponent(JSON.stringify({
+                    "createdAt": {"$gte": {"__type": "Date", "iso": todayISO}}
+                }));
+                
+                const todayResponse = await makeRequestWithMasterKey('GET', `classes/GlobalMessage?where=${todayQuery}&count=1&limit=0`);
+                const todayResult = await todayResponse.json();
+                
+                // Update UI
+                document.getElementById('totalGlobalMessages').textContent = globalResult.count || 0;
+                document.getElementById('globalTrend').textContent = `+${todayResult.count || 0} today`;
+                
+            } catch (error) {
+                console.error('Error loading global message stats:', error);
+            }
+        }
+        
+        async function loadContactStats() {
+            try {
+                // Get total contacts count
+                const contactResponse = await makeRequestWithMasterKey('GET', 'classes/Contact?count=1&limit=0');
+                const contactResult = await contactResponse.json();
+                
+                // Get today's contacts
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const todayISO = today.toISOString();
+                
+                const todayQuery = encodeURIComponent(JSON.stringify({
+                    "createdAt": {"$gte": {"__type": "Date", "iso": todayISO}}
+                }));
+                
+                const todayResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${todayQuery}&count=1&limit=0`);
+                const todayResult = await todayResponse.json();
+                
+                // Update UI
+                document.getElementById('totalContacts').textContent = contactResult.count || 0;
+                document.getElementById('contactsTrend').textContent = `+${todayResult.count || 0} today`;
+                
+            } catch (error) {
+                console.error('Error loading contact stats:', error);
+            }
+        }
+        
+        async function loadRecentActivity() {
+            try {
+                // Get recent global messages
+                const response = await makeRequestWithMasterKey('GET', 'classes/GlobalMessage?include=sender&order=-createdAt&limit=5');
+                const result = await response.json();
+                
+                const activityDiv = document.getElementById('recentActivity');
+                activityDiv.innerHTML = '';
+                
+                if (result.results && result.results.length > 0) {
+                    result.results.forEach(msg => {
+                        const sender = msg.sender;
+                        const senderName = sender ? sender.username : 'Unknown';
+                        const message = msg.message || '';
+                        const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        
+                        const activityItem = document.createElement('div');
+                        activityItem.className = 'message-item';
+                        activityItem.innerHTML = `
+                            <div class="message-content">
+                                <div class="message-sender">
+                                    <i class="fas fa-user-circle"></i> ${escapeHTML(senderName)}
+                                </div>
+                                <div class="message-text">${escapeHTML(message.substring(0, 100))}${message.length > 100 ? '...' : ''}</div>
+                                <div class="message-meta">
+                                    <span class="message-time">${time}</span>
+                                    <span><i class="fas fa-globe"></i> Global Chat</span>
+                                </div>
+                            </div>
+                            <div class="message-actions">
+                                <button class="message-btn delete" onclick="deleteMessagePrompt('${msg.objectId}', '${escapeHTML(senderName)}', '${escapeHTML(message.substring(0, 50))}')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        `;
+                        
+                        activityDiv.appendChild(activityItem);
+                    });
+                } else {
+                    activityDiv.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-comments"></i>
+                            <h3>No recent activity</h3>
+                            <p>No global messages have been sent yet.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading recent activity:', error);
+            }
+        }
+        
+        // =============== USER MANAGEMENT FUNCTIONS ===============
+        let currentUsers = [];
+        let totalUserPages = 1;
+        let userToDelete = null;
+        let userToChangeRole = null;
+        
+        async function loadUsers() {
+            try {
+                document.getElementById('usersLoading').classList.remove('hidden');
+                document.getElementById('usersList').classList.add('hidden');
+                document.getElementById('usersPagination').style.display = 'none';
+                document.getElementById('adminWarning').style.display = 'none';
+                
+                // Calculate skip for pagination
+                const skip = (userPage - 1) * usersPerPage;
+                
+                // Get users with pagination
+                const response = await makeRequestWithMasterKey('GET', `classes/_User?order=-createdAt&skip=${skip}&limit=${usersPerPage}`);
+                const result = await response.json();
+                
+                // Get total count for pagination
+                const countResponse = await makeRequestWithMasterKey('GET', 'classes/_User?count=1&limit=0');
+                const countResult = await countResponse.json();
+                
+                currentUsers = result.results || [];
+                totalUserPages = Math.ceil((countResult.count || 0) / usersPerPage);
+                
+                displayUsers(currentUsers);
+                
+                // Show warning if current user is not super-admin
+                if (currentAdminRole !== 'super-admin') {
+                    document.getElementById('adminWarning').style.display = 'block';
+                    document.getElementById('warningText').textContent = 
+                        'Note: As an administrator (not super-admin), you cannot promote users to admin or delete super-admins.';
+                }
+                
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showNotification('Failed to load users', 'error');
+            }
+        }
+        
+        function displayUsers(users) {
+            const usersList = document.getElementById('usersList');
+            usersList.innerHTML = '';
+            
+            if (users.length === 0) {
+                usersList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-user-slash"></i>
+                        <h3>No users found</h3>
+                        <p>No users are registered in the system.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            users.forEach(user => {
+                const userId = user.objectId;
+                const username = user.username || 'Unknown';
+                const email = user.email || 'No email';
+                const role = user.role || 'user';
+                const createdAt = new Date(user.createdAt);
+                const isCurrentUser = userId === currentUserId;
+                const isSuperAdmin = role === 'super-admin';
+                const isAdmin = role === 'admin';
+                
+                // Check permissions
+                const canDelete = currentAdminRole === 'super-admin' && !isCurrentUser && !isSuperAdmin;
+                const canPromote = currentAdminRole === 'super-admin' && !isCurrentUser && !isSuperAdmin;
+                const canDemote = currentAdminRole === 'super-admin' && !isCurrentUser && isAdmin;
+                
+                const userDiv = document.createElement('div');
+                userDiv.className = 'user-item';
+                
+                // Create avatar
+                const avatarDiv = document.createElement('div');
+                avatarDiv.className = 'user-avatar-large';
+                avatarDiv.id = `admin-user-avatar-${userId}`;
+                
+                // Load avatar asynchronously
+                loadProfilePicture(userId, avatarDiv, username);
+                
+                userDiv.innerHTML = `
+                    ${avatarDiv.outerHTML}
+                    <div class="user-details">
+                        <div class="user-name">
+                            ${escapeHTML(username)}
+                            ${isCurrentUser ? ' (You)' : ''}
+                        </div>
+                        <div class="user-email">${escapeHTML(email)}</div>
+                        <div class="user-meta">
+                            <span><i class="far fa-calendar"></i> Joined ${createdAt.toLocaleDateString()}</span>
+                            <span class="user-role-badge ${role}">${role.replace('-', ' ')}</span>
+                        </div>
+                    </div>
+                    <div class="user-actions">
+                        ${canPromote ? `
+                            <button class="action-btn promote" onclick="promoteUser('${userId}', '${escapeString(username)}')" title="Promote to Admin">
+                                <i class="fas fa-arrow-up"></i>
+                            </button>
+                        ` : ''}
+                        
+                        ${canDemote ? `
+                            <button class="action-btn demote" onclick="demoteUser('${userId}', '${escapeString(username)}')" title="Demote to User">
+                                <i class="fas fa-arrow-down"></i>
+                            </button>
+                        ` : ''}
+                        
+                        ${canDelete ? `
+                            <button class="action-btn delete" onclick="deleteUserPrompt('${userId}', '${escapeString(username)}')" title="Delete User">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+                
+                usersList.appendChild(userDiv);
+            });
+            
+            // Update pagination
+            updateUserPagination();
+            
+            // Show elements
+            document.getElementById('usersLoading').classList.add('hidden');
+            usersList.classList.remove('hidden');
+            document.getElementById('usersPagination').style.display = 'flex';
+        }
+        
+        function updateUserPagination() {
+            document.getElementById('pageInfo').textContent = `Page ${userPage} of ${totalUserPages}`;
+            document.getElementById('prevPage').disabled = userPage <= 1;
+            document.getElementById('nextPage').disabled = userPage >= totalUserPages;
+        }
+        
+        function changePage(direction) {
+            const newPage = userPage + direction;
+            if (newPage >= 1 && newPage <= totalUserPages) {
+                userPage = newPage;
+                loadUsers();
+            }
+        }
+        
+        function searchUsers() {
+            const searchTerm = document.getElementById('userSearch').value.toLowerCase();
+            
+            if (!searchTerm) {
+                displayUsers(currentUsers);
+                return;
+            }
+            
+            const filteredUsers = currentUsers.filter(user => {
+                const username = (user.username || '').toLowerCase();
+                const email = (user.email || '').toLowerCase();
+                return username.includes(searchTerm) || email.includes(searchTerm);
+            });
+            
+            displayUsers(filteredUsers);
+        }
+        
+        function promoteUser(userId, username) {
+            userToChangeRole = { userId, username, newRole: 'admin' };
+            document.getElementById('targetUserName').textContent = username;
+            document.getElementById('newUserRole').value = 'admin';
+            document.getElementById('roleModal').style.display = 'block';
+        }
+        
+        function demoteUser(userId, username) {
+            userToChangeRole = { userId, username, newRole: 'user' };
+            document.getElementById('targetUserName').textContent = username;
+            document.getElementById('newUserRole').value = 'user';
+            document.getElementById('roleModal').style.display = 'block';
+        }
+        
+        async function confirmRoleChange() {
+            if (!userToChangeRole) return;
+            
+            try {
+                const { userId, username, newRole } = userToChangeRole;
+                
+                // Prevent self-demotion if super-admin
+                if (userId === currentUserId && currentAdminRole === 'super-admin' && newRole !== 'super-admin') {
+                    showNotification('You cannot demote yourself from super-admin', 'error');
+                    return;
+                }
+                
+                // Update user role
+                const updateData = {
+                    role: newRole
+                };
+                
+                const response = await makeRequestWithMasterKey('PUT', `classes/_User/${userId}`, updateData);
+                
+                if (response.ok) {
+                    showNotification(`${username} role changed to ${newRole}`, 'success');
+                    closeRoleModal();
+                    await loadUsers(); // Refresh user list
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error changing role:', error);
+                showNotification('Failed to change role', 'error');
+            }
+        }
+        
+        function closeRoleModal() {
+            document.getElementById('roleModal').style.display = 'none';
+            userToChangeRole = null;
+        }
+        
+        function deleteUserPrompt(userId, username) {
+            userToDelete = { userId, username };
+            document.getElementById('deleteUserMessage').textContent = 
+                `Are you sure you want to delete user "${username}"? This action cannot be undone and will delete all their messages and contacts.`;
+            document.getElementById('deleteUserModal').style.display = 'block';
+        }
+        
+        async function confirmDeleteUser() {
+            if (!userToDelete) return;
+            
+            try {
+                const { userId, username } = userToDelete;
+                showNotification(`Deleting user ${username}...`, 'info');
+                
+                // Delete user
+                const response = await makeRequestWithMasterKey('DELETE', `classes/_User/${userId}`);
+                
+                if (response.ok) {
+                    showNotification(`User ${username} deleted successfully`, 'success');
+                    closeDeleteModal();
+                    await loadUsers(); // Refresh user list
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                showNotification('Failed to delete user', 'error');
+            }
+        }
+        
+        function closeDeleteModal() {
+            document.getElementById('deleteUserModal').style.display = 'none';
+            userToDelete = null;
+        }
+        
+        // =============== MESSAGE MANAGEMENT FUNCTIONS ===============
+        let currentMessages = [];
+        let totalMessagePages = 1;
+        let messageToDelete = null;
+        
+        async function loadGlobalMessages() {
+            try {
+                document.getElementById('messagesLoading').classList.remove('hidden');
+                document.getElementById('messagesList').classList.add('hidden');
+                document.getElementById('messagesPagination').style.display = 'none';
+                
+                // Calculate skip for pagination
+                const skip = (messagePage - 1) * messagesPerPage;
+                
+                // Get global messages with pagination
+                const response = await makeRequestWithMasterKey('GET', `classes/GlobalMessage?include=sender&order=-createdAt&skip=${skip}&limit=${messagesPerPage}`);
+                const result = await response.json();
+                
+                // Get total count for pagination
+                const countResponse = await makeRequestWithMasterKey('GET', 'classes/GlobalMessage?count=1&limit=0');
+                const countResult = await countResponse.json();
+                
+                currentMessages = result.results || [];
+                totalMessagePages = Math.ceil((countResult.count || 0) / messagesPerPage);
+                
+                displayMessages(currentMessages);
+                
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                showNotification('Failed to load messages', 'error');
+            }
+        }
+        
+        function displayMessages(messages) {
+            const messagesList = document.getElementById('messagesList');
+            messagesList.innerHTML = '';
+            
+            if (messages.length === 0) {
+                messagesList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-comments"></i>
+                        <h3>No messages found</h3>
+                        <p>No global messages have been sent yet.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            messages.forEach(msg => {
+                const sender = msg.sender;
+                const senderId = sender ? sender.objectId : null;
+                const senderName = sender ? sender.username : 'Unknown';
+                const messageText = msg.message || '';
+                const timestamp = new Date(msg.createdAt);
+                const timeString = timestamp.toLocaleString();
+                
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message-item';
+                
+                messageDiv.innerHTML = `
+                    <div class="message-content">
+                        <div class="message-sender">
+                            <i class="fas fa-user-circle"></i> ${escapeHTML(senderName)}
+                        </div>
+                        <div class="message-text">${escapeHTML(messageText)}</div>
+                        <div class="message-meta">
+                            <span class="message-time">${timeString}</span>
+                            <span><i class="fas fa-globe"></i> Global Chat</span>
+                        </div>
+                    </div>
+                    <div class="message-actions">
+                        <button class="message-btn delete" onclick="deleteMessagePrompt('${msg.objectId}', '${escapeString(senderName)}', '${escapeString(messageText.substring(0, 50))}')">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                `;
+                
+                messagesList.appendChild(messageDiv);
+            });
+            
+            // Update pagination
+            updateMessagePagination();
+            
+            // Show elements
+            document.getElementById('messagesLoading').classList.add('hidden');
+            messagesList.classList.remove('hidden');
+            document.getElementById('messagesPagination').style.display = 'flex';
+        }
+        
+        function updateMessagePagination() {
+            document.getElementById('messagePageInfo').textContent = `Page ${messagePage} of ${totalMessagePages}`;
+            document.getElementById('prevMessagePage').disabled = messagePage <= 1;
+            document.getElementById('nextMessagePage').disabled = messagePage >= totalMessagePages;
+        }
+        
+        function changeMessagePage(direction) {
+            const newPage = messagePage + direction;
+            if (newPage >= 1 && newPage <= totalMessagePages) {
+                messagePage = newPage;
+                loadGlobalMessages();
+            }
+        }
+        
+        function searchMessages() {
+            const searchTerm = document.getElementById('messageSearch').value.toLowerCase();
+            
+            if (!searchTerm) {
+                displayMessages(currentMessages);
+                return;
+            }
+            
+            const filteredMessages = currentMessages.filter(msg => {
+                const senderName = (msg.sender ? msg.sender.username || '' : '').toLowerCase();
+                const messageText = (msg.message || '').toLowerCase();
+                return messageText.includes(searchTerm) || senderName.includes(searchTerm);
+            });
+            
+            displayMessages(filteredMessages);
+        }
+        
+        function deleteMessagePrompt(messageId, senderName, messageText) {
+            messageToDelete = { messageId, senderName, messageText };
+            document.getElementById('deleteMessageText').textContent = 
+                `Are you sure you want to delete this message from "${senderName}"? \n\n"${messageText}"`;
+            document.getElementById('deleteMessageModal').style.display = 'block';
+        }
+        
+        async function confirmDeleteMessage() {
+            if (!messageToDelete) return;
+            
+            try {
+                const { messageId, senderName } = messageToDelete;
+                showNotification(`Deleting message from ${senderName}...`, 'info');
+                
+                // Delete message
+                const response = await makeRequestWithMasterKey('DELETE', `classes/GlobalMessage/${messageId}`);
+                
+                if (response.ok) {
+                    showNotification(`Message from ${senderName} deleted successfully`, 'success');
+                    closeDeleteMessageModal();
+                    await loadGlobalMessages(); // Refresh message list
+                    await loadDashboardData(); // Update stats
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting message:', error);
+                showNotification('Failed to delete message', 'error');
+            }
+        }
+        
+        function closeDeleteMessageModal() {
+            document.getElementById('deleteMessageModal').style.display = 'none';
+            messageToDelete = null;
+        }
+        
+        // =============== SYSTEM SETTINGS FUNCTIONS ===============
+        async function loadSystemSettings() {
+            try {
+                // Load settings from Settings class (create if doesn't exist)
+                const response = await makeRequestWithMasterKey('GET', 'classes/Settings?order=-createdAt&limit=1');
+                const result = await response.json();
+                
+                let settings = {};
+                if (result.results && result.results.length > 0) {
+                    settings = result.results[0];
+                }
+                
+                // Set form values
+                document.getElementById('maintenanceMode').value = settings.maintenanceMode || 'false';
+                document.getElementById('registrationStatus').value = settings.registrationStatus || 'open';
+                document.getElementById('messageModeration').value = settings.messageModeration || 'none';
+                
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+        
+        async function saveSettings() {
+            try {
+                showNotification('Saving settings...', 'info');
+                
+                // Get current settings
+                const response = await makeRequestWithMasterKey('GET', 'classes/Settings?order=-createdAt&limit=1');
+                const result = await response.json();
+                
+                const settingsData = {
+                    maintenanceMode: document.getElementById('maintenanceMode').value === 'true',
+                    registrationStatus: document.getElementById('registrationStatus').value,
+                    messageModeration: document.getElementById('messageModeration').value,
+                    updatedBy: {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUserId
+                    },
+                    updatedByUsername: currentUsername
+                };
+                
+                let saveResponse;
+                if (result.results && result.results.length > 0) {
+                    // Update existing settings
+                    const settingsId = result.results[0].objectId;
+                    saveResponse = await makeRequestWithMasterKey('PUT', `classes/Settings/${settingsId}`, settingsData);
+                } else {
+                    // Create new settings
+                    saveResponse = await makeRequestWithMasterKey('POST', 'classes/Settings', settingsData);
+                }
+                
+                if (saveResponse.ok) {
+                    showNotification('Settings saved successfully', 'success');
+                } else {
+                    const error = await saveResponse.json();
+                    showNotification(`Failed: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                showNotification('Failed to save settings', 'error');
+            }
+        }
+        
+        function resetSettings() {
+            document.getElementById('maintenanceMode').value = 'false';
+            document.getElementById('registrationStatus').value = 'open';
+            document.getElementById('messageModeration').value = 'none';
+            showNotification('Settings reset to defaults', 'info');
+        }
+        
+        // =============== UTILITY FUNCTIONS ===============
+        function goToChat() {
+            window.location.href = 'index.html';
+        }
+        
+        function escapeString(text) {
+            return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+    </script>
+</body>
+</html>
