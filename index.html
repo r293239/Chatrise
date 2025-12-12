@@ -1086,7 +1086,8 @@
                     <button class="action-btn" onclick="showUsersModal()" title="Find People">
                         <i class="fas fa-user-plus"></i>
                     </button>
-                    <button class="action-btn" onclick="checkAndOpenAdminPanel()" title="Admin Panel">
+                    <!-- Admin Panel button - will be shown/hidden based on user role -->
+                    <button class="action-btn" onclick="checkAndOpenAdminPanel()" title="Admin Panel" id="adminPanelBtn" style="display: none;">
                         <i class="fas fa-shield-alt"></i>
                     </button>
                     <button class="action-btn" onclick="refreshAll()" title="Refresh">
@@ -1390,12 +1391,13 @@
                     await currentUser.fetch();
                     
                     // Update username display
-                    document.getElementById('username-display').textContent = currentUser.get('username') || 'User';
+                    const username = currentUser.get('username') || 'User';
+                    document.getElementById('username-display').textContent = username;
                     
                     // Update avatar from Avatar class
                     await loadUserProfilePicture();
                     
-                    console.log('✅ User loaded:', currentUser.get('username'));
+                    console.log('✅ User loaded:', username);
                 }
             } catch (error) {
                 console.error('Error loading user data:', error);
@@ -1416,6 +1418,63 @@
                 },
                 body: method !== 'GET' ? JSON.stringify(data) : undefined
             });
+        }
+
+        // =============== ADMIN BUTTON VISIBILITY ===============
+        async function checkAndShowAdminButton() {
+            try {
+                const currentUser = Parse.User.current();
+                if (!currentUser) return;
+                
+                await currentUser.fetch();
+                const userId = currentUser.id;
+                const userRole = currentUser.get('role') || 'user';
+                
+                // Check if user is admin or super admin (or is user rk9MDUV7li)
+                if (userId === SUPER_ADMIN_ID || userRole === 'admin' || userRole === 'super-admin') {
+                    // Show admin panel button
+                    document.getElementById('adminPanelBtn').style.display = 'flex';
+                    
+                    // Add admin badge to username if super admin
+                    if (userId === SUPER_ADMIN_ID || userRole === 'super-admin') {
+                        const usernameDisplay = document.getElementById('username-display');
+                        const currentName = usernameDisplay.textContent;
+                        usernameDisplay.innerHTML = `${currentName} <span style="font-size: 10px; background: #ff4757; color: white; padding: 2px 6px; border-radius: 10px; margin-left: 5px;">ADMIN</span>`;
+                    } else if (userRole === 'admin') {
+                        const usernameDisplay = document.getElementById('username-display');
+                        const currentName = usernameDisplay.textContent;
+                        usernameDisplay.innerHTML = `${currentName} <span style="font-size: 10px; background: #ffa502; color: white; padding: 2px 6px; border-radius: 10px; margin-left: 5px;">MOD</span>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+            }
+        }
+
+        // =============== ADMIN PANEL FUNCTION ===============
+        async function checkAndOpenAdminPanel() {
+            try {
+                const currentUser = Parse.User.current();
+                if (!currentUser) {
+                    showNotification('Please login first', 'error');
+                    return;
+                }
+                
+                await currentUser.fetch();
+                const userId = currentUser.id;
+                const userRole = currentUser.get('role') || 'user';
+                
+                // Check if user is admin or super admin (or is user rk9MDUV7li)
+                if (userId === SUPER_ADMIN_ID || userRole === 'admin' || userRole === 'super-admin') {
+                    window.location.href = 'admin-panel.html';
+                } else {
+                    // This shouldn't happen since button is hidden, but just in case
+                    showNotification('Admin privileges required', 'error');
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+                showNotification('Unable to verify admin status', 'error');
+            }
         }
 
         // =============== CONTACT FUNCTIONS ===============
@@ -1768,31 +1827,6 @@
             } catch (error) {
                 console.log('No received requests:', error);
                 return [];
-            }
-        }
-
-        // =============== ADMIN PANEL FUNCTION ===============
-        async function checkAndOpenAdminPanel() {
-            try {
-                const currentUser = Parse.User.current();
-                if (!currentUser) {
-                    showNotification('Please login first', 'error');
-                    return;
-                }
-                
-                await currentUser.fetch();
-                const userId = currentUser.id;
-                const userRole = currentUser.get('role') || 'user';
-                
-                // Check if user is admin or super admin (or is user rk9MDUV7li)
-                if (userId === SUPER_ADMIN_ID || userRole === 'admin' || userRole === 'super-admin') {
-                    window.location.href = 'admin-panel.html';
-                } else {
-                    showNotification('Admin privileges required', 'error');
-                }
-            } catch (error) {
-                console.error('Error checking admin status:', error);
-                showNotification('Unable to verify admin status', 'error');
             }
         }
 
@@ -2306,12 +2340,18 @@
                 return;
             }
             
-            const sendBtn = document.getElementById('sendBtn');
-            sendBtn.disabled = true;
-            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            if (!Parse.User.current()) {
+                window.location.href = 'login.html';
+                return;
+            }
             
             try {
                 const currentUser = Parse.User.current();
+                
+                // Disable send button and show loading
+                const sendBtn = document.getElementById('sendBtn');
+                sendBtn.disabled = true;
+                sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
                 
                 if (isGlobalChat) {
                     // Send global message
@@ -2322,25 +2362,33 @@
                             "objectId": currentUser.id
                         },
                         message: message,
-                        senderName: currentUser.get('username') || 'User'
+                        senderName: currentUser.get('username') || 'User',
+                        createdAt: {
+                            "__type": "Date",
+                            "iso": new Date().toISOString()
+                        }
                     };
                     
                     const response = await makeRequestWithMasterKey('POST', 'classes/GlobalMessage', messageData);
                     
                     if (response.ok) {
+                        // Clear input
                         input.value = '';
-                        adjustTextareaHeight(input);
+                        input.style.height = 'auto';
+                        
+                        // Reload messages
                         await loadGlobalMessages();
                         
+                        // Scroll to bottom
                         const container = document.getElementById('messagesContainer');
                         setTimeout(() => {
                             container.scrollTop = container.scrollHeight;
                         }, 100);
                         
-                        showNotification('Message sent to global chat! ✓', 'success', 2000);
+                        console.log('✅ Global message sent');
                     } else {
                         const error = await response.json();
-                        showNotification('Failed to send: ' + error.error, 'error');
+                        throw new Error(error.error || 'Failed to send message');
                     }
                 } else {
                     // Send private message
@@ -2356,155 +2404,238 @@
                             "objectId": currentChatId
                         },
                         message: message,
-                        senderName: currentUser.get('username') || 'User',
-                        receiverName: currentChatName
+                        createdAt: {
+                            "__type": "Date",
+                            "iso": new Date().toISOString()
+                        }
                     };
                     
                     const response = await makeRequestWithMasterKey('POST', 'classes/Message', messageData);
                     
                     if (response.ok) {
+                        // Clear input
                         input.value = '';
-                        adjustTextareaHeight(input);
+                        input.style.height = 'auto';
+                        
+                        // Reload messages
                         await loadMessages(true);
-                        showNotification('Message sent! ✓', 'success', 2000);
+                        
+                        console.log('✅ Private message sent');
                     } else {
                         const error = await response.json();
-                        showNotification('Failed to send: ' + error.error, 'error');
+                        throw new Error(error.error || 'Failed to send message');
                     }
                 }
+                
             } catch (error) {
-                console.error('Error sending message:', error);
-                showNotification('Error: ' + error.message, 'error');
+                console.error('❌ Error sending message:', error);
+                showNotification(`Failed to send message: ${error.message}`, 'error');
+            } finally {
+                // Re-enable send button
+                const sendBtn = document.getElementById('sendBtn');
+                sendBtn.disabled = input.value.trim() === '';
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                sendBtn.style.background = input.value.trim() ? '#25d366' : '#ccc';
             }
-            
-            sendBtn.disabled = false;
-            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
-            input.focus();
         }
         
-        // =============== DATA LOADING FUNCTIONS ===============
-        // Load chats
+        // Handle Enter key press
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+            setTimeout(() => adjustTextareaHeight(event.target), 0);
+        }
+        
+        // =============== CHATS TAB FUNCTIONS ===============
         async function loadChats() {
+            const chatsContent = document.getElementById('chatsContent');
+            
             try {
-                const chatsContent = document.getElementById('chatsContent');
-                const globalChat = document.getElementById('globalChatItem');
-                const loading = document.getElementById('chatsLoading');
-                
-                // Clear existing content but keep global chat
-                chatsContent.innerHTML = '';
-                chatsContent.appendChild(globalChat);
-                
-                // Get recent conversations from messages
                 const currentUser = Parse.User.current();
-                const query = encodeURIComponent(JSON.stringify({
-                    "$or": [
-                        {
-                            "sender": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": currentUser.id
-                            }
-                        },
-                        {
-                            "receiver": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": currentUser.id
-                            }
-                        }
-                    ]
+                if (!currentUser) {
+                    chatsContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Not logged in</h3>
+                            <p>Please refresh the page</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Get user's contacts
+                const contactsQuery = encodeURIComponent(JSON.stringify({
+                    "fromUser": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUser.id
+                    },
+                    "status": "accepted"
                 }));
                 
-                const response = await makeRequestWithMasterKey('GET', `classes/Message?where=${query}&include=sender,receiver&order=-createdAt&limit=50`);
-                const result = await response.json();
+                const contactsResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${contactsQuery}&include=toUser`);
+                const contactsResult = await contactsResponse.json();
                 
-                if (result.results && result.results.length > 0) {
-                    // Group messages by chat partner
-                    const chatMap = new Map();
+                // Show chats loading
+                chatsContent.innerHTML = `
+                    <div class="global-chat-item" onclick="selectGlobalChat()" id="globalChatItem">
+                        <div class="global-avatar">
+                            <i class="fas fa-globe"></i>
+                        </div>
+                        <div class="chat-info">
+                            <div class="chat-name">🌍 Global Chat</div>
+                            <div class="chat-preview">Join the worldwide conversation</div>
+                        </div>
+                        <div class="chat-time">
+                            <span id="globalUserCount">0</span> online
+                        </div>
+                    </div>
+                    <div class="loading" id="chatsLoading">
+                        <div class="spinner"></div>
+                        Loading chats...
+                    </div>
+                `;
+                
+                if (!contactsResult.results || contactsResult.results.length === 0) {
+                    document.getElementById('chatsLoading').innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-comments"></i>
+                            <h3>No chats yet</h3>
+                            <p>Add contacts to start chatting!</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Get last messages for each contact
+                const contactChats = [];
+                
+                for (const contact of contactsResult.results) {
+                    const userId = contact.toUser.objectId;
+                    const username = contact.toUsername || contact.toUser.username || 'User';
                     
-                    result.results.forEach(msg => {
-                        const sender = msg.sender;
-                        const receiver = msg.receiver;
-                        
-                        let chatPartner;
-                        if (sender.objectId === currentUser.id) {
-                            chatPartner = receiver;
-                        } else {
-                            chatPartner = sender;
-                        }
-                        
-                        if (!chatPartner) return;
-                        
-                        if (!chatMap.has(chatPartner.objectId)) {
-                            chatMap.set(chatPartner.objectId, {
-                                id: chatPartner.objectId,
-                                name: chatPartner.username || 'Unknown',
-                                lastMessage: msg.message,
-                                timestamp: msg.createdAt,
-                                unread: 0
-                            });
-                        }
-                    });
+                    // Get last message between users
+                    const messageQuery = encodeURIComponent(JSON.stringify({
+                        "$or": [
+                            {
+                                "sender": {
+                                    "__type": "Pointer",
+                                    "className": "_User",
+                                    "objectId": currentUser.id
+                                },
+                                "receiver": {
+                                    "__type": "Pointer",
+                                    "className": "_User",
+                                    "objectId": userId
+                                }
+                            },
+                            {
+                                "sender": {
+                                    "__type": "Pointer",
+                                    "className": "_User",
+                                    "objectId": userId
+                                },
+                                "receiver": {
+                                    "__type": "Pointer",
+                                    "className": "_User",
+                                    "objectId": currentUser.id
+                                }
+                            }
+                        ]
+                    }));
                     
-                    // Display chats
-                    const chats = Array.from(chatMap.values());
-                    chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    const messagesResponse = await makeRequestWithMasterKey('GET', `classes/Message?where=${messageQuery}&order=-createdAt&limit=1`);
+                    const messagesResult = await messagesResponse.json();
                     
-                    for (const chat of chats) {
-                        const chatDiv = document.createElement('div');
-                        chatDiv.className = 'chat-item';
-                        if (currentChatId === chat.id) {
-                            chatDiv.classList.add('active');
-                        }
-                        chatDiv.onclick = () => selectChat(chat.id, chat.name);
-                        
-                        // Create avatar div
-                        const avatarDiv = document.createElement('div');
-                        avatarDiv.className = 'chat-avatar';
-                        avatarDiv.id = `chat-avatar-${chat.id}`;
-                        
-                        // Load avatar
-                        await loadProfilePicture(chat.id, avatarDiv, chat.name);
-                        
-                        chatDiv.innerHTML = `
-                            ${avatarDiv.outerHTML}
-                            <div class="chat-info">
-                                <div class="chat-name">${escapeHTML(chat.name)}</div>
-                                <div class="chat-preview">${chat.lastMessage ? escapeHTML(chat.lastMessage.substring(0, 30)) + (chat.lastMessage.length > 30 ? '...' : '') : 'No messages yet'}</div>
-                            </div>
-                            <div class="chat-time">${formatTime(chat.timestamp)}</div>
-                        `;
-                        
-                        chatsContent.appendChild(chatDiv);
+                    let lastMessage = "No messages yet";
+                    let lastMessageTime = contact.createdAt;
+                    
+                    if (messagesResult.results && messagesResult.results.length > 0) {
+                        const msg = messagesResult.results[0];
+                        lastMessage = msg.message || "No messages yet";
+                        lastMessageTime = msg.createdAt;
                     }
                     
-                    loading.style.display = 'none';
-                } else {
-                    // Show empty state if no chats
-                    const emptyDiv = document.createElement('div');
-                    emptyDiv.className = 'empty-state';
-                    emptyDiv.innerHTML = `
-                        <i class="fas fa-comments"></i>
-                        <h3>No chats yet</h3>
-                        <p>Start a conversation with your contacts or join the global chat!</p>
-                    `;
-                    chatsContent.appendChild(emptyDiv);
-                    loading.style.display = 'none';
+                    contactChats.push({
+                        userId,
+                        username,
+                        lastMessage,
+                        lastMessageTime
+                    });
                 }
+                
+                // Sort by last message time
+                contactChats.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+                
+                // Display chats
+                let chatsHTML = '';
+                
+                // Global chat is already added at the top
+                
+                // Add contact chats
+                for (const chat of contactChats) {
+                    const avatarDiv = document.createElement('div');
+                    avatarDiv.className = 'chat-avatar';
+                    avatarDiv.id = `chat-avatar-${chat.userId}`;
+                    
+                    // Load avatar asynchronously
+                    loadProfilePicture(chat.userId, avatarDiv, chat.username);
+                    
+                    chatsHTML += `
+                        <div class="chat-item" onclick="selectChat('${chat.userId}', '${escapeString(chat.username)}')" id="chat-${chat.userId}">
+                            ${avatarDiv.outerHTML}
+                            <div class="chat-info">
+                                <div class="chat-name">${escapeHTML(chat.username)}</div>
+                                <div class="chat-preview">${escapeHTML(chat.lastMessage.substring(0, 50))}${chat.lastMessage.length > 50 ? '...' : ''}</div>
+                            </div>
+                            <div class="chat-time">${formatTime(chat.lastMessageTime)}</div>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('chatsLoading').remove();
+                chatsContent.insertAdjacentHTML('beforeend', chatsHTML);
+                
+                // Mark active chat if any
+                if (currentChatId && currentChatId !== 'global') {
+                    const activeChat = document.getElementById(`chat-${currentChatId}`);
+                    if (activeChat) {
+                        activeChat.classList.add('active');
+                    }
+                }
+                
             } catch (error) {
                 console.error('Error loading chats:', error);
+                document.getElementById('chatsLoading').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Error loading chats</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
             }
         }
         
-        // Load contacts
+        // =============== CONTACTS TAB FUNCTIONS ===============
         async function loadContacts() {
+            const contactsContent = document.getElementById('contactsContent');
+            
             try {
-                const contactsContent = document.getElementById('contactsContent');
-                const loading = document.getElementById('contactsLoading');
-                
-                contactsContent.innerHTML = '<div class="loading"><div class="spinner"></div>Loading contacts...</div>';
-                
                 const currentUser = Parse.User.current();
+                if (!currentUser) {
+                    contactsContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Not logged in</h3>
+                            <p>Please refresh the page</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Get accepted contacts
                 const query = encodeURIComponent(JSON.stringify({
                     "fromUser": {
                         "__type": "Pointer",
@@ -2517,56 +2648,68 @@
                 const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}&include=toUser`);
                 const result = await response.json();
                 
-                if (result.results && result.results.length > 0) {
-                    contactsContent.innerHTML = '';
-                    
-                    for (const contact of result.results) {
-                        const toUser = contact.toUser;
-                        if (!toUser) continue;
-                        
-                        const username = toUser.username || 'Unknown';
-                        const userId = toUser.objectId;
-                        
-                        const contactDiv = document.createElement('div');
-                        contactDiv.className = 'contact-item';
-                        
-                        // Create avatar div
-                        const avatarDiv = document.createElement('div');
-                        avatarDiv.className = 'contact-avatar';
-                        avatarDiv.id = `contact-avatar-${userId}`;
-                        
-                        // Load avatar
-                        await loadProfilePicture(userId, avatarDiv, username);
-                        
-                        contactDiv.innerHTML = `
-                            ${avatarDiv.outerHTML}
-                            <div class="contact-info">
-                                <div class="contact-name">${escapeHTML(username)}</div>
-                                <div class="contact-status">
-                                    Contact
-                                </div>
-                            </div>
-                            <div class="contact-actions">
-                                <button class="contact-btn message" onclick="startChat('${userId}', '${escapeString(username)}')" title="Message">
-                                    <i class="fas fa-comment"></i>
-                                </button>
-                                <button class="contact-btn remove" onclick="removeContact('${userId}', '${escapeString(username)}')" title="Remove Contact">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        `;
-                        
-                        contactsContent.appendChild(contactDiv);
-                    }
-                } else {
+                if (!result.results || result.results.length === 0) {
                     contactsContent.innerHTML = `
                         <div class="empty-state">
-                            <i class="fas fa-users"></i>
+                            <i class="fas fa-user-friends"></i>
                             <h3>No contacts yet</h3>
                             <p>Add friends to start chatting!</p>
                         </div>
                     `;
+                    return;
                 }
+                
+                contactsContent.innerHTML = '';
+                
+                // Load avatars and display contacts
+                const avatarPromises = result.results.map(async (contact) => {
+                    const userId = contact.toUser.objectId;
+                    const username = contact.toUsername || contact.toUser.username || 'User';
+                    
+                    const avatarDiv = document.createElement('div');
+                    avatarDiv.className = 'contact-avatar';
+                    avatarDiv.id = `contact-avatar-${userId}`;
+                    
+                    const avatarUrl = await loadProfilePicture(userId, avatarDiv, username);
+                    
+                    return {
+                        userId,
+                        username,
+                        avatarDiv,
+                        avatarUrl,
+                        contactDate: contact.createdAt
+                    };
+                });
+                
+                const contactsWithAvatars = await Promise.all(avatarPromises);
+                
+                // Sort by username
+                contactsWithAvatars.sort((a, b) => a.username.localeCompare(b.username));
+                
+                // Display contacts
+                contactsWithAvatars.forEach(({ userId, username, avatarDiv, avatarUrl, contactDate }) => {
+                    const contactDiv = document.createElement('div');
+                    contactDiv.className = 'contact-item';
+                    
+                    contactDiv.innerHTML = `
+                        ${avatarDiv.outerHTML}
+                        <div class="contact-info">
+                            <div class="contact-name">${escapeHTML(username)}</div>
+                            <div class="contact-status online">Online</div>
+                        </div>
+                        <div class="contact-actions">
+                            <button class="contact-btn message" onclick="startChat('${userId}', '${escapeString(username)}')" title="Message">
+                                <i class="fas fa-comment"></i>
+                            </button>
+                            <button class="contact-btn remove" onclick="removeContact('${userId}', '${escapeString(username)}')" title="Remove Contact">
+                                <i class="fas fa-user-times"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    contactsContent.appendChild(contactDiv);
+                });
+                
             } catch (error) {
                 console.error('Error loading contacts:', error);
                 contactsContent.innerHTML = `
@@ -2579,16 +2722,24 @@
             }
         }
         
-        // Load requests
+        // =============== REQUESTS TAB FUNCTIONS ===============
         async function loadRequests() {
+            const requestsContent = document.getElementById('requestsContent');
+            
             try {
-                const requestsContent = document.getElementById('requestsContent');
-                const loading = document.getElementById('requestsLoading');
-                const requestsBadge = document.getElementById('requestsBadge');
-                
-                requestsContent.innerHTML = '<div class="loading"><div class="spinner"></div>Loading requests...</div>';
-                
                 const currentUser = Parse.User.current();
+                if (!currentUser) {
+                    requestsContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Not logged in</h3>
+                            <p>Please refresh the page</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Get received requests
                 const query = encodeURIComponent(JSON.stringify({
                     "toUser": {
                         "__type": "Pointer",
@@ -2601,61 +2752,77 @@
                 const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}&include=fromUser`);
                 const result = await response.json();
                 
-                if (result.results && result.results.length > 0) {
-                    requestsContent.innerHTML = '';
-                    
-                    // Update badge
-                    requestsBadge.textContent = result.results.length;
-                    requestsBadge.classList.remove('hidden');
-                    
-                    for (const contact of result.results) {
-                        const fromUser = contact.fromUser;
-                        if (!fromUser) continue;
-                        
-                        const username = fromUser.username || 'Unknown';
-                        const userId = fromUser.objectId;
-                        
-                        const requestDiv = document.createElement('div');
-                        requestDiv.className = 'contact-item';
-                        
-                        // Create avatar div
-                        const avatarDiv = document.createElement('div');
-                        avatarDiv.className = 'contact-avatar';
-                        avatarDiv.id = `request-avatar-${userId}`;
-                        
-                        // Load avatar
-                        await loadProfilePicture(userId, avatarDiv, username);
-                        
-                        requestDiv.innerHTML = `
-                            ${avatarDiv.outerHTML}
-                            <div class="contact-info">
-                                <div class="contact-name">${escapeHTML(username)}</div>
-                                <div class="contact-status">
-                                    Wants to connect
-                                </div>
-                            </div>
-                            <div class="contact-actions">
-                                <button class="contact-btn accept" onclick="acceptRequest('${userId}', '${escapeString(username)}')" title="Accept">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                                <button class="contact-btn reject" onclick="rejectRequest('${userId}', '${escapeString(username)}')" title="Reject">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        `;
-                        
-                        requestsContent.appendChild(requestDiv);
-                    }
-                } else {
+                if (!result.results || result.results.length === 0) {
                     requestsContent.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-user-plus"></i>
                             <h3>No pending requests</h3>
-                            <p>When someone sends you a request, it will appear here</p>
+                            <p>All caught up!</p>
                         </div>
                     `;
-                    requestsBadge.classList.add('hidden');
+                    
+                    // Update badge
+                    document.getElementById('requestsBadge').classList.add('hidden');
+                    document.getElementById('requestsBadge').textContent = '0';
+                    return;
                 }
+                
+                requestsContent.innerHTML = '';
+                
+                // Update badge
+                const requestsBadge = document.getElementById('requestsBadge');
+                requestsBadge.classList.remove('hidden');
+                requestsBadge.textContent = result.results.length;
+                
+                // Load avatars and display requests
+                const avatarPromises = result.results.map(async (contact) => {
+                    const userId = contact.fromUser.objectId;
+                    const username = contact.fromUsername || contact.fromUser.username || 'User';
+                    
+                    const avatarDiv = document.createElement('div');
+                    avatarDiv.className = 'contact-avatar';
+                    avatarDiv.id = `request-avatar-${userId}`;
+                    
+                    const avatarUrl = await loadProfilePicture(userId, avatarDiv, username);
+                    
+                    return {
+                        userId,
+                        username,
+                        avatarDiv,
+                        avatarUrl,
+                        requestDate: contact.createdAt
+                    };
+                });
+                
+                const requestsWithAvatars = await Promise.all(avatarPromises);
+                
+                // Sort by request date (newest first)
+                requestsWithAvatars.sort((a, b) => new Date(b.requestDate) - new Date(a.requestDate));
+                
+                // Display requests
+                requestsWithAvatars.forEach(({ userId, username, avatarDiv, avatarUrl, requestDate }) => {
+                    const requestDiv = document.createElement('div');
+                    requestDiv.className = 'contact-item';
+                    
+                    requestDiv.innerHTML = `
+                        ${avatarDiv.outerHTML}
+                        <div class="contact-info">
+                            <div class="contact-name">${escapeHTML(username)}</div>
+                            <div class="contact-status">Wants to connect</div>
+                        </div>
+                        <div class="contact-actions">
+                            <button class="contact-btn accept" onclick="acceptRequest('${userId}', '${escapeString(username)}')" title="Accept">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="contact-btn reject" onclick="cancelRequest('${userId}', '${escapeString(username)}')" title="Reject">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    requestsContent.appendChild(requestDiv);
+                });
+                
             } catch (error) {
                 console.error('Error loading requests:', error);
                 requestsContent.innerHTML = `
@@ -2668,147 +2835,186 @@
             }
         }
         
-        async function rejectRequest(userId, username) {
-            if (confirm(`Reject contact request from ${username}?`)) {
-                try {
-                    showNotification('Rejecting request...', 'info');
-                    
-                    const currentUser = Parse.User.current();
-                    const query = encodeURIComponent(JSON.stringify({
-                        "fromUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": userId
-                        },
-                        "toUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentUser.id
-                        },
-                        "status": "pending"
-                    }));
-                    
-                    const findResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
-                    const findResult = await findResponse.json();
-                    
-                    if (findResult.results && findResult.results.length > 0) {
-                        const contactId = findResult.results[0].objectId;
-                        
-                        const deleteResponse = await makeRequestWithMasterKey('DELETE', `classes/Contact/${contactId}`);
-                        
-                        if (deleteResponse.ok) {
-                            showNotification(`Request from ${username} rejected`, 'info');
-                            await loadRequests();
-                        } else {
-                            const error = await deleteResponse.json();
-                            showNotification('Failed to reject request', 'error');
-                        }
+        // =============== ONLINE USERS COUNT ===============
+        async function updateOnlineUsersCount() {
+            try {
+                // Count all users (simplified - in production you'd track online status)
+                const response = await makeRequestWithMasterKey('GET', 'classes/_User?count=1&limit=0');
+                const result = await response.json();
+                
+                const count = result.count || 0;
+                document.getElementById('globalUserCount').textContent = count;
+                
+            } catch (error) {
+                console.error('Error updating online count:', error);
+            }
+        }
+        
+        // =============== SEARCH FUNCTION ===============
+        function searchContent() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            
+            if (!searchTerm) {
+                // Show all items
+                document.querySelectorAll('.chat-item, .contact-item, .global-chat-item').forEach(item => {
+                    item.style.display = 'flex';
+                });
+                return;
+            }
+            
+            // Search in current tab
+            const currentTabContent = document.getElementById(currentTab + 'Content');
+            const items = currentTabContent.querySelectorAll('.chat-item, .contact-item, .global-chat-item');
+            
+            items.forEach(item => {
+                const nameElement = item.querySelector('.chat-name, .contact-name');
+                if (nameElement) {
+                    const name = nameElement.textContent.toLowerCase();
+                    if (name.includes(searchTerm)) {
+                        item.style.display = 'flex';
                     } else {
-                        showNotification('Request not found', 'error');
+                        item.style.display = 'none';
                     }
-                    
-                } catch (error) {
-                    console.error('Error rejecting request:', error);
-                    showNotification('Failed to reject request', 'error');
+                }
+            });
+        }
+        
+        // =============== REFRESH FUNCTIONS ===============
+        async function refreshMessages() {
+            if (!currentChatId) {
+                showNotification('No chat selected', 'info');
+                return;
+            }
+            
+            showNotification('Refreshing messages...', 'info');
+            
+            if (isGlobalChat) {
+                await loadGlobalMessages();
+            } else {
+                await loadMessages(true);
+            }
+            
+            showNotification('Messages refreshed', 'success');
+        }
+        
+        async function refreshAll() {
+            showNotification('Refreshing...', 'info');
+            
+            // Update user data
+            await loadUserData();
+            
+            // Refresh current tab
+            switch(currentTab) {
+                case 'chats':
+                    await loadChats();
+                    break;
+                case 'contacts':
+                    await loadContacts();
+                    break;
+                case 'requests':
+                    await loadRequests();
+                    break;
+            }
+            
+            // Refresh messages if in a chat
+            if (currentChatId) {
+                if (isGlobalChat) {
+                    await loadGlobalMessages();
+                } else {
+                    await loadMessages(true);
                 }
             }
+            
+            showNotification('All data refreshed', 'success');
         }
         
-        // =============== UTILITY FUNCTIONS ===============
-        function handleKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
-        
+        // =============== MOBILE FUNCTIONS ===============
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('show');
         }
         
-        function refreshMessages() {
-            if (currentChatId) {
-                if (isGlobalChat) {
-                    loadGlobalMessages();
-                } else {
-                    loadMessages(true);
-                }
-                showNotification('Messages refreshed', 'info', 2000);
-            }
-        }
-        
-        function refreshAll() {
-            loadAllData();
-            if (currentChatId) {
-                refreshMessages();
-            }
-            showNotification('All data refreshed', 'success', 2000);
-        }
-        
-        function searchContent() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const currentContent = document.getElementById(currentTab + 'Content');
-            
-            const items = currentContent.querySelectorAll('.chat-item, .contact-item, .user-result');
-            items.forEach(item => {
-                const text = item.textContent.toLowerCase();
-                item.style.display = text.includes(searchTerm) ? 'flex' : 'none';
-            });
-        }
-        
-        async function updateOnlineUsersCount() {
-            try {
-                // Get approximate online users by checking recently active users
-                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-                const query = encodeURIComponent(JSON.stringify({
-                    "updatedAt": {"$gte": {"__type": "Date", "iso": fiveMinutesAgo}}
-                }));
-                
-                const response = await makeRequestWithMasterKey('GET', `classes/_User?where=${query}&count=1`);
-                const result = await response.json();
-                
-                if (result.count) {
-                    document.getElementById('globalUserCount').textContent = result.count;
-                }
-            } catch (error) {
-                console.log('Error updating online count:', error);
-            }
-        }
-        
-        function logout() {
-            if (confirm('Are you sure you want to logout?')) {
-                Parse.User.logOut().then(() => {
-                    window.location.href = 'login.html';
-                });
-            }
-        }
-        
         // =============== INITIALIZATION ===============
-        window.addEventListener('load', async function() {
-            console.log('🚀 ChatRise initializing...');
+        async function initializeApp() {
+            console.log('🚀 Initializing ChatRise Messenger...');
             
-            // Check login status
-            if (!Parse.User.current()) {
-                console.log('🔐 Not logged in, redirecting...');
+            // Check if user is logged in
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                console.log('❌ No user logged in, redirecting to login...');
                 window.location.href = 'login.html';
                 return;
             }
             
-            // Load user data with profile picture
-            await loadUserData();
+            console.log('✅ User is logged in:', currentUser.get('username'));
             
-            // Initialize input handler
+            // Load initial data
+            await Promise.all([
+                loadUserData(),
+                checkAndShowAdminButton(),
+                loadAllData(),
+                updateOnlineUsersCount()
+            ]);
+            
+            // Set up message input auto-resize
             const messageInput = document.getElementById('messageInput');
             messageInput.addEventListener('input', function() {
                 adjustTextareaHeight(this);
             });
             
-            // Load initial data
-            await loadAllData();
+            // Set up page visibility listener
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                    loadAllData();
+                }
+            });
+            
+            // Set up window resize for mobile
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 768) {
+                    document.getElementById('sidebar').classList.remove('show');
+                }
+            });
+            
+            // Start auto-refresh
             startAutoRefresh();
             
-            console.log('✅ ChatRise initialized successfully');
+            console.log('✅ App initialized successfully');
+            
+            // Show welcome notification
+            showNotification(`Welcome back, ${currentUser.get('username')}! 👋`, 'success', 3000);
+        }
+        
+        // =============== LOGOUT FUNCTION ===============
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                Parse.User.logOut().then(() => {
+                    console.log('✅ User logged out');
+                    showNotification('Logged out successfully', 'success');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 1500);
+                }).catch(error => {
+                    console.error('Error logging out:', error);
+                    showNotification('Error logging out', 'error');
+                });
+            }
+        }
+        
+        // =============== START THE APP ===============
+        // Wait for DOM to be ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Fix mobile viewport height
+            function setVH() {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+            }
+            
+            setVH();
+            window.addEventListener('resize', setVH);
+            
+            // Initialize the app
+            setTimeout(initializeApp, 100);
         });
         
         // Close modal when clicking outside
@@ -2818,21 +3024,6 @@
                 hideUsersModal();
             }
         };
-        
-        // Handle back button on mobile
-        window.onpopstate = function() {
-            if (window.innerWidth <= 768) {
-                const sidebar = document.getElementById('sidebar');
-                sidebar.classList.remove('show');
-            }
-        };
-        
-        // Handle visibility change
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden && Parse.User.current()) {
-                refreshAll();
-            }
-        });
     </script>
 </body>
 </html>
