@@ -8,6 +8,50 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     
+    <!-- MASTER KEY FIX SCRIPT -->
+    <script>
+    // =============== FORCE MASTER KEY FIX ===============
+    (function() {
+        console.log('🔧 Applying master key fix...');
+        
+        // Wait for Parse to be loaded from config.js
+        setTimeout(() => {
+            // Store original request method
+            const originalRequest = Parse._request;
+            
+            // Override to add master key header
+            Parse._request = function(method, path, data, options) {
+                options = options || {};
+                options.headers = options.headers || {};
+                
+                // Add master key header to ALL requests
+                options.headers['X-Parse-Master-Key'] = 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz';
+                
+                // Also add JavaScript key if not present
+                if (!options.headers['X-Parse-JavaScript-Key']) {
+                    options.headers['X-Parse-JavaScript-Key'] = 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV';
+                }
+                
+                console.log('📤 Request:', method, path.substring(0, 50));
+                return originalRequest.call(this, method, path, data, options);
+            };
+            
+            console.log('✅ Master key fix applied');
+            
+            // Test if it works
+            setTimeout(() => {
+                const testQuery = new Parse.Query(Parse.User);
+                testQuery.limit(5);
+                testQuery.find().then(users => {
+                    console.log(`✅ Test successful! Found ${users.length} users`);
+                }).catch(err => {
+                    console.error('❌ Test failed:', err);
+                });
+            }, 1000);
+        }, 500);
+    })();
+    </script>
+    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -1042,6 +1086,9 @@
                     <button class="action-btn" onclick="showUsersModal()" title="Find People">
                         <i class="fas fa-user-plus"></i>
                     </button>
+                    <button class="action-btn" onclick="checkAndOpenAdminPanel()" title="Admin Panel">
+                        <i class="fas fa-shield-alt"></i>
+                    </button>
                     <button class="action-btn" onclick="refreshAll()" title="Refresh">
                         <i class="fas fa-sync-alt"></i>
                     </button>
@@ -1198,6 +1245,9 @@
         let dataRefreshInterval = null;
         let currentTab = 'chats';
         let userSearchDebounce = null;
+        
+        // SUPER ADMIN USER ID (rk9MDUV7li)
+        const SUPER_ADMIN_ID = 'rk9MDUV7li';
 
         // =============== HELPER FUNCTIONS ===============
         function escapeHTML(text) {
@@ -1718,6 +1768,31 @@
             } catch (error) {
                 console.log('No received requests:', error);
                 return [];
+            }
+        }
+
+        // =============== ADMIN PANEL FUNCTION ===============
+        async function checkAndOpenAdminPanel() {
+            try {
+                const currentUser = Parse.User.current();
+                if (!currentUser) {
+                    showNotification('Please login first', 'error');
+                    return;
+                }
+                
+                await currentUser.fetch();
+                const userId = currentUser.id;
+                const userRole = currentUser.get('role') || 'user';
+                
+                // Check if user is admin or super admin (or is user rk9MDUV7li)
+                if (userId === SUPER_ADMIN_ID || userRole === 'admin' || userRole === 'super-admin') {
+                    window.location.href = 'admin-panel.html';
+                } else {
+                    showNotification('Admin privileges required', 'error');
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+                showNotification('Unable to verify admin status', 'error');
             }
         }
 
