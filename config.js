@@ -26,21 +26,33 @@ Parse.masterKey = CONFIG.PARSE_MASTER_KEY;
 // Also set it on the Parse object
 Parse.CoreManager.set('MASTER_KEY', CONFIG.PARSE_MASTER_KEY);
 
+// =============== CLIENT-SIDE VALIDATION FUNCTIONS ===============
+// These run on the client side only
+
+// Client-side user validation function
+function validateUserData(user) {
+    const errors = [];
+    
+    // Ensure bio is never too long
+    if (user.get('bio') && user.get('bio').length > 500) {
+        console.warn('Bio too long, truncating...');
+        user.set('bio', user.get('bio').substring(0, 500));
+        errors.push('Bio was truncated to 500 characters');
+    }
+    
+    // Can add more client-side validation here when needed
+    
+    return {
+        isValid: errors.length === 0,
+        errors: errors
+    };
+}
+
 // Debug: Verify master key is set
 console.log('✅ Parse initialized');
 console.log('✅ Master Key available:', !!Parse.masterKey);
 console.log('✅ Master Key set globally:', !!Parse.CoreManager.get('MASTER_KEY'));
 
-Parse.Cloud.beforeSave('_User', function(request, response) {
-    const user = request.object;
-    
-    // Ensure bio is never too long
-    if (user.get('bio') && user.get('bio').length > 500) {
-        user.set('bio', user.get('bio').substring(0, 500));
-    }
-    
-    // Can add more validation here when needed
-    response.success();
-});
-
+// Make functions available globally
 window.CONFIG = CONFIG;
+window.validateUserData = validateUserData;
