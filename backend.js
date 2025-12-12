@@ -65,8 +65,12 @@ if (typeof Backend !== 'undefined') {
                 // Create new Parse User
                 const user = new Parse.User();
                 user.set('username', username);
-                user.set('email', email);
                 user.set('password', password);
+                
+                // Only set email if provided and not empty
+                if (email && email.trim() !== '') {
+                    user.set('email', email.trim());
+                }
                 
                 console.log('📝 Creating user account...');
                 
@@ -86,9 +90,9 @@ if (typeof Backend !== 'undefined') {
                 
                 if (error.code === 202) {
                     errorMessage = 'Username already taken';
-                } else if (error.code === 203) {
+                } else if (error.code === 203 && email && email.trim() !== '') {
                     errorMessage = 'Email already registered';
-                } else if (error.code === 125) {
+                } else if (error.code === 125 && email && email.trim() !== '') {
                     errorMessage = 'Invalid email address';
                 } else if (error.message) {
                     errorMessage = error.message;
