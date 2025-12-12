@@ -1272,6 +1272,86 @@
             }, duration);
         }
 
+        // =============== AVATAR FUNCTIONS ===============
+        async function loadProfilePicture(userId, avatarElement, username = null) {
+            try {
+                // Query Avatar class for this user's profile picture
+                const query = encodeURIComponent(JSON.stringify({
+                    "user": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": userId
+                    }
+                }));
+                
+                const response = await makeRequestWithMasterKey('GET', `classes/Avatar?where=${query}&order=-createdAt&limit=1`);
+                const result = await response.json();
+                
+                if (result.results && result.results.length > 0) {
+                    const avatar = result.results[0];
+                    const imageFile = avatar.image;
+                    
+                    if (imageFile && imageFile.url) {
+                        // Set the profile picture
+                        avatarElement.style.backgroundImage = `url('${imageFile.url}')`;
+                        avatarElement.textContent = '';
+                        return imageFile.url;
+                    }
+                }
+                
+                // If no avatar found, show initial letter
+                if (username) {
+                    avatarElement.textContent = username[0].toUpperCase();
+                    avatarElement.style.backgroundImage = 'none';
+                    avatarElement.style.backgroundColor = userId === 'global' ? 
+                        'rgba(255,255,255,0.2)' : '#25d366';
+                }
+                return null;
+                
+            } catch (error) {
+                console.error('Error loading profile picture:', error);
+                if (username) {
+                    avatarElement.textContent = username[0].toUpperCase();
+                    avatarElement.style.backgroundImage = 'none';
+                    avatarElement.style.backgroundColor = '#25d366';
+                }
+                return null;
+            }
+        }
+        
+        async function loadUserProfilePicture() {
+            try {
+                const currentUser = Parse.User.current();
+                if (!currentUser) return;
+                
+                const userAvatar = document.getElementById('userAvatar');
+                await loadProfilePicture(currentUser.id, userAvatar, currentUser.get('username'));
+                
+            } catch (error) {
+                console.error('Error loading profile picture:', error);
+            }
+        }
+        
+        async function loadUserData() {
+            try {
+                const currentUser = Parse.User.current();
+                if (currentUser) {
+                    // Fetch fresh user data
+                    await currentUser.fetch();
+                    
+                    // Update username display
+                    document.getElementById('username-display').textContent = currentUser.get('username') || 'User';
+                    
+                    // Update avatar from Avatar class
+                    await loadUserProfilePicture();
+                    
+                    console.log('✅ User loaded:', currentUser.get('username'));
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+
         // =============== MASTER KEY HELPER FUNCTIONS ===============
         function makeRequestWithMasterKey(method, endpoint, data = {}) {
             const url = `https://parseapi.back4app.com/${endpoint}`;
@@ -1641,62 +1721,6 @@
             }
         }
 
-        // =============== PROFILE PICTURE FUNCTIONS ===============
-        async function loadUserProfilePicture() {
-            try {
-                const currentUser = Parse.User.current();
-                if (!currentUser) return;
-                
-                // Check if user has a profile picture
-                const profilePic = currentUser.get('profilePicture');
-                if (profilePic && profilePic.url) {
-                    // Set profile picture as background image
-                    const userAvatar = document.getElementById('userAvatar');
-                    userAvatar.style.backgroundImage = `url('${profilePic.url}')`;
-                    userAvatar.textContent = ''; // Remove text
-                    
-                    // Also set for chat header avatar
-                    const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
-                    chatHeaderAvatar.style.backgroundImage = `url('${profilePic.url}')`;
-                }
-                
-            } catch (error) {
-                console.error('Error loading profile picture:', error);
-            }
-        }
-        
-        async function loadUserData() {
-            try {
-                const currentUser = Parse.User.current();
-                if (currentUser) {
-                    // Fetch fresh user data to get updated profile picture
-                    await currentUser.fetch();
-                    
-                    // Update username display
-                    document.getElementById('username-display').textContent = currentUser.get('username') || 'User';
-                    
-                    // Update avatar with initial letter if no profile picture
-                    const userAvatar = document.getElementById('userAvatar');
-                    const username = currentUser.get('username') || 'U';
-                    
-                    // Check if user has a profile picture
-                    const profilePic = currentUser.get('profilePicture');
-                    if (profilePic && profilePic.url) {
-                        userAvatar.style.backgroundImage = `url('${profilePic.url}')`;
-                        userAvatar.textContent = '';
-                    } else {
-                        userAvatar.textContent = username[0].toUpperCase();
-                        userAvatar.style.backgroundImage = 'none';
-                        userAvatar.style.backgroundColor = 'rgba(255,255,255,0.2)';
-                    }
-                    
-                    console.log('✅ User loaded:', currentUser.get('username'));
-                }
-            } catch (error) {
-                console.error('Error loading user data:', error);
-            }
-        }
-
         // =============== USERS MODAL FUNCTIONS ===============
         async function showUsersModal() {
             console.log('👥 Showing users modal...');
@@ -1769,10 +1793,31 @@
                 
                 // Display users
                 usersList.innerHTML = '';
-                result.results.forEach(user => {
+                
+                // Load avatars for all users first
+                const avatarPromises = result.results.map(async (user) => {
                     const userId = user.objectId;
                     const username = user.username || 'User';
-                    const profilePic = user.profilePicture;
+                    
+                    // Load avatar
+                    const avatarDiv = document.createElement('div');
+                    avatarDiv.className = 'user-result-avatar';
+                    avatarDiv.id = `avatar-${userId}`;
+                    const avatarUrl = await loadProfilePicture(userId, avatarDiv, username);
+                    
+                    return {
+                        user,
+                        avatarDiv,
+                        avatarUrl,
+                        username
+                    };
+                });
+                
+                const usersWithAvatars = await Promise.all(avatarPromises);
+                
+                // Now display users
+                usersWithAvatars.forEach(({ user, avatarDiv, avatarUrl, username }) => {
+                    const userId = user.objectId;
                     
                     // Check contact status
                     let status = 'none';
@@ -1810,14 +1855,8 @@
                     const userDiv = document.createElement('div');
                     userDiv.className = 'user-result';
                     
-                    const avatarStyle = profilePic && profilePic.url ? 
-                        `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
-                        `style="background-color: #25d366;"`;
-                    
                     userDiv.innerHTML = `
-                        <div class="user-result-avatar" ${avatarStyle}>
-                            ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
-                        </div>
+                        ${avatarDiv.outerHTML}
                         <div class="user-result-info">
                             <div class="user-result-name">${escapeHTML(username)}</div>
                             <div class="user-result-status ${status === 'contact' ? 'online' : ''}">
@@ -1948,6 +1987,7 @@
             document.getElementById('chatStatus').textContent = 'Everyone is here';
             document.getElementById('chatHeaderAvatar').innerHTML = '<i class="fas fa-globe"></i>';
             document.getElementById('chatHeaderAvatar').style.backgroundImage = 'none';
+            document.getElementById('chatHeaderAvatar').style.backgroundColor = 'rgba(255,255,255,0.2)';
             
             await loadGlobalMessages();
             document.getElementById('messageInput').focus();
@@ -1991,34 +2031,9 @@
             document.getElementById('currentChatName').textContent = username;
             document.getElementById('chatStatus').textContent = 'online';
             
-            // Load user profile picture for chat header
-            try {
-                const query = encodeURIComponent(JSON.stringify({"objectId": userId}));
-                const response = await makeRequestWithMasterKey('GET', `classes/_User?where=${query}`);
-                const result = await response.json();
-                
-                if (result.results && result.results.length > 0) {
-                    const user = result.results[0];
-                    const profilePic = user.profilePicture;
-                    const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
-                    
-                    if (profilePic && profilePic.url) {
-                        chatHeaderAvatar.style.backgroundImage = `url('${profilePic.url}')`;
-                        chatHeaderAvatar.textContent = '';
-                    } else {
-                        chatHeaderAvatar.textContent = username[0].toUpperCase();
-                        chatHeaderAvatar.style.backgroundImage = 'none';
-                        chatHeaderAvatar.style.backgroundColor = '#25d366';
-                    }
-                } else {
-                    document.getElementById('chatHeaderAvatar').textContent = username[0].toUpperCase();
-                    document.getElementById('chatHeaderAvatar').style.backgroundImage = 'none';
-                }
-            } catch (error) {
-                console.error('Error loading user profile:', error);
-                document.getElementById('chatHeaderAvatar').textContent = username[0].toUpperCase();
-                document.getElementById('chatHeaderAvatar').style.backgroundImage = 'none';
-            }
+            // Load user profile picture from Avatar class
+            const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
+            await loadProfilePicture(userId, chatHeaderAvatar, username);
             
             await loadMessages();
             document.getElementById('messageInput').focus();
@@ -2360,7 +2375,7 @@
                     const chats = Array.from(chatMap.values());
                     chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                     
-                    chats.forEach(chat => {
+                    for (const chat of chats) {
                         const chatDiv = document.createElement('div');
                         chatDiv.className = 'chat-item';
                         if (currentChatId === chat.id) {
@@ -2368,10 +2383,16 @@
                         }
                         chatDiv.onclick = () => selectChat(chat.id, chat.name);
                         
+                        // Create avatar div
+                        const avatarDiv = document.createElement('div');
+                        avatarDiv.className = 'chat-avatar';
+                        avatarDiv.id = `chat-avatar-${chat.id}`;
+                        
+                        // Load avatar
+                        await loadProfilePicture(chat.id, avatarDiv, chat.name);
+                        
                         chatDiv.innerHTML = `
-                            <div class="chat-avatar">
-                                ${(chat.name || '')[0].toUpperCase()}
-                            </div>
+                            ${avatarDiv.outerHTML}
                             <div class="chat-info">
                                 <div class="chat-name">${escapeHTML(chat.name)}</div>
                                 <div class="chat-preview">${chat.lastMessage ? escapeHTML(chat.lastMessage.substring(0, 30)) + (chat.lastMessage.length > 30 ? '...' : '') : 'No messages yet'}</div>
@@ -2380,7 +2401,7 @@
                         `;
                         
                         chatsContent.appendChild(chatDiv);
-                    });
+                    }
                     
                     loading.style.display = 'none';
                 } else {
@@ -2423,25 +2444,27 @@
                 
                 if (result.results && result.results.length > 0) {
                     contactsContent.innerHTML = '';
-                    result.results.forEach(contact => {
+                    
+                    for (const contact of result.results) {
                         const toUser = contact.toUser;
-                        if (!toUser) return;
+                        if (!toUser) continue;
                         
                         const username = toUser.username || 'Unknown';
                         const userId = toUser.objectId;
-                        const profilePic = toUser.profilePicture;
                         
                         const contactDiv = document.createElement('div');
                         contactDiv.className = 'contact-item';
                         
-                        const avatarStyle = profilePic && profilePic.url ? 
-                            `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
-                            `style="background-color: #25d366;"`;
+                        // Create avatar div
+                        const avatarDiv = document.createElement('div');
+                        avatarDiv.className = 'contact-avatar';
+                        avatarDiv.id = `contact-avatar-${userId}`;
+                        
+                        // Load avatar
+                        await loadProfilePicture(userId, avatarDiv, username);
                         
                         contactDiv.innerHTML = `
-                            <div class="contact-avatar" ${avatarStyle}>
-                                ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
-                            </div>
+                            ${avatarDiv.outerHTML}
                             <div class="contact-info">
                                 <div class="contact-name">${escapeHTML(username)}</div>
                                 <div class="contact-status">
@@ -2459,7 +2482,7 @@
                         `;
                         
                         contactsContent.appendChild(contactDiv);
-                    });
+                    }
                 } else {
                     contactsContent.innerHTML = `
                         <div class="empty-state">
@@ -2510,25 +2533,26 @@
                     requestsBadge.textContent = result.results.length;
                     requestsBadge.classList.remove('hidden');
                     
-                    result.results.forEach(contact => {
+                    for (const contact of result.results) {
                         const fromUser = contact.fromUser;
-                        if (!fromUser) return;
+                        if (!fromUser) continue;
                         
                         const username = fromUser.username || 'Unknown';
                         const userId = fromUser.objectId;
-                        const profilePic = fromUser.profilePicture;
                         
                         const requestDiv = document.createElement('div');
                         requestDiv.className = 'contact-item';
                         
-                        const avatarStyle = profilePic && profilePic.url ? 
-                            `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
-                            `style="background-color: #ffa502;"`;
+                        // Create avatar div
+                        const avatarDiv = document.createElement('div');
+                        avatarDiv.className = 'contact-avatar';
+                        avatarDiv.id = `request-avatar-${userId}`;
+                        
+                        // Load avatar
+                        await loadProfilePicture(userId, avatarDiv, username);
                         
                         requestDiv.innerHTML = `
-                            <div class="contact-avatar" ${avatarStyle}>
-                                ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
-                            </div>
+                            ${avatarDiv.outerHTML}
                             <div class="contact-info">
                                 <div class="contact-name">${escapeHTML(username)}</div>
                                 <div class="contact-status">
@@ -2546,7 +2570,7 @@
                         `;
                         
                         requestsContent.appendChild(requestDiv);
-                    });
+                    }
                 } else {
                     requestsContent.innerHTML = `
                         <div class="empty-state">
