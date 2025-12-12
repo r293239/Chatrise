@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Setup - ChatRise</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .setup-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .setup-icon {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 25px;
+            color: white;
+            font-size: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 28px;
+        }
+        
+        .user-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 25px 0;
+            text-align: left;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .info-item:last-child {
+            margin-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+        
+        .info-value {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .super-admin-badge {
+            background: #ff4757;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        
+        .setup-btn {
+            background: #25d366;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 30px auto 0;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        
+        .setup-btn:hover {
+            background: #20b858;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(37, 211, 102, 0.3);
+        }
+        
+        .setup-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .back-btn {
+            background: #f1f2f6;
+            color: #666;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 20px;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .back-btn:hover {
+            background: #e1e5e9;
+        }
+        
+        .notification {
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-align: left;
+        }
+        
+        .notification.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .notification.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .notification.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        @media (max-width: 768px) {
+            .setup-container {
+                padding: 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <div class="setup-icon">
+            <i class="fas fa-shield-alt"></i>
+        </div>
+        
+        <h1>Admin Setup</h1>
+        <p style="color: #666; margin-bottom: 25px; line-height: 1.6;">
+            This setup will make user <strong>rk9MDUV7li</strong> a Super Administrator.
+            Only run this once for initial setup.
+        </p>
+        
+        <div id="userInfo" class="user-info">
+            <div class="loading" style="padding: 20px;">
+                <div class="spinner"></div>
+                Loading user information...
+            </div>
+        </div>
+        
+        <div id="notificationArea"></div>
+        
+        <button class="setup-btn" onclick="setupSuperAdmin()" id="setupBtn">
+            <i class="fas fa-user-shield"></i>
+            Make Super Admin
+        </button>
+        
+        <a href="index.html" class="back-btn">
+            <i class="fas fa-arrow-left"></i>
+            Back to Chat
+        </a>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
+    <script>
+        // =============== PARSE INITIALIZATION ===============
+        Parse.initialize(
+            'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
+            'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV'
+        );
+        Parse.serverURL = 'https://parseapi.back4app.com/';
+        
+        // SUPER ADMIN USER ID
+        const SUPER_ADMIN_ID = 'rk9MDUV7li';
+        
+        // =============== HELPER FUNCTIONS ===============
+        function showNotification(message, type = 'info') {
+            const notificationArea = document.getElementById('notificationArea');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i> ${message}`;
+            notificationArea.appendChild(notification);
+            
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 5000);
+        }
+        
+        function makeRequestWithMasterKey(method, endpoint, data = {}) {
+            const url = `https://parseapi.back4app.com/${endpoint}`;
+            
+            return fetch(url, {
+                method: method,
+                headers: {
+                    'X-Parse-Application-Id': 'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
+                    'X-Parse-Master-Key': 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz',
+                    'Content-Type': 'application/json'
+                },
+                body: method !== 'GET' ? JSON.stringify(data) : undefined
+            });
+        }
+        
+        // =============== SETUP FUNCTIONS ===============
+        async function loadUserInfo() {
+            try {
+                const currentUser = Parse.User.current();
+                if (!currentUser) {
+                    // Not logged in
+                    document.getElementById('userInfo').innerHTML = `
+                        <div style="text-align: center;">
+                            <i class="fas fa-exclamation-triangle" style="color: #ffa502; font-size: 24px; margin-bottom: 10px;"></i>
+                            <h3 style="color: #333; margin-bottom: 10px;">Not Logged In</h3>
+                            <p style="color: #666;">Please login to setup admin privileges.</p>
+                        </div>
+                    `;
+                    document.getElementById('setupBtn').disabled = true;
+                    return;
+                }
+                
+                await currentUser.fetch();
+                const userId = currentUser.id;
+                const username = currentUser.get('username') || 'Unknown';
+                const email = currentUser.get('email') || 'No email';
+                const role = currentUser.get('role') || 'user';
+                const isSuperAdmin = role === 'super-admin';
+                
+                // Check if this is the correct user
+                const isTargetUser = userId === SUPER_ADMIN_ID;
+                
+                document.getElementById('userInfo').innerHTML = `
+                    <div class="info-item">
+                        <span class="info-label">User ID:</span>
+                        <span class="info-value">${userId}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Username:</span>
+                        <span class="info-value">${username}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">${email}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Current Role:</span>
+                        <span class="info-value">${role}</span>
+                    </div>
+                    ${isTargetUser ? `
+                        <div style="text-align: center; margin-top: 15px;">
+                            <div class="super-admin-badge">
+                                <i class="fas fa-crown"></i> Target Super Admin
+                            </div>
+                        </div>
+                    ` : `
+                        <div style="text-align: center; margin-top: 15px; color: #ff4757; font-weight: 600;">
+                            <i class="fas fa-exclamation-triangle"></i> Not the target user
+                        </div>
+                    `}
+                `;
+                
+                // Update button state
+                const setupBtn = document.getElementById('setupBtn');
+                if (isTargetUser && !isSuperAdmin) {
+                    setupBtn.disabled = false;
+                    setupBtn.innerHTML = `<i class="fas fa-user-shield"></i> Make Super Admin`;
+                } else if (isSuperAdmin) {
+                    setupBtn.disabled = true;
+                    setupBtn.innerHTML = `<i class="fas fa-check-circle"></i> Already Super Admin`;
+                    showNotification('This user is already a Super Administrator', 'success');
+                } else {
+                    setupBtn.disabled = true;
+                    setupBtn.innerHTML = `<i class="fas fa-times-circle"></i> Incorrect User`;
+                    showNotification('Only user rk9MDUV7li can be set as Super Admin', 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error loading user info:', error);
+                document.getElementById('userInfo').innerHTML = `
+                    <div style="text-align: center; color: #ff4757;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Error loading user information</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function setupSuperAdmin() {
+            try {
+                const currentUser = Parse.User.current();
+                if (!currentUser) {
+                    showNotification('Please login first', 'error');
+                    return;
+                }
+                
+                const userId = currentUser.id;
+                
+                // Double-check this is the correct user
+                if (userId !== SUPER_ADMIN_ID) {
+                    showNotification('Only user rk9MDUV7li can be set as Super Admin', 'error');
+                    return;
+                }
+                
+                // Check if already super admin
+                await currentUser.fetch();
+                const currentRole = currentUser.get('role');
+                if (currentRole === 'super-admin') {
+                    showNotification('User is already a Super Administrator', 'info');
+                    return;
+                }
+                
+                // Disable button during setup
+                const setupBtn = document.getElementById('setupBtn');
+                setupBtn.disabled = true;
+                setupBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Setting up...`;
+                
+                // Make user super admin using master key
+                const updateData = {
+                    role: "super-admin"
+                };
+                
+                const response = await makeRequestWithMasterKey('PUT', `classes/_User/${userId}`, updateData);
+                
+                if (response.ok) {
+                    // Update local user object
+                    currentUser.set('role', 'super-admin');
+                    await currentUser.save();
+                    
+                    showNotification('✅ Successfully set as Super Administrator!', 'success');
+                    
+                    // Update button
+                    setupBtn.innerHTML = `<i class="fas fa-check-circle"></i> Setup Complete`;
+                    setupBtn.style.background = '#2ed573';
+                    
+                    // Refresh user info
+                    setTimeout(() => {
+                        loadUserInfo();
+                    }, 2000);
+                    
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to update user role');
+                }
+                
+            } catch (error) {
+                console.error('Error setting up super admin:', error);
+                showNotification(`Error: ${error.message}`, 'error');
+                
+                // Re-enable button
+                const setupBtn = document.getElementById('setupBtn');
+                setupBtn.disabled = false;
+                setupBtn.innerHTML = `<i class="fas fa-user-shield"></i> Make Super Admin`;
+            }
+        }
+        
+        // =============== INITIALIZATION ===============
+        window.addEventListener('load', async function() {
+            console.log('🔧 Admin Setup initializing...');
+            await loadUserInfo();
+            console.log('✅ Admin Setup ready');
+        });
+    </script>
+</body>
+</html>
