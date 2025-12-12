@@ -6,53 +6,7 @@
     <title>ChatRise - Messenger</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
-    <script src="config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-    <script src="backend.js"></script>
-    
-    <!-- MASTER KEY FIX SCRIPT -->
-    <script>
-    // =============== FORCE MASTER KEY FIX ===============
-    (function() {
-        console.log('🔧 Applying master key fix...');
-        
-        // Wait for Parse to be loaded from config.js
-        setTimeout(() => {
-            // Store original request method
-            const originalRequest = Parse._request;
-            
-            // Override to add master key header
-            Parse._request = function(method, path, data, options) {
-                options = options || {};
-                options.headers = options.headers || {};
-                
-                // Add master key header to ALL requests
-                options.headers['X-Parse-Master-Key'] = 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz';
-                
-                // Also add JavaScript key if not present
-                if (!options.headers['X-Parse-JavaScript-Key']) {
-                    options.headers['X-Parse-JavaScript-Key'] = 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV';
-                }
-                
-                console.log('📤 Request:', method, path.substring(0, 50));
-                return originalRequest.call(this, method, path, data, options);
-            };
-            
-            console.log('✅ Master key fix applied');
-            
-            // Test if it works
-            setTimeout(() => {
-                const testQuery = new Parse.Query(Parse.User);
-                testQuery.limit(5);
-                testQuery.find().then(users => {
-                    console.log(`✅ Test successful! Found ${users.length} users`);
-                }).catch(err => {
-                    console.error('❌ Test failed:', err);
-                });
-            }, 1000);
-        }, 500);
-    })();
-    </script>
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1229,6 +1183,13 @@
     </div>
 
     <script>
+        // =============== PARSE INITIALIZATION ===============
+        Parse.initialize(
+            'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
+            'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV'
+        );
+        Parse.serverURL = 'https://parseapi.back4app.com/';
+
         // =============== GLOBAL VARIABLES ===============
         let currentChatId = null;
         let currentChatName = '';
@@ -1237,6 +1198,79 @@
         let dataRefreshInterval = null;
         let currentTab = 'chats';
         let userSearchDebounce = null;
+
+        // =============== HELPER FUNCTIONS ===============
+        function escapeHTML(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escapeString(text) {
+            return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+            
+            let date;
+            if (typeof timestamp === 'object' && timestamp.__type === 'Date') {
+                date = new Date(timestamp.iso);
+            } else if (timestamp instanceof Date) {
+                date = timestamp;
+            } else if (typeof timestamp === 'string') {
+                date = new Date(timestamp);
+            } else {
+                return '';
+            }
+            
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function adjustTextareaHeight(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+            
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = textarea.value.trim() === '';
+            sendBtn.style.background = textarea.value.trim() ? '#25d366' : '#ccc';
+        }
+
+        function isScrolledToBottom(element) {
+            return element.scrollHeight - element.scrollTop <= element.clientHeight + 100;
+        }
+
+        function showNotification(message, type = 'info', duration = 3000) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = message;
+            notification.style.animation = 'slideInRight 0.3s ease';
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, duration);
+        }
 
         // =============== MASTER KEY HELPER FUNCTIONS ===============
         function makeRequestWithMasterKey(method, endpoint, data = {}) {
@@ -1254,7 +1288,7 @@
             });
         }
 
-        // =============== CONTACT FUNCTIONS WITH MASTER KEY ===============
+        // =============== CONTACT FUNCTIONS ===============
         async function sendContactRequest(userId, username) {
             console.log(`📤 Sending contact request to ${username} (${userId})...`);
             
@@ -1278,7 +1312,10 @@
                     status: "pending",
                     fromUsername: currentUser.get('username') || 'User',
                     toUsername: username,
-                    createdAt: new Date().toISOString()
+                    createdAt: {
+                        "__type": "Date",
+                        "iso": new Date().toISOString()
+                    }
                 };
                 
                 console.log('Creating contact request with data:', contactData);
@@ -1383,15 +1420,21 @@
                 if (findResult.results && findResult.results.length > 0) {
                     const contactId = findResult.results[0].objectId;
                     
-                    // Update the contact status to accepted
+                    // Update the contact status to accepted with CORRECT date format
                     const updateData = {
                         status: "accepted",
-                        updatedAt: new Date().toISOString()
+                        updatedAt: {
+                            "__type": "Date",
+                            "iso": new Date().toISOString()
+                        }
                     };
                     
                     const updateResponse = await makeRequestWithMasterKey('PUT', `classes/Contact/${contactId}`, updateData);
                     
                     if (updateResponse.ok) {
+                        // Also create the reverse contact (so they appear in both users' contacts)
+                        await createReverseContact(userId, username);
+                        
                         showNotification(`${username} added to contacts!`, 'success');
                         
                         // Refresh all data
@@ -1411,6 +1454,112 @@
             } catch (error) {
                 console.error('Error accepting request:', error);
                 showNotification('Failed to accept request: ' + error.message, 'error');
+            }
+        }
+        
+        async function createReverseContact(userId, username) {
+            try {
+                const currentUser = Parse.User.current();
+                
+                const reverseContactData = {
+                    fromUser: {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUser.id
+                    },
+                    toUser: {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": userId
+                    },
+                    status: "accepted",
+                    fromUsername: currentUser.get('username') || 'User',
+                    toUsername: username,
+                    createdAt: {
+                        "__type": "Date",
+                        "iso": new Date().toISOString()
+                    },
+                    updatedAt: {
+                        "__type": "Date",
+                        "iso": new Date().toISOString()
+                    }
+                };
+                
+                await makeRequestWithMasterKey('POST', 'classes/Contact', reverseContactData);
+                console.log('✅ Reverse contact created');
+                
+            } catch (error) {
+                console.log('⚠️ Reverse contact may already exist or error:', error.message);
+                // It's okay if this fails - contact might already exist
+            }
+        }
+        
+        async function removeContact(userId, username) {
+            if (confirm(`Remove ${username} from contacts?`)) {
+                try {
+                    showNotification('Removing contact...', 'info');
+                    
+                    const currentUser = Parse.User.current();
+                    
+                    // Find both directions of contact
+                    const query = encodeURIComponent(JSON.stringify({
+                        "$or": [
+                            {
+                                "fromUser": {
+                                    "__type": "Pointer",
+                                    "className": "_User",
+                                    "objectId": currentUser.id
+                                },
+                                "toUser": {
+                                    "__type": "Pointer",
+                                    "className": "_User",
+                                    "objectId": userId
+                                },
+                                "status": "accepted"
+                            },
+                            {
+                                "fromUser": {
+                                    "__type": "Pointer",
+                                    "className": "_User",
+                                    "objectId": userId
+                                },
+                                "toUser": {
+                                    "__type": "Pointer",
+                                    "className": "_User",
+                                    "objectId": currentUser.id
+                                },
+                                "status": "accepted"
+                            }
+                        ]
+                    }));
+                    
+                    const findResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
+                    const findResult = await findResponse.json();
+                    
+                    if (findResult.results && findResult.results.length > 0) {
+                        // Delete all found contacts
+                        const deletePromises = findResult.results.map(contact => 
+                            makeRequestWithMasterKey('DELETE', `classes/Contact/${contact.objectId}`)
+                        );
+                        
+                        await Promise.all(deletePromises);
+                        showNotification(`${username} removed from contacts`, 'info');
+                        await loadContacts();
+                        
+                        // If we're currently chatting with this user, switch to welcome screen
+                        if (currentChatId === userId) {
+                            currentChatId = null;
+                            document.getElementById('welcomeScreen').classList.remove('hidden');
+                            document.getElementById('chatContent').classList.add('hidden');
+                        }
+                    } else {
+                        showNotification('Contact not found', 'error');
+                    }
+                    
+                } catch (error) {
+                    console.error('Error removing contact:', error);
+                    showNotification('Failed to remove contact', 'error');
+                }
             }
         }
         
@@ -1491,7 +1640,7 @@
                 return [];
             }
         }
-        
+
         // =============== PROFILE PICTURE FUNCTIONS ===============
         async function loadUserProfilePicture() {
             try {
@@ -1547,36 +1696,8 @@
                 console.error('Error loading user data:', error);
             }
         }
-        
-        // =============== INITIALIZATION ===============
-        window.addEventListener('load', async function() {
-            console.log('🚀 ChatRise initializing...');
-            
-            // Check login status
-            if (!Parse.User.current()) {
-                console.log('🔐 Not logged in, redirecting...');
-                window.location.href = 'login.html';
-                return;
-            }
-            
-            // Load user data with profile picture
-            await loadUserData();
-            
-            // Initialize input handler
-            const messageInput = document.getElementById('messageInput');
-            messageInput.addEventListener('input', function() {
-                adjustTextareaHeight(this);
-            });
-            
-            // Load initial data
-            await loadAllData();
-            startAutoRefresh();
-            
-            console.log('✅ ChatRise initialized successfully');
-        });
-        
+
         // =============== USERS MODAL FUNCTIONS ===============
-        
         async function showUsersModal() {
             console.log('👥 Showing users modal...');
             document.getElementById('usersModal').style.display = 'block';
@@ -1736,9 +1857,8 @@
                 default: return 'Not connected';
             }
         }
-        
+
         // =============== CORE FUNCTIONS ===============
-        
         // Tab switching
         function switchTab(tabName) {
             currentTab = tabName;
@@ -1802,7 +1922,6 @@
         }
         
         // =============== CHAT FUNCTIONS ===============
-        
         // Select global chat
         window.selectGlobalChat = async function() {
             console.log('🌍 Selecting global chat...');
@@ -1916,70 +2035,88 @@
         }
         
         // =============== MESSAGE FUNCTIONS ===============
-        
         // Load private messages
         async function loadMessages(scrollToBottom = true) {
             if (!currentChatId || currentChatId === 'global') return;
             
             try {
-                // Try to use Backend if available
-                let result;
-                if (typeof Backend !== 'undefined' && typeof Backend.getMessages === 'function') {
-                    result = await Backend.getMessages(currentChatId);
-                } else {
-                    // Fallback: Show empty messages
-                    result = { success: true, messages: [] };
-                }
+                // Query messages between current user and selected user
+                const currentUser = Parse.User.current();
+                const query = encodeURIComponent(JSON.stringify({
+                    "$or": [
+                        {
+                            "sender": {
+                                "__type": "Pointer",
+                                "className": "_User",
+                                "objectId": currentUser.id
+                            },
+                            "receiver": {
+                                "__type": "Pointer",
+                                "className": "_User",
+                                "objectId": currentChatId
+                            }
+                        },
+                        {
+                            "sender": {
+                                "__type": "Pointer",
+                                "className": "_User",
+                                "objectId": currentChatId
+                            },
+                            "receiver": {
+                                "__type": "Pointer",
+                                "className": "_User",
+                                "objectId": currentUser.id
+                            }
+                        }
+                    ]
+                }));
+                
+                const response = await makeRequestWithMasterKey('GET', `classes/Message?where=${query}&include=sender,receiver&order=createdAt&limit=50`);
+                const result = await response.json();
                 
                 const container = document.getElementById('messagesContainer');
                 const wasAtBottom = isScrolledToBottom(container);
                 
-                if (result.success) {
+                if (result.results && result.results.length > 0) {
                     container.innerHTML = '';
-                    const currentUser = Parse.User.current();
                     
-                    if (result.messages && result.messages.length > 0) {
-                        result.messages.forEach(msg => {
-                            const sender = msg.get ? msg.get('sender') : msg.sender;
-                            const senderName = msg.get ? msg.get('senderName') : msg.senderName;
-                            const isOwn = sender && sender.id === currentUser.id;
-                            
-                            let displayName = 'Unknown User';
-                            if (sender && sender.get) {
-                                displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
-                            } else if (senderName) {
-                                displayName = senderName;
-                            }
-                            
-                            const messageDiv = document.createElement('div');
-                            messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
-                            
-                            const messageText = msg.get ? msg.get('message') : msg.message;
-                            const timestamp = msg.get ? msg.get('timestamp') : msg.timestamp;
-                            
-                            messageDiv.innerHTML = `
-                                ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
-                                <div class="message-content">${escapeHTML(messageText)}</div>
-                                <div class="message-time">${formatTime(timestamp)}</div>
-                            `;
-                            
-                            container.appendChild(messageDiv);
-                        });
+                    result.results.forEach(msg => {
+                        const sender = msg.sender;
+                        const isOwn = sender.objectId === currentUser.id;
                         
-                        if (scrollToBottom || wasAtBottom) {
-                            setTimeout(() => {
-                                container.scrollTop = container.scrollHeight;
-                            }, 100);
+                        let displayName = 'Unknown User';
+                        if (sender && sender.username) {
+                            displayName = sender.username;
                         }
-                    } else {
-                        container.innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-comments"></i>
-                                <h3>No messages yet</h3>
-                                <p>Start the conversation!</p>
-                            </div>
+                        
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+                        
+                        const messageText = msg.message || '';
+                        const timestamp = msg.createdAt;
+                        
+                        messageDiv.innerHTML = `
+                            ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
+                            <div class="message-content">${escapeHTML(messageText)}</div>
+                            <div class="message-time">${formatTime(timestamp)}</div>
                         `;
+                        
+                        container.appendChild(messageDiv);
+                    });
+                    
+                    if (scrollToBottom || wasAtBottom) {
+                        setTimeout(() => {
+                            container.scrollTop = container.scrollHeight;
+                        }, 100);
                     }
+                } else {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-comments"></i>
+                            <h3>No messages yet</h3>
+                            <p>Start the conversation!</p>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 console.error('Error loading messages:', error);
@@ -1999,70 +2136,54 @@
             console.log('📥 Loading global messages...');
             
             try {
-                let result;
-                if (typeof Backend !== 'undefined' && typeof Backend.getGlobalMessages === 'function') {
-                    result = await Backend.getGlobalMessages();
-                } else {
-                    // Fallback: Show empty state
-                    result = { success: true, messages: [] };
-                }
+                const response = await makeRequestWithMasterKey('GET', 'classes/GlobalMessage?include=sender&order=-createdAt&limit=50');
+                const result = await response.json();
                 
                 const container = document.getElementById('messagesContainer');
                 const wasAtBottom = isScrolledToBottom(container);
                 
-                if (result.success) {
+                if (result.results && result.results.length > 0) {
                     container.innerHTML = '';
                     const currentUser = Parse.User.current();
                     
-                    if (result.messages && result.messages.length > 0) {
-                        result.messages.forEach(msg => {
-                            const sender = msg.get ? msg.get('sender') : msg.sender;
-                            const senderName = msg.get ? msg.get('senderName') : msg.senderName;
-                            const isOwn = sender && sender.id === currentUser.id;
-                            
-                            let displayName = 'Unknown User';
-                            if (sender && sender.get) {
-                                displayName = sender.get('username') || sender.get('name') || senderName || 'Unknown User';
-                            } else if (senderName) {
-                                displayName = senderName;
-                            }
-                            
-                            const messageDiv = document.createElement('div');
-                            messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
-                            
-                            const messageText = msg.get ? msg.get('message') : msg.message;
-                            const timestamp = msg.get ? msg.get('timestamp') : msg.timestamp;
-                            
-                            messageDiv.innerHTML = `
-                                ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
-                                <div class="message-content">${escapeHTML(messageText)}</div>
-                                <div class="message-time">${formatTime(timestamp)}</div>
-                            `;
-                            
-                            container.appendChild(messageDiv);
-                        });
+                    // Reverse to show oldest first
+                    const messages = result.results.reverse();
+                    
+                    messages.forEach(msg => {
+                        const sender = msg.sender;
+                        const isOwn = sender && sender.objectId === currentUser.id;
                         
-                        if (wasAtBottom || (result.messages && result.messages.length <= 5)) {
-                            setTimeout(() => {
-                                container.scrollTop = container.scrollHeight;
-                            }, 100);
+                        let displayName = 'Unknown User';
+                        if (sender && sender.username) {
+                            displayName = sender.username;
                         }
-                    } else {
-                        container.innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-globe"></i>
-                                <h3>Welcome to Global Chat! 🌍</h3>
-                                <p>Be the first to start the conversation</p>
-                            </div>
+                        
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+                        
+                        const messageText = msg.message || '';
+                        const timestamp = msg.createdAt;
+                        
+                        messageDiv.innerHTML = `
+                            ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
+                            <div class="message-content">${escapeHTML(messageText)}</div>
+                            <div class="message-time">${formatTime(timestamp)}</div>
                         `;
+                        
+                        container.appendChild(messageDiv);
+                    });
+                    
+                    if (wasAtBottom) {
+                        setTimeout(() => {
+                            container.scrollTop = container.scrollHeight;
+                        }, 100);
                     }
                 } else {
-                    console.error('Failed to load global messages:', result.error);
                     container.innerHTML = `
                         <div class="empty-state">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <h3>Unable to load global chat</h3>
-                            <p>${result.error || 'Please try again later'}</p>
+                            <i class="fas fa-globe"></i>
+                            <h3>Welcome to Global Chat! 🌍</h3>
+                            <p>Be the first to start the conversation</p>
                         </div>
                     `;
                 }
@@ -2100,44 +2221,66 @@
             sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             
             try {
-                let result;
+                const currentUser = Parse.User.current();
                 
                 if (isGlobalChat) {
-                    if (typeof Backend !== 'undefined' && typeof Backend.sendGlobalMessage === 'function') {
-                        result = await Backend.sendGlobalMessage(message);
-                    } else {
-                        result = { success: false, error: 'Backend not available' };
-                    }
-                } else {
-                    if (typeof Backend !== 'undefined' && typeof Backend.sendMessage === 'function') {
-                        result = await Backend.sendMessage(currentChatId, message);
-                    } else {
-                        result = { success: false, error: 'Backend not available' };
-                    }
-                }
-                
-                if (result.success) {
-                    input.value = '';
-                    adjustTextareaHeight(input);
+                    // Send global message
+                    const messageData = {
+                        sender: {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentUser.id
+                        },
+                        message: message,
+                        senderName: currentUser.get('username') || 'User'
+                    };
                     
-                    if (isGlobalChat) {
+                    const response = await makeRequestWithMasterKey('POST', 'classes/GlobalMessage', messageData);
+                    
+                    if (response.ok) {
+                        input.value = '';
+                        adjustTextareaHeight(input);
                         await loadGlobalMessages();
+                        
                         const container = document.getElementById('messagesContainer');
                         setTimeout(() => {
                             container.scrollTop = container.scrollHeight;
                         }, 100);
+                        
+                        showNotification('Message sent to global chat! ✓', 'success', 2000);
                     } else {
-                        await loadMessages(true);
+                        const error = await response.json();
+                        showNotification('Failed to send: ' + error.error, 'error');
                     }
-                    
-                    // Refresh chats list
-                    if (typeof loadChats === 'function') {
-                        setTimeout(loadChats, 500);
-                    }
-                    
-                    showNotification('Message sent! ✓', 'success', 2000);
                 } else {
-                    showNotification('Failed to send: ' + result.error, 'error');
+                    // Send private message
+                    const messageData = {
+                        sender: {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentUser.id
+                        },
+                        receiver: {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentChatId
+                        },
+                        message: message,
+                        senderName: currentUser.get('username') || 'User',
+                        receiverName: currentChatName
+                    };
+                    
+                    const response = await makeRequestWithMasterKey('POST', 'classes/Message', messageData);
+                    
+                    if (response.ok) {
+                        input.value = '';
+                        adjustTextareaHeight(input);
+                        await loadMessages(true);
+                        showNotification('Message sent! ✓', 'success', 2000);
+                    } else {
+                        const error = await response.json();
+                        showNotification('Failed to send: ' + error.error, 'error');
+                    }
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
@@ -2150,7 +2293,6 @@
         }
         
         // =============== DATA LOADING FUNCTIONS ===============
-        
         // Load chats
         async function loadChats() {
             try {
@@ -2162,57 +2304,103 @@
                 chatsContent.innerHTML = '';
                 chatsContent.appendChild(globalChat);
                 
-                // Try to get chats from Backend
-                if (typeof Backend !== 'undefined' && typeof Backend.getChats === 'function') {
-                    const result = await Backend.getChats();
+                // Get recent conversations from messages
+                const currentUser = Parse.User.current();
+                const query = encodeURIComponent(JSON.stringify({
+                    "$or": [
+                        {
+                            "sender": {
+                                "__type": "Pointer",
+                                "className": "_User",
+                                "objectId": currentUser.id
+                            }
+                        },
+                        {
+                            "receiver": {
+                                "__type": "Pointer",
+                                "className": "_User",
+                                "objectId": currentUser.id
+                            }
+                        }
+                    ]
+                }));
+                
+                const response = await makeRequestWithMasterKey('GET', `classes/Message?where=${query}&include=sender,receiver&order=-createdAt&limit=50`);
+                const result = await response.json();
+                
+                if (result.results && result.results.length > 0) {
+                    // Group messages by chat partner
+                    const chatMap = new Map();
                     
-                    if (result.success && result.chats.length > 0) {
-                        result.chats.forEach(chat => {
-                            const chatDiv = document.createElement('div');
-                            chatDiv.className = 'chat-item';
-                            chatDiv.onclick = () => selectChat(chat.id, chat.name);
-                            
-                            chatDiv.innerHTML = `
-                                <div class="chat-avatar">
-                                    ${(chat.name || '')[0].toUpperCase()}
-                                </div>
-                                <div class="chat-info">
-                                    <div class="chat-name">${escapeHTML(chat.name)}</div>
-                                    <div class="chat-preview">${chat.lastMessage ? escapeHTML(chat.lastMessage.substring(0, 30)) + '...' : 'No messages yet'}</div>
-                                </div>
-                                <div class="chat-time">${formatTime(chat.timestamp)}</div>
-                            `;
-                            
-                            chatsContent.appendChild(chatDiv);
-                        });
-                    } else {
-                        // Show empty state if no chats
-                        const emptyDiv = document.createElement('div');
-                        emptyDiv.className = 'empty-state';
-                        emptyDiv.innerHTML = `
-                            <i class="fas fa-comments"></i>
-                            <h3>No chats yet</h3>
-                            <p>Start a conversation with your contacts or join the global chat!</p>
+                    result.results.forEach(msg => {
+                        const sender = msg.sender;
+                        const receiver = msg.receiver;
+                        
+                        let chatPartner;
+                        if (sender.objectId === currentUser.id) {
+                            chatPartner = receiver;
+                        } else {
+                            chatPartner = sender;
+                        }
+                        
+                        if (!chatPartner) return;
+                        
+                        if (!chatMap.has(chatPartner.objectId)) {
+                            chatMap.set(chatPartner.objectId, {
+                                id: chatPartner.objectId,
+                                name: chatPartner.username || 'Unknown',
+                                lastMessage: msg.message,
+                                timestamp: msg.createdAt,
+                                unread: 0
+                            });
+                        }
+                    });
+                    
+                    // Display chats
+                    const chats = Array.from(chatMap.values());
+                    chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    chats.forEach(chat => {
+                        const chatDiv = document.createElement('div');
+                        chatDiv.className = 'chat-item';
+                        if (currentChatId === chat.id) {
+                            chatDiv.classList.add('active');
+                        }
+                        chatDiv.onclick = () => selectChat(chat.id, chat.name);
+                        
+                        chatDiv.innerHTML = `
+                            <div class="chat-avatar">
+                                ${(chat.name || '')[0].toUpperCase()}
+                            </div>
+                            <div class="chat-info">
+                                <div class="chat-name">${escapeHTML(chat.name)}</div>
+                                <div class="chat-preview">${chat.lastMessage ? escapeHTML(chat.lastMessage.substring(0, 30)) + (chat.lastMessage.length > 30 ? '...' : '') : 'No messages yet'}</div>
+                            </div>
+                            <div class="chat-time">${formatTime(chat.timestamp)}</div>
                         `;
-                        chatsContent.appendChild(emptyDiv);
-                    }
+                        
+                        chatsContent.appendChild(chatDiv);
+                    });
+                    
+                    loading.style.display = 'none';
                 } else {
-                    // Backend not available
+                    // Show empty state if no chats
                     const emptyDiv = document.createElement('div');
                     emptyDiv.className = 'empty-state';
                     emptyDiv.innerHTML = `
                         <i class="fas fa-comments"></i>
                         <h3>No chats yet</h3>
-                        <p>Add contacts to start chatting!</p>
+                        <p>Start a conversation with your contacts or join the global chat!</p>
                     `;
                     chatsContent.appendChild(emptyDiv);
+                    loading.style.display = 'none';
                 }
             } catch (error) {
                 console.error('Error loading chats:', error);
             }
         }
         
-        // Load contacts with master key
+        // Load contacts
         async function loadContacts() {
             try {
                 const contactsContent = document.getElementById('contactsContent');
@@ -2220,83 +2408,69 @@
                 
                 contactsContent.innerHTML = '<div class="loading"><div class="spinner"></div>Loading contacts...</div>';
                 
-                try {
-                    const currentUser = Parse.User.current();
-                    const query = encodeURIComponent(JSON.stringify({
-                        "fromUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentUser.id
-                        },
-                        "status": "accepted"
-                    }));
-                    
-                    const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}&include=toUser`);
-                    const result = await response.json();
-                    
-                    if (result.results && result.results.length > 0) {
-                        contactsContent.innerHTML = '';
-                        result.results.forEach(contact => {
-                            const toUser = contact.toUser;
-                            if (!toUser) return;
-                            
-                            const username = toUser.username || 'Unknown';
-                            const userId = toUser.objectId;
-                            const profilePic = toUser.profilePicture;
-                            
-                            const contactDiv = document.createElement('div');
-                            contactDiv.className = 'contact-item';
-                            
-                            const avatarStyle = profilePic && profilePic.url ? 
-                                `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
-                                `style="background-color: #25d366;"`;
-                            
-                            contactDiv.innerHTML = `
-                                <div class="contact-avatar" ${avatarStyle}>
-                                    ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
+                const currentUser = Parse.User.current();
+                const query = encodeURIComponent(JSON.stringify({
+                    "fromUser": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUser.id
+                    },
+                    "status": "accepted"
+                }));
+                
+                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}&include=toUser`);
+                const result = await response.json();
+                
+                if (result.results && result.results.length > 0) {
+                    contactsContent.innerHTML = '';
+                    result.results.forEach(contact => {
+                        const toUser = contact.toUser;
+                        if (!toUser) return;
+                        
+                        const username = toUser.username || 'Unknown';
+                        const userId = toUser.objectId;
+                        const profilePic = toUser.profilePicture;
+                        
+                        const contactDiv = document.createElement('div');
+                        contactDiv.className = 'contact-item';
+                        
+                        const avatarStyle = profilePic && profilePic.url ? 
+                            `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
+                            `style="background-color: #25d366;"`;
+                        
+                        contactDiv.innerHTML = `
+                            <div class="contact-avatar" ${avatarStyle}>
+                                ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
+                            </div>
+                            <div class="contact-info">
+                                <div class="contact-name">${escapeHTML(username)}</div>
+                                <div class="contact-status">
+                                    Contact
                                 </div>
-                                <div class="contact-info">
-                                    <div class="contact-name">${escapeHTML(username)}</div>
-                                    <div class="contact-status">
-                                        Contact
-                                    </div>
-                                </div>
-                                <div class="contact-actions">
-                                    <button class="contact-btn message" onclick="startChat('${userId}', '${escapeString(username)}')" title="Message">
-                                        <i class="fas fa-comment"></i>
-                                    </button>
-                                    <button class="contact-btn remove" onclick="removeContact('${contact.objectId}', '${escapeString(username)}')" title="Remove Contact">
-                                        <i class="fas fa-user-minus"></i>
-                                    </button>
-                                </div>
-                            `;
-                            
-                            contactsContent.appendChild(contactDiv);
-                        });
-                    } else {
-                        // Show empty state
-                        contactsContent.innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-users"></i>
-                                <h3>No contacts yet</h3>
-                                <p>Add people to your contacts to start chatting!</p>
+                            </div>
+                            <div class="contact-actions">
+                                <button class="contact-btn message" onclick="startChat('${userId}', '${escapeString(username)}')" title="Message">
+                                    <i class="fas fa-comment"></i>
+                                </button>
+                                <button class="contact-btn remove" onclick="removeContact('${userId}', '${escapeString(username)}')" title="Remove Contact">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         `;
-                    }
-                } catch (error) {
-                    console.error('Error loading contacts:', error);
-                    // Show empty state if error
+                        
+                        contactsContent.appendChild(contactDiv);
+                    });
+                } else {
                     contactsContent.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-users"></i>
                             <h3>No contacts yet</h3>
-                            <p>Add people to your contacts to start chatting!</p>
+                            <p>Add friends to start chatting!</p>
                         </div>
                     `;
                 }
             } catch (error) {
                 console.error('Error loading contacts:', error);
-                const contactsContent = document.getElementById('contactsContent');
                 contactsContent.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-exclamation-triangle"></i>
@@ -2307,173 +2481,84 @@
             }
         }
         
-        // Load requests with master key
+        // Load requests
         async function loadRequests() {
             try {
                 const requestsContent = document.getElementById('requestsContent');
-                const badge = document.getElementById('requestsBadge');
+                const loading = document.getElementById('requestsLoading');
+                const requestsBadge = document.getElementById('requestsBadge');
                 
                 requestsContent.innerHTML = '<div class="loading"><div class="spinner"></div>Loading requests...</div>';
                 
-                let totalRequests = 0;
+                const currentUser = Parse.User.current();
+                const query = encodeURIComponent(JSON.stringify({
+                    "toUser": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUser.id
+                    },
+                    "status": "pending"
+                }));
                 
-                try {
-                    const currentUser = Parse.User.current();
-                    
-                    // Get received requests
-                    const receivedQuery = encodeURIComponent(JSON.stringify({
-                        "toUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentUser.id
-                        },
-                        "status": "pending"
-                    }));
-                    
-                    const receivedResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${receivedQuery}&include=fromUser`);
-                    const receivedResult = await receivedResponse.json();
-                    
-                    if (receivedResult.results && receivedResult.results.length > 0) {
-                        requestsContent.innerHTML = '';
-                        const headerDiv = document.createElement('div');
-                        headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Received Requests</h4>';
-                        requestsContent.appendChild(headerDiv);
-                        
-                        receivedResult.results.forEach(request => {
-                            try {
-                                const fromUser = request.fromUser;
-                                if (!fromUser) return;
-                                
-                                const username = fromUser.username || 'Unknown';
-                                const fromUserId = fromUser.objectId;
-                                const profilePic = fromUser.profilePicture;
-                                
-                                totalRequests++;
-                                
-                                const requestDiv = document.createElement('div');
-                                requestDiv.className = 'contact-item';
-                                
-                                const avatarStyle = profilePic && profilePic.url ? 
-                                    `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
-                                    `style="background-color: #25d366;"`;
-                                
-                                requestDiv.innerHTML = `
-                                    <div class="contact-avatar" ${avatarStyle}>
-                                        ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
-                                    </div>
-                                    <div class="contact-info">
-                                        <div class="contact-name">${escapeHTML(username)}</div>
-                                        <div class="contact-status">Wants to connect</div>
-                                    </div>
-                                    <div class="contact-actions">
-                                        <button class="contact-btn accept" onclick="acceptRequest('${fromUserId}', '${escapeString(username)}')" title="Accept">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                        <button class="contact-btn reject" onclick="rejectContactRequest('${request.objectId}', '${escapeString(username)}')" title="Reject">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                `;
-                                
-                                requestsContent.appendChild(requestDiv);
-                            } catch (error) {
-                                console.error('Error processing request:', error);
-                            }
-                        });
-                    }
-                    
-                    // Get sent requests
-                    const sentQuery = encodeURIComponent(JSON.stringify({
-                        "fromUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentUser.id
-                        },
-                        "status": "pending"
-                    }));
-                    
-                    const sentResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${sentQuery}&include=toUser`);
-                    const sentResult = await sentResponse.json();
-                    
-                    if (sentResult.results && sentResult.results.length > 0) {
-                        if (requestsContent.innerHTML.includes('loading')) {
-                            requestsContent.innerHTML = '';
-                        }
-                        
-                        if (receivedResult.results && receivedResult.results.length > 0) {
-                            const separator = document.createElement('div');
-                            separator.style.height = '20px';
-                            requestsContent.appendChild(separator);
-                        }
-                        
-                        const headerDiv = document.createElement('div');
-                        headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Sent Requests</h4>';
-                        requestsContent.appendChild(headerDiv);
-                        
-                        sentResult.results.forEach(request => {
-                            try {
-                                const toUser = request.toUser;
-                                if (!toUser) return;
-                                
-                                const username = toUser.username || 'Unknown';
-                                const toUserId = toUser.objectId;
-                                const profilePic = toUser.profilePicture;
-                                
-                                const requestDiv = document.createElement('div');
-                                requestDiv.className = 'contact-item';
-                                
-                                const avatarStyle = profilePic && profilePic.url ? 
-                                    `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
-                                    `style="background-color: #25d366;"`;
-                                
-                                requestDiv.innerHTML = `
-                                    <div class="contact-avatar" ${avatarStyle}>
-                                        ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
-                                    </div>
-                                    <div class="contact-info">
-                                        <div class="contact-name">${escapeHTML(username)}</div>
-                                        <div class="contact-status">Request pending</div>
-                                    </div>
-                                    <div class="contact-actions">
-                                        <button class="contact-btn pending" onclick="cancelRequest('${toUserId}', '${escapeString(username)}')" title="Cancel Request">
-                                            <i class="fas fa-clock"></i>
-                                        </button>
-                                    </div>
-                                `;
-                                
-                                requestsContent.appendChild(requestDiv);
-                            } catch (error) {
-                                console.error('Error processing sent request:', error);
-                            }
-                        });
-                    }
-                    
-                } catch (error) {
-                    console.error('Error loading requests:', error);
-                }
+                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}&include=fromUser`);
+                const result = await response.json();
                 
-                // Show empty state if no requests
-                if (totalRequests === 0 && requestsContent.innerHTML.includes('loading')) {
+                if (result.results && result.results.length > 0) {
+                    requestsContent.innerHTML = '';
+                    
+                    // Update badge
+                    requestsBadge.textContent = result.results.length;
+                    requestsBadge.classList.remove('hidden');
+                    
+                    result.results.forEach(contact => {
+                        const fromUser = contact.fromUser;
+                        if (!fromUser) return;
+                        
+                        const username = fromUser.username || 'Unknown';
+                        const userId = fromUser.objectId;
+                        const profilePic = fromUser.profilePicture;
+                        
+                        const requestDiv = document.createElement('div');
+                        requestDiv.className = 'contact-item';
+                        
+                        const avatarStyle = profilePic && profilePic.url ? 
+                            `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
+                            `style="background-color: #ffa502;"`;
+                        
+                        requestDiv.innerHTML = `
+                            <div class="contact-avatar" ${avatarStyle}>
+                                ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
+                            </div>
+                            <div class="contact-info">
+                                <div class="contact-name">${escapeHTML(username)}</div>
+                                <div class="contact-status">
+                                    Wants to connect
+                                </div>
+                            </div>
+                            <div class="contact-actions">
+                                <button class="contact-btn accept" onclick="acceptRequest('${userId}', '${escapeString(username)}')" title="Accept">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="contact-btn reject" onclick="rejectRequest('${userId}', '${escapeString(username)}')" title="Reject">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `;
+                        
+                        requestsContent.appendChild(requestDiv);
+                    });
+                } else {
                     requestsContent.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-user-plus"></i>
-                            <h3>No contact requests</h3>
-                            <p>Send contact requests to other users and they will appear here</p>
+                            <h3>No pending requests</h3>
+                            <p>When someone sends you a request, it will appear here</p>
                         </div>
                     `;
+                    requestsBadge.classList.add('hidden');
                 }
-                
-                // Update badge
-                if (totalRequests > 0) {
-                    badge.textContent = totalRequests;
-                    badge.classList.remove('hidden');
-                } else {
-                    badge.classList.add('hidden');
-                }
-                
             } catch (error) {
-                console.error('Error in loadRequests:', error);
-                const requestsContent = document.getElementById('requestsContent');
+                console.error('Error loading requests:', error);
                 requestsContent.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-exclamation-triangle"></i>
@@ -2484,145 +2569,53 @@
             }
         }
         
-        // Remove contact with master key
-        async function removeContact(contactId, username) {
-            if (confirm(`Remove ${username} from contacts?`)) {
-                try {
-                    showNotification('Removing contact...', 'info');
-                    
-                    const response = await makeRequestWithMasterKey('DELETE', `classes/Contact/${contactId}`);
-                    
-                    if (response.ok) {
-                        showNotification(`${username} removed from contacts`, 'info');
-                        await loadContacts();
-                    } else {
-                        const error = await response.json();
-                        showNotification('Failed to remove contact', 'error');
-                    }
-                    
-                } catch (error) {
-                    console.error('Remove contact error:', error);
-                    showNotification('Failed to remove contact', 'error');
-                }
-            }
-        }
-        
-        // Reject contact request with master key
-        async function rejectContactRequest(contactId, username) {
+        async function rejectRequest(userId, username) {
             if (confirm(`Reject contact request from ${username}?`)) {
                 try {
                     showNotification('Rejecting request...', 'info');
                     
-                    const response = await makeRequestWithMasterKey('DELETE', `classes/Contact/${contactId}`);
+                    const currentUser = Parse.User.current();
+                    const query = encodeURIComponent(JSON.stringify({
+                        "fromUser": {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": userId
+                        },
+                        "toUser": {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentUser.id
+                        },
+                        "status": "pending"
+                    }));
                     
-                    if (response.ok) {
-                        showNotification(`Request from ${username} rejected`, 'info');
-                        await loadRequests();
+                    const findResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
+                    const findResult = await findResponse.json();
+                    
+                    if (findResult.results && findResult.results.length > 0) {
+                        const contactId = findResult.results[0].objectId;
+                        
+                        const deleteResponse = await makeRequestWithMasterKey('DELETE', `classes/Contact/${contactId}`);
+                        
+                        if (deleteResponse.ok) {
+                            showNotification(`Request from ${username} rejected`, 'info');
+                            await loadRequests();
+                        } else {
+                            const error = await deleteResponse.json();
+                            showNotification('Failed to reject request', 'error');
+                        }
                     } else {
-                        const error = await response.json();
-                        showNotification('Failed to reject request', 'error');
+                        showNotification('Request not found', 'error');
                     }
                     
                 } catch (error) {
-                    console.error('Reject contact error:', error);
+                    console.error('Error rejecting request:', error);
                     showNotification('Failed to reject request', 'error');
                 }
             }
         }
         
-        // =============== UI FUNCTIONS ===============
-        
-        // Search sidebar content
-        function searchContent() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            
-            if (currentTab === 'chats') {
-                const chatItems = document.querySelectorAll('.chat-item');
-                chatItems.forEach(item => {
-                    const chatName = item.querySelector('.chat-name')?.textContent.toLowerCase() || '';
-                    item.style.display = chatName.includes(searchTerm) ? 'flex' : 'none';
-                });
-            } else if (currentTab === 'contacts') {
-                const contactItems = document.querySelectorAll('.contact-item');
-                contactItems.forEach(item => {
-                    const contactName = item.querySelector('.contact-name')?.textContent.toLowerCase() || '';
-                    item.style.display = contactName.includes(searchTerm) ? 'flex' : 'none';
-                });
-            }
-        }
-        
-        // Mobile sidebar toggle
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('show');
-        }
-        
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(e) {
-            const sidebar = document.getElementById('sidebar');
-            const toggleBtn = document.querySelector('.mobile-menu-toggle');
-            
-            if (window.innerWidth <= 768 && sidebar.classList.contains('show')) {
-                if (!sidebar.contains(e.target) && e.target !== toggleBtn && !toggleBtn.contains(e.target)) {
-                    sidebar.classList.remove('show');
-                }
-            }
-        });
-        
-        // Refresh all data
-        async function refreshAll() {
-            showNotification('Refreshing...', 'info', 2000);
-            await loadUserData(); // Refresh user data including profile picture
-            await loadAllData();
-            showNotification('Data refreshed!', 'success', 1000);
-        }
-        
-        // Refresh messages
-        async function refreshMessages() {
-            if (currentChatId) {
-                showNotification('Refreshing messages...', 'info', 1000);
-                if (isGlobalChat) {
-                    await loadGlobalMessages();
-                } else {
-                    await loadMessages(true);
-                }
-            }
-        }
-        
-        // Update online users count
-        async function updateOnlineUsersCount() {
-            try {
-                // Simple fallback: Just show a placeholder count
-                const randomCount = Math.floor(Math.random() * 50) + 10;
-                document.getElementById('globalUserCount').textContent = randomCount;
-            } catch (error) {
-                console.error('Error updating online count:', error);
-                document.getElementById('globalUserCount').textContent = '?';
-            }
-        }
-        
-        // Logout
-        async function logout() {
-            if (confirm('Are you sure you want to logout?')) {
-                // Stop intervals
-                if (dataRefreshInterval) clearInterval(dataRefreshInterval);
-                if (messageRefreshInterval) clearInterval(messageRefreshInterval);
-                
-                // Try to logout via Backend if available
-                if (typeof Backend !== 'undefined' && typeof Backend.logout === 'function') {
-                    await Backend.logout();
-                } else {
-                    // Fallback: Just clear Parse session
-                    await Parse.User.logOut();
-                }
-                
-                window.location.href = 'login.html';
-            }
-        }
-        
         // =============== UTILITY FUNCTIONS ===============
-        
-        // Handle enter key press
         function handleKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
@@ -2630,120 +2623,93 @@
             }
         }
         
-        // Adjust textarea height
-        function adjustTextareaHeight(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-            
-            const sendBtn = document.getElementById('sendBtn');
-            const hasContent = textarea.value.trim().length > 0;
-            
-            sendBtn.disabled = !hasContent;
-            
-            if (hasContent) {
-                sendBtn.style.background = '#25d366';
-            } else {
-                sendBtn.style.background = '#ccc';
-            }
-        }
-        
-        // Check if scrolled to bottom
-        function isScrolledToBottom(container) {
-            if (!container) return true;
-            const threshold = 100;
-            return container.scrollTop >= (container.scrollHeight - container.clientHeight - threshold);
-        }
-        
-        // Format time
-        function formatTime(date) {
-            if (!date) return '';
-            
-            try {
-                const now = new Date();
-                const messageDate = new Date(date);
-                const diffInHours = (now - messageDate) / (1000 * 60 * 60);
-                
-                if (diffInHours < 1) {
-                    return 'now';
-                } else if (diffInHours < 24) {
-                    return messageDate.toLocaleTimeString('en-US', { 
-                        hour: '2-digit', 
-                        minute: '2-digit',
-                        hour12: false 
-                    });
-                } else {
-                    return messageDate.toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric' 
-                    });
-                }
-            } catch (e) {
-                return '';
-            }
-        }
-        
-        // Escape string for JavaScript
-        function escapeString(str) {
-            if (!str) return '';
-            return str
-                .replace(/\\/g, '\\\\')
-                .replace(/'/g, "\\'")
-                .replace(/"/g, '\\"')
-                .replace(/\n/g, '\\n')
-                .replace(/\r/g, '\\r')
-                .replace(/\t/g, '\\t');
-        }
-        
-        // Escape HTML
-        function escapeHTML(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        // Show notification
-        function showNotification(message, type = 'info', duration = 4000) {
-            const existing = document.querySelector('.notification');
-            if (existing) existing.remove();
-            
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.innerHTML = `
-                ${message}
-                <button style="background:none;border:none;color:white;float:right;cursor:pointer;margin-left:12px;font-size:16px;" onclick="this.parentElement.remove()">×</button>
-            `;
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                if (notification.parentElement) {
-                    notification.remove();
-                }
-            }, duration);
-        }
-        
-        // Fix mobile viewport height
-        function setViewportHeight() {
-            const vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-        }
-        
-        // =============== EVENT LISTENERS ===============
-        
-        // Handle window resize
-        window.addEventListener('resize', function() {
+        function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            if (window.innerWidth > 768) {
-                sidebar.classList.remove('show');
-            }
-            setViewportHeight();
-        });
+            sidebar.classList.toggle('show');
+        }
         
-        // Set viewport height
-        setViewportHeight();
-        window.addEventListener('orientationchange', () => {
-            setTimeout(setViewportHeight, 100);
+        function refreshMessages() {
+            if (currentChatId) {
+                if (isGlobalChat) {
+                    loadGlobalMessages();
+                } else {
+                    loadMessages(true);
+                }
+                showNotification('Messages refreshed', 'info', 2000);
+            }
+        }
+        
+        function refreshAll() {
+            loadAllData();
+            if (currentChatId) {
+                refreshMessages();
+            }
+            showNotification('All data refreshed', 'success', 2000);
+        }
+        
+        function searchContent() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const currentContent = document.getElementById(currentTab + 'Content');
+            
+            const items = currentContent.querySelectorAll('.chat-item, .contact-item, .user-result');
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(searchTerm) ? 'flex' : 'none';
+            });
+        }
+        
+        async function updateOnlineUsersCount() {
+            try {
+                // Get approximate online users by checking recently active users
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+                const query = encodeURIComponent(JSON.stringify({
+                    "updatedAt": {"$gte": {"__type": "Date", "iso": fiveMinutesAgo}}
+                }));
+                
+                const response = await makeRequestWithMasterKey('GET', `classes/_User?where=${query}&count=1`);
+                const result = await response.json();
+                
+                if (result.count) {
+                    document.getElementById('globalUserCount').textContent = result.count;
+                }
+            } catch (error) {
+                console.log('Error updating online count:', error);
+            }
+        }
+        
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                Parse.User.logOut().then(() => {
+                    window.location.href = 'login.html';
+                });
+            }
+        }
+        
+        // =============== INITIALIZATION ===============
+        window.addEventListener('load', async function() {
+            console.log('🚀 ChatRise initializing...');
+            
+            // Check login status
+            if (!Parse.User.current()) {
+                console.log('🔐 Not logged in, redirecting...');
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Load user data with profile picture
+            await loadUserData();
+            
+            // Initialize input handler
+            const messageInput = document.getElementById('messageInput');
+            messageInput.addEventListener('input', function() {
+                adjustTextareaHeight(this);
+            });
+            
+            // Load initial data
+            await loadAllData();
+            startAutoRefresh();
+            
+            console.log('✅ ChatRise initialized successfully');
         });
         
         // Close modal when clicking outside
@@ -2752,26 +2718,20 @@
             if (event.target === modal) {
                 hideUsersModal();
             }
-        }
+        };
         
-        // Handle visibility changes
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && currentChatId) {
-                if (isGlobalChat) {
-                    loadGlobalMessages();
-                } else {
-                    loadMessages();
-                }
+        // Handle back button on mobile
+        window.onpopstate = function() {
+            if (window.innerWidth <= 768) {
+                const sidebar = document.getElementById('sidebar');
+                sidebar.classList.remove('show');
             }
-        });
+        };
         
-        // Initialize input handler
-        window.addEventListener('load', function() {
-            const messageInput = document.getElementById('messageInput');
-            if (messageInput) {
-                messageInput.addEventListener('input', function() {
-                    adjustTextareaHeight(this);
-                });
+        // Handle visibility change
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && Parse.User.current()) {
+                refreshAll();
             }
         });
     </script>
