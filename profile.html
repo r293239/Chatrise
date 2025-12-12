@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
     <script src="config.js"></script>
+    <script src="backend.js"></script>
     <style>
         * {
             margin: 0;
@@ -387,16 +388,17 @@
 
     <script>
         // =============== GLOBAL VARIABLES ===============
-        let currentUser = null;
         let hasUnsavedChanges = false;
         
         // =============== INITIALIZATION ===============
         window.addEventListener('load', async function() {
             console.log('👤 Profile page loading...');
             
+            // Wait for Backend to be initialized
+            await waitForBackend();
+            
             // Check if logged in
-            currentUser = Parse.User.current();
-            if (!currentUser) {
+            if (!Backend.isLoggedIn()) {
                 showNotification('Please login first', 'error');
                 setTimeout(() => window.location.href = 'login.html', 1500);
                 return;
@@ -426,13 +428,29 @@
             console.log('✅ Profile page loaded');
         });
         
+        // Wait for Backend to be fully initialized
+        function waitForBackend() {
+            return new Promise((resolve) => {
+                const checkBackend = () => {
+                    if (typeof Backend !== 'undefined' && Backend.isInitialized) {
+                        resolve();
+                    } else {
+                        setTimeout(checkBackend, 100);
+                    }
+                };
+                checkBackend();
+            });
+        }
+        
         // =============== PROFILE FUNCTIONS ===============
         
         // Load user profile data
         async function loadUserProfile() {
             try {
-                // Refresh user data
-                await currentUser.fetch();
+                const currentUser = Backend.getCurrentUser();
+                if (!currentUser) {
+                    throw new Error('No user found');
+                }
                 
                 // Display basic info
                 document.getElementById('profileName').textContent = currentUser.get('username') || 'User';
@@ -459,6 +477,7 @@
         // Load user avatar
         async function loadAvatar() {
             const avatarContent = document.getElementById('avatarContent');
+            const currentUser = Backend.getCurrentUser();
             const avatarFile = currentUser.get('avatar');
             
             if (avatarFile) {
@@ -495,6 +514,8 @@
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
             
             try {
+                const currentUser = Backend.getCurrentUser();
+                
                 // Create Parse file
                 const parseFile = new Parse.File('avatar.jpg', file);
                 await parseFile.save();
@@ -511,7 +532,7 @@
                 
             } catch (error) {
                 console.error('Error uploading avatar:', error);
-                showNotification('Failed to upload avatar', 'error');
+                showNotification('Failed to upload avatar: ' + error.message, 'error');
             }
             
             saveBtn.disabled = false;
@@ -523,12 +544,22 @@
             const statsGrid = document.getElementById('statsGrid');
             
             try {
-                // These would come from your backend
+                // Get contacts
+                const contactsResult = await Backend.getContacts();
+                const contactsCount = contactsResult.success ? contactsResult.contacts.length : 0;
+                
+                // Get messages count (you may need to add this to backend.js)
                 // For now, we'll use placeholder data
+                const messagesCount = await getMessagesCount();
+                
+                // Check if user is online
+                const currentUser = Backend.getCurrentUser();
+                const isOnline = currentUser.get('isOnline') || false;
+                
                 const stats = [
-                    { label: 'Contacts', value: '0' },
-                    { label: 'Messages', value: '0' },
-                    { label: 'Online', value: 'Now' }
+                    { label: 'Contacts', value: contactsCount },
+                    { label: 'Messages', value: messagesCount },
+                    { label: 'Status', value: isOnline ? 'Online' : 'Offline' }
                 ];
                 
                 statsGrid.innerHTML = '';
@@ -544,7 +575,40 @@
                 
             } catch (error) {
                 console.error('Error loading stats:', error);
-                statsGrid.innerHTML = '<div class="loading">Failed to load stats</div>';
+                // Fallback to placeholder stats
+                statsGrid.innerHTML = '';
+                const fallbackStats = [
+                    { label: 'Contacts', value: '0' },
+                    { label: 'Messages', value: '0' },
+                    { label: 'Status', value: 'Online' }
+                ];
+                
+                fallbackStats.forEach(stat => {
+                    const statItem = document.createElement('div');
+                    statItem.className = 'stat-item';
+                    statItem.innerHTML = `
+                        <div class="stat-value">${stat.value}</div>
+                        <div class="stat-label">${stat.label}</div>
+                    `;
+                    statsGrid.appendChild(statItem);
+                });
+            }
+        }
+        
+        // Get messages count for current user
+        async function getMessagesCount() {
+            try {
+                // This is a simplified version - you may want to optimize this
+                const Message = Parse.Object.extend('Message');
+                const query = new Parse.Query(Message);
+                const currentUser = Backend.getCurrentUser();
+                
+                query.equalTo('receiver', currentUser);
+                const count = await query.count();
+                return count;
+            } catch (error) {
+                console.error('Error getting messages count:', error);
+                return '0';
             }
         }
         
@@ -557,11 +621,13 @@
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
             
             try {
+                const currentUser = Backend.getCurrentUser();
+                
                 // Update bio
                 const bio = document.getElementById('bioTextarea').value.trim();
                 currentUser.set('bio', bio);
                 
-                // Save all changes
+                // Save all changes using Backend's user management
                 await currentUser.save();
                 
                 hasUnsavedChanges = false;
