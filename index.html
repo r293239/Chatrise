@@ -110,6 +110,9 @@
             position: relative;
             cursor: pointer;
             transition: transform 0.2s;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
         
         .user-avatar:hover {
@@ -308,6 +311,9 @@
             font-weight: bold;
             font-size: 18px;
             position: relative;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
         
         .global-avatar {
@@ -486,6 +492,9 @@
             font-weight: bold;
             font-size: 18px;
             position: relative;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
         
         .chat-header-details h3 {
@@ -793,6 +802,9 @@
             font-size: 18px;
             margin-right: 15px;
             position: relative;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
         
         .user-result-info {
@@ -1226,6 +1238,316 @@
         let currentTab = 'chats';
         let userSearchDebounce = null;
 
+        // =============== MASTER KEY HELPER FUNCTIONS ===============
+        function makeRequestWithMasterKey(method, endpoint, data = {}) {
+            const url = `https://parseapi.back4app.com/${endpoint}`;
+            console.log(`🔐 Making ${method} request to ${endpoint} with master key`);
+            
+            return fetch(url, {
+                method: method,
+                headers: {
+                    'X-Parse-Application-Id': 'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
+                    'X-Parse-Master-Key': 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz',
+                    'Content-Type': 'application/json'
+                },
+                body: method !== 'GET' ? JSON.stringify(data) : undefined
+            });
+        }
+
+        // =============== CONTACT FUNCTIONS WITH MASTER KEY ===============
+        async function sendContactRequest(userId, username) {
+            console.log(`📤 Sending contact request to ${username} (${userId})...`);
+            
+            try {
+                showNotification(`Sending request to ${username}...`, 'info');
+                
+                const currentUser = Parse.User.current();
+                
+                // Use REST API with master key to create contact
+                const contactData = {
+                    fromUser: {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUser.id
+                    },
+                    toUser: {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": userId
+                    },
+                    status: "pending",
+                    fromUsername: currentUser.get('username') || 'User',
+                    toUsername: username,
+                    createdAt: new Date().toISOString()
+                };
+                
+                console.log('Creating contact request with data:', contactData);
+                
+                const response = await makeRequestWithMasterKey('POST', 'classes/Contact', contactData);
+                const result = await response.json();
+                
+                if (response.ok) {
+                    console.log('✅ Contact request saved successfully!', result);
+                    showNotification(`Contact request sent to ${username}!`, 'success');
+                    
+                    // Refresh users list and requests
+                    await loadAllUsers();
+                    await loadRequests();
+                } else {
+                    console.error('❌ Failed to save contact request:', result);
+                    if (result.code === 137) {
+                        showNotification(`You already sent a request to ${username}`, 'info');
+                    } else {
+                        showNotification(`Failed to send request: ${result.error || 'Unknown error'}`, 'error');
+                    }
+                }
+                
+            } catch (error) {
+                console.error('❌ Error sending contact request:', error);
+                showNotification(`Failed to send request: ${error.message}`, 'error');
+            }
+        }
+        
+        async function cancelRequest(userId, username) {
+            if (confirm(`Cancel contact request to ${username}?`)) {
+                try {
+                    showNotification('Cancelling request...', 'info');
+                    
+                    // First find the request ID
+                    const currentUser = Parse.User.current();
+                    const query = encodeURIComponent(JSON.stringify({
+                        "fromUser": {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentUser.id
+                        },
+                        "toUser": {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": userId
+                        },
+                        "status": "pending"
+                    }));
+                    
+                    const findResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
+                    const findResult = await findResponse.json();
+                    
+                    if (findResult.results && findResult.results.length > 0) {
+                        const contactId = findResult.results[0].objectId;
+                        
+                        // Delete the contact request
+                        const deleteResponse = await makeRequestWithMasterKey('DELETE', `classes/Contact/${contactId}`);
+                        
+                        if (deleteResponse.ok) {
+                            showNotification(`Request to ${username} cancelled`, 'info');
+                            await loadAllUsers();
+                            await loadRequests();
+                        } else {
+                            const error = await deleteResponse.json();
+                            showNotification('Failed to cancel request', 'error');
+                        }
+                    } else {
+                        showNotification('Request not found', 'error');
+                    }
+                    
+                } catch (error) {
+                    console.error('Error cancelling request:', error);
+                    showNotification('Failed to cancel request', 'error');
+                }
+            }
+        }
+        
+        async function acceptRequest(userId, username) {
+            try {
+                showNotification('Accepting request...', 'info');
+                
+                // Find the request ID
+                const currentUser = Parse.User.current();
+                const query = encodeURIComponent(JSON.stringify({
+                    "fromUser": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": userId
+                    },
+                    "toUser": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUser.id
+                    },
+                    "status": "pending"
+                }));
+                
+                const findResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
+                const findResult = await findResponse.json();
+                
+                if (findResult.results && findResult.results.length > 0) {
+                    const contactId = findResult.results[0].objectId;
+                    
+                    // Update the contact status to accepted
+                    const updateData = {
+                        status: "accepted",
+                        updatedAt: new Date().toISOString()
+                    };
+                    
+                    const updateResponse = await makeRequestWithMasterKey('PUT', `classes/Contact/${contactId}`, updateData);
+                    
+                    if (updateResponse.ok) {
+                        showNotification(`${username} added to contacts!`, 'success');
+                        
+                        // Refresh all data
+                        await Promise.all([
+                            loadAllUsers(),
+                            loadContacts(),
+                            loadRequests()
+                        ]);
+                    } else {
+                        const error = await updateResponse.json();
+                        showNotification('Failed to accept request', 'error');
+                    }
+                } else {
+                    showNotification('Request not found', 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error accepting request:', error);
+                showNotification('Failed to accept request: ' + error.message, 'error');
+            }
+        }
+        
+        async function getExistingContacts() {
+            try {
+                const currentUser = Parse.User.current();
+                const query = encodeURIComponent(JSON.stringify({
+                    "fromUser": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUser.id
+                    },
+                    "status": "accepted"
+                }));
+                
+                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
+                const result = await response.json();
+                
+                if (result.results) {
+                    return result.results.map(contact => contact.toUser.objectId);
+                }
+                return [];
+                
+            } catch (error) {
+                console.log('No contacts found:', error);
+                return [];
+            }
+        }
+        
+        async function getPendingRequests() {
+            try {
+                const currentUser = Parse.User.current();
+                const query = encodeURIComponent(JSON.stringify({
+                    "fromUser": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUser.id
+                    },
+                    "status": "pending"
+                }));
+                
+                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
+                const result = await response.json();
+                
+                if (result.results) {
+                    return result.results.map(contact => contact.toUser.objectId);
+                }
+                return [];
+                
+            } catch (error) {
+                console.log('No pending requests:', error);
+                return [];
+            }
+        }
+        
+        async function getReceivedRequests() {
+            try {
+                const currentUser = Parse.User.current();
+                const query = encodeURIComponent(JSON.stringify({
+                    "toUser": {
+                        "__type": "Pointer",
+                        "className": "_User",
+                        "objectId": currentUser.id
+                    },
+                    "status": "pending"
+                }));
+                
+                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
+                const result = await response.json();
+                
+                if (result.results) {
+                    return result.results.map(contact => contact.fromUser.objectId);
+                }
+                return [];
+                
+            } catch (error) {
+                console.log('No received requests:', error);
+                return [];
+            }
+        }
+        
+        // =============== PROFILE PICTURE FUNCTIONS ===============
+        async function loadUserProfilePicture() {
+            try {
+                const currentUser = Parse.User.current();
+                if (!currentUser) return;
+                
+                // Check if user has a profile picture
+                const profilePic = currentUser.get('profilePicture');
+                if (profilePic && profilePic.url) {
+                    // Set profile picture as background image
+                    const userAvatar = document.getElementById('userAvatar');
+                    userAvatar.style.backgroundImage = `url('${profilePic.url}')`;
+                    userAvatar.textContent = ''; // Remove text
+                    
+                    // Also set for chat header avatar
+                    const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
+                    chatHeaderAvatar.style.backgroundImage = `url('${profilePic.url}')`;
+                }
+                
+            } catch (error) {
+                console.error('Error loading profile picture:', error);
+            }
+        }
+        
+        async function loadUserData() {
+            try {
+                const currentUser = Parse.User.current();
+                if (currentUser) {
+                    // Fetch fresh user data to get updated profile picture
+                    await currentUser.fetch();
+                    
+                    // Update username display
+                    document.getElementById('username-display').textContent = currentUser.get('username') || 'User';
+                    
+                    // Update avatar with initial letter if no profile picture
+                    const userAvatar = document.getElementById('userAvatar');
+                    const username = currentUser.get('username') || 'U';
+                    
+                    // Check if user has a profile picture
+                    const profilePic = currentUser.get('profilePicture');
+                    if (profilePic && profilePic.url) {
+                        userAvatar.style.backgroundImage = `url('${profilePic.url}')`;
+                        userAvatar.textContent = '';
+                    } else {
+                        userAvatar.textContent = username[0].toUpperCase();
+                        userAvatar.style.backgroundImage = 'none';
+                        userAvatar.style.backgroundColor = 'rgba(255,255,255,0.2)';
+                    }
+                    
+                    console.log('✅ User loaded:', currentUser.get('username'));
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+        
         // =============== INITIALIZATION ===============
         window.addEventListener('load', async function() {
             console.log('🚀 ChatRise initializing...');
@@ -1237,13 +1559,8 @@
                 return;
             }
             
-            // Initialize user interface
-            const user = Parse.User.current();
-            if (user) {
-                document.getElementById('username-display').textContent = user.get('username') || 'User';
-                document.getElementById('userAvatar').textContent = (user.get('username') || 'U')[0].toUpperCase();
-                console.log('✅ User loaded:', user.get('username'));
-            }
+            // Load user data with profile picture
+            await loadUserData();
             
             // Initialize input handler
             const messageInput = document.getElementById('messageInput');
@@ -1300,20 +1617,20 @@
                     return;
                 }
                 
-                // Query all users
-                const query = new Parse.Query(Parse.User);
-                query.notEqualTo('objectId', currentUser.id);
+                // Query all users using master key
+                const query = searchTerm ? 
+                    encodeURIComponent(JSON.stringify({
+                        "username": {"$regex": searchTerm, "$options": "i"},
+                        "objectId": {"$ne": currentUser.id}
+                    })) : 
+                    encodeURIComponent(JSON.stringify({
+                        "objectId": {"$ne": currentUser.id}
+                    }));
                 
-                if (searchTerm) {
-                    query.contains('username', searchTerm);
-                }
+                const response = await makeRequestWithMasterKey('GET', `classes/_User?where=${query}&order=username&limit=50`);
+                const result = await response.json();
                 
-                query.limit(50);
-                query.ascending('username');
-                
-                const users = await query.find();
-                
-                if (users.length === 0) {
+                if (!result.results || result.results.length === 0) {
                     usersList.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-user-slash"></i>
@@ -1331,9 +1648,10 @@
                 
                 // Display users
                 usersList.innerHTML = '';
-                users.forEach(user => {
-                    const userId = user.id;
-                    const username = user.get('username') || 'User';
+                result.results.forEach(user => {
+                    const userId = user.objectId;
+                    const username = user.username || 'User';
+                    const profilePic = user.profilePicture;
                     
                     // Check contact status
                     let status = 'none';
@@ -1370,9 +1688,14 @@
                     
                     const userDiv = document.createElement('div');
                     userDiv.className = 'user-result';
+                    
+                    const avatarStyle = profilePic && profilePic.url ? 
+                        `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
+                        `style="background-color: #25d366;"`;
+                    
                     userDiv.innerHTML = `
-                        <div class="user-result-avatar">
-                            ${username[0].toUpperCase()}
+                        <div class="user-result-avatar" ${avatarStyle}>
+                            ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
                         </div>
                         <div class="user-result-info">
                             <div class="user-result-name">${escapeHTML(username)}</div>
@@ -1411,161 +1734,6 @@
                 case 'pending': return 'Request sent';
                 case 'received': return 'Request received';
                 default: return 'Not connected';
-            }
-        }
-        
-        // =============== CONTACT REQUEST FUNCTIONS ===============
-        
-        async function sendContactRequest(userId, username) {
-            console.log(`📤 Sending contact request to ${username} (${userId})...`);
-            
-            try {
-                showNotification(`Sending request to ${username}...`, 'info');
-                
-                // Create Contact object
-                const Contact = Parse.Object.extend('Contact');
-                const contact = new Contact();
-                
-                const currentUser = Parse.User.current();
-                const toUser = Parse.User.createWithoutData(userId);
-                
-                // Set contact data
-                contact.set('fromUser', currentUser);
-                contact.set('toUser', toUser);
-                contact.set('status', 'pending');
-                contact.set('fromUsername', currentUser.get('username') || 'User');
-                contact.set('toUsername', username);
-                contact.set('createdAt', new Date());
-                
-                console.log('Creating contact request:', {
-                    fromUser: currentUser.id,
-                    toUser: userId,
-                    status: 'pending'
-                });
-                
-                await contact.save();
-                
-                console.log('✅ Contact request saved successfully!');
-                showNotification(`Contact request sent to ${username}!`, 'success');
-                
-                // Refresh users list and requests
-                await loadAllUsers();
-                await loadRequests();
-                
-            } catch (error) {
-                console.error('❌ Error sending contact request:', error);
-                
-                if (error.code === 137) {
-                    // Duplicate value error - already sent
-                    showNotification(`You already sent a request to ${username}`, 'info');
-                } else {
-                    showNotification(`Failed to send request: ${error.message}`, 'error');
-                }
-            }
-        }
-        
-        async function cancelRequest(userId, username) {
-            if (confirm(`Cancel contact request to ${username}?`)) {
-                try {
-                    const Contact = Parse.Object.extend('Contact');
-                    const query = new Parse.Query(Contact);
-                    query.equalTo('fromUser', Parse.User.current());
-                    query.equalTo('toUser', Parse.User.createWithoutData(userId));
-                    query.equalTo('status', 'pending');
-                    
-                    const request = await query.first();
-                    
-                    if (request) {
-                        await request.destroy();
-                        showNotification(`Request to ${username} cancelled`, 'info');
-                        await loadAllUsers();
-                        await loadRequests();
-                    }
-                    
-                } catch (error) {
-                    console.error('Error cancelling request:', error);
-                    showNotification('Failed to cancel request', 'error');
-                }
-            }
-        }
-        
-        async function acceptRequest(userId, username) {
-            try {
-                const Contact = Parse.Object.extend('Contact');
-                const query = new Parse.Query(Contact);
-                query.equalTo('fromUser', Parse.User.createWithoutData(userId));
-                query.equalTo('toUser', Parse.User.current());
-                query.equalTo('status', 'pending');
-                
-                const request = await query.first();
-                
-                if (request) {
-                    request.set('status', 'accepted');
-                    await request.save();
-                    
-                    showNotification(`${username} added to contacts!`, 'success');
-                    
-                    // Refresh all data
-                    await Promise.all([
-                        loadAllUsers(),
-                        loadContacts(),
-                        loadRequests()
-                    ]);
-                } else {
-                    showNotification('Request not found', 'error');
-                }
-                
-            } catch (error) {
-                console.error('Error accepting request:', error);
-                showNotification('Failed to accept request: ' + error.message, 'error');
-            }
-        }
-        
-        async function getExistingContacts() {
-            try {
-                const Contact = Parse.Object.extend('Contact');
-                const query = new Parse.Query(Contact);
-                query.equalTo('fromUser', Parse.User.current());
-                query.equalTo('status', 'accepted');
-                
-                const contacts = await query.find();
-                return contacts.map(c => c.get('toUser').id);
-                
-            } catch (error) {
-                console.log('No contacts found:', error);
-                return [];
-            }
-        }
-        
-        async function getPendingRequests() {
-            try {
-                const Contact = Parse.Object.extend('Contact');
-                const query = new Parse.Query(Contact);
-                query.equalTo('fromUser', Parse.User.current());
-                query.equalTo('status', 'pending');
-                
-                const requests = await query.find();
-                return requests.map(r => r.get('toUser').id);
-                
-            } catch (error) {
-                console.log('No pending requests:', error);
-                return [];
-            }
-        }
-        
-        async function getReceivedRequests() {
-            try {
-                const Contact = Parse.Object.extend('Contact');
-                const query = new Parse.Query(Contact);
-                query.equalTo('toUser', Parse.User.current());
-                query.equalTo('status', 'pending');
-                
-                const requests = await query.find();
-                return requests.map(r => r.get('fromUser').id);
-                
-            } catch (error) {
-                console.log('No received requests:', error);
-                return [];
             }
         }
         
@@ -1660,6 +1828,7 @@
             document.getElementById('currentChatName').textContent = '🌍 Global Chat';
             document.getElementById('chatStatus').textContent = 'Everyone is here';
             document.getElementById('chatHeaderAvatar').innerHTML = '<i class="fas fa-globe"></i>';
+            document.getElementById('chatHeaderAvatar').style.backgroundImage = 'none';
             
             await loadGlobalMessages();
             document.getElementById('messageInput').focus();
@@ -1702,7 +1871,35 @@
             
             document.getElementById('currentChatName').textContent = username;
             document.getElementById('chatStatus').textContent = 'online';
-            document.getElementById('chatHeaderAvatar').textContent = username[0].toUpperCase();
+            
+            // Load user profile picture for chat header
+            try {
+                const query = encodeURIComponent(JSON.stringify({"objectId": userId}));
+                const response = await makeRequestWithMasterKey('GET', `classes/_User?where=${query}`);
+                const result = await response.json();
+                
+                if (result.results && result.results.length > 0) {
+                    const user = result.results[0];
+                    const profilePic = user.profilePicture;
+                    const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
+                    
+                    if (profilePic && profilePic.url) {
+                        chatHeaderAvatar.style.backgroundImage = `url('${profilePic.url}')`;
+                        chatHeaderAvatar.textContent = '';
+                    } else {
+                        chatHeaderAvatar.textContent = username[0].toUpperCase();
+                        chatHeaderAvatar.style.backgroundImage = 'none';
+                        chatHeaderAvatar.style.backgroundColor = '#25d366';
+                    }
+                } else {
+                    document.getElementById('chatHeaderAvatar').textContent = username[0].toUpperCase();
+                    document.getElementById('chatHeaderAvatar').style.backgroundImage = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading user profile:', error);
+                document.getElementById('chatHeaderAvatar').textContent = username[0].toUpperCase();
+                document.getElementById('chatHeaderAvatar').style.backgroundImage = 'none';
+            }
             
             await loadMessages();
             document.getElementById('messageInput').focus();
@@ -2015,41 +2212,48 @@
             }
         }
         
-        // Load contacts
+        // Load contacts with master key
         async function loadContacts() {
             try {
                 const contactsContent = document.getElementById('contactsContent');
                 const loading = document.getElementById('contactsLoading');
                 
-                contactsContent.innerHTML = '';
+                contactsContent.innerHTML = '<div class="loading"><div class="spinner"></div>Loading contacts...</div>';
                 
-                // Try to get contacts from Contact class
                 try {
-                    const Contact = Parse.Object.extend('Contact');
-                    const query = new Parse.Query(Contact);
-                    query.equalTo('fromUser', Parse.User.current());
-                    query.equalTo('status', 'accepted');
-                    query.include('toUser');
+                    const currentUser = Parse.User.current();
+                    const query = encodeURIComponent(JSON.stringify({
+                        "fromUser": {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentUser.id
+                        },
+                        "status": "accepted"
+                    }));
                     
-                    const contacts = await query.find();
+                    const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}&include=toUser`);
+                    const result = await response.json();
                     
-                    if (contacts.length > 0) {
-                        contacts.forEach(contact => {
-                            const toUser = contact.get('toUser');
-                            const username = toUser ? (toUser.get('username') || 'Unknown') : 'Unknown';
-                            const userId = toUser ? toUser.id : null;
+                    if (result.results && result.results.length > 0) {
+                        contactsContent.innerHTML = '';
+                        result.results.forEach(contact => {
+                            const toUser = contact.toUser;
+                            if (!toUser) return;
                             
-                            if (!userId) {
-                                console.warn('Contact has no valid toUser:', contact.id);
-                                return; // Skip this contact
-                            }
+                            const username = toUser.username || 'Unknown';
+                            const userId = toUser.objectId;
+                            const profilePic = toUser.profilePicture;
                             
                             const contactDiv = document.createElement('div');
                             contactDiv.className = 'contact-item';
                             
+                            const avatarStyle = profilePic && profilePic.url ? 
+                                `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
+                                `style="background-color: #25d366;"`;
+                            
                             contactDiv.innerHTML = `
-                                <div class="contact-avatar">
-                                    ${username[0].toUpperCase()}
+                                <div class="contact-avatar" ${avatarStyle}>
+                                    ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
                                 </div>
                                 <div class="contact-info">
                                     <div class="contact-name">${escapeHTML(username)}</div>
@@ -2061,7 +2265,7 @@
                                     <button class="contact-btn message" onclick="startChat('${userId}', '${escapeString(username)}')" title="Message">
                                         <i class="fas fa-comment"></i>
                                     </button>
-                                    <button class="contact-btn remove" onclick="removeContact('${contact.id}', '${escapeString(username)}')" title="Remove Contact">
+                                    <button class="contact-btn remove" onclick="removeContact('${contact.objectId}', '${escapeString(username)}')" title="Remove Contact">
                                         <i class="fas fa-user-minus"></i>
                                     </button>
                                 </div>
@@ -2071,26 +2275,24 @@
                         });
                     } else {
                         // Show empty state
-                        const emptyDiv = document.createElement('div');
-                        emptyDiv.className = 'empty-state';
-                        emptyDiv.innerHTML = `
-                            <i class="fas fa-users"></i>
-                            <h3>No contacts yet</h3>
-                            <p>Add people to your contacts to start chatting!</p>
+                        contactsContent.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-users"></i>
+                                <h3>No contacts yet</h3>
+                                <p>Add people to your contacts to start chatting!</p>
+                            </div>
                         `;
-                        contactsContent.appendChild(emptyDiv);
                     }
                 } catch (error) {
                     console.error('Error loading contacts:', error);
                     // Show empty state if error
-                    const emptyDiv = document.createElement('div');
-                    emptyDiv.className = 'empty-state';
-                    emptyDiv.innerHTML = `
-                        <i class="fas fa-users"></i>
-                        <h3>No contacts yet</h3>
-                        <p>Add people to your contacts to start chatting!</p>
+                    contactsContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-users"></i>
+                            <h3>No contacts yet</h3>
+                            <p>Add people to your contacts to start chatting!</p>
+                        </div>
                     `;
-                    contactsContent.appendChild(emptyDiv);
                 }
             } catch (error) {
                 console.error('Error loading contacts:', error);
@@ -2105,7 +2307,7 @@
             }
         }
         
-        // Load requests
+        // Load requests with master key
         async function loadRequests() {
             try {
                 const requestsContent = document.getElementById('requestsContent');
@@ -2116,38 +2318,48 @@
                 let totalRequests = 0;
                 
                 try {
-                    const Contact = Parse.Object.extend('Contact');
+                    const currentUser = Parse.User.current();
                     
                     // Get received requests
-                    const receivedQuery = new Parse.Query(Contact);
-                    receivedQuery.equalTo('toUser', Parse.User.current());
-                    receivedQuery.equalTo('status', 'pending');
-                    receivedQuery.include('fromUser');
+                    const receivedQuery = encodeURIComponent(JSON.stringify({
+                        "toUser": {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentUser.id
+                        },
+                        "status": "pending"
+                    }));
                     
-                    const receivedRequests = await receivedQuery.find();
+                    const receivedResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${receivedQuery}&include=fromUser`);
+                    const receivedResult = await receivedResponse.json();
                     
-                    if (receivedRequests.length > 0) {
+                    if (receivedResult.results && receivedResult.results.length > 0) {
                         requestsContent.innerHTML = '';
                         const headerDiv = document.createElement('div');
                         headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Received Requests</h4>';
                         requestsContent.appendChild(headerDiv);
                         
-                        receivedRequests.forEach(request => {
+                        receivedResult.results.forEach(request => {
                             try {
-                                const fromUser = request.get('fromUser');
+                                const fromUser = request.fromUser;
                                 if (!fromUser) return;
                                 
-                                const username = fromUser.get('username') || 'Unknown';
-                                const fromUserId = fromUser.id;
+                                const username = fromUser.username || 'Unknown';
+                                const fromUserId = fromUser.objectId;
+                                const profilePic = fromUser.profilePicture;
                                 
                                 totalRequests++;
                                 
                                 const requestDiv = document.createElement('div');
                                 requestDiv.className = 'contact-item';
                                 
+                                const avatarStyle = profilePic && profilePic.url ? 
+                                    `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
+                                    `style="background-color: #25d366;"`;
+                                
                                 requestDiv.innerHTML = `
-                                    <div class="contact-avatar">
-                                        ${username[0].toUpperCase()}
+                                    <div class="contact-avatar" ${avatarStyle}>
+                                        ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
                                     </div>
                                     <div class="contact-info">
                                         <div class="contact-name">${escapeHTML(username)}</div>
@@ -2157,7 +2369,7 @@
                                         <button class="contact-btn accept" onclick="acceptRequest('${fromUserId}', '${escapeString(username)}')" title="Accept">
                                             <i class="fas fa-check"></i>
                                         </button>
-                                        <button class="contact-btn reject" onclick="rejectContactRequest('${request.id}', '${escapeString(username)}')" title="Reject">
+                                        <button class="contact-btn reject" onclick="rejectContactRequest('${request.objectId}', '${escapeString(username)}')" title="Reject">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -2171,19 +2383,24 @@
                     }
                     
                     // Get sent requests
-                    const sentQuery = new Parse.Query(Contact);
-                    sentQuery.equalTo('fromUser', Parse.User.current());
-                    sentQuery.equalTo('status', 'pending');
-                    sentQuery.include('toUser');
+                    const sentQuery = encodeURIComponent(JSON.stringify({
+                        "fromUser": {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentUser.id
+                        },
+                        "status": "pending"
+                    }));
                     
-                    const sentRequests = await sentQuery.find();
+                    const sentResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${sentQuery}&include=toUser`);
+                    const sentResult = await sentResponse.json();
                     
-                    if (sentRequests.length > 0) {
+                    if (sentResult.results && sentResult.results.length > 0) {
                         if (requestsContent.innerHTML.includes('loading')) {
                             requestsContent.innerHTML = '';
                         }
                         
-                        if (receivedRequests.length > 0) {
+                        if (receivedResult.results && receivedResult.results.length > 0) {
                             const separator = document.createElement('div');
                             separator.style.height = '20px';
                             requestsContent.appendChild(separator);
@@ -2193,20 +2410,25 @@
                         headerDiv.innerHTML = '<h4 style="padding: 15px; margin: 0; color: #666; font-size: 14px; text-transform: uppercase;">Sent Requests</h4>';
                         requestsContent.appendChild(headerDiv);
                         
-                        sentRequests.forEach(request => {
+                        sentResult.results.forEach(request => {
                             try {
-                                const toUser = request.get('toUser');
+                                const toUser = request.toUser;
                                 if (!toUser) return;
                                 
-                                const username = toUser.get('username') || 'Unknown';
-                                const toUserId = toUser.id;
+                                const username = toUser.username || 'Unknown';
+                                const toUserId = toUser.objectId;
+                                const profilePic = toUser.profilePicture;
                                 
                                 const requestDiv = document.createElement('div');
                                 requestDiv.className = 'contact-item';
                                 
+                                const avatarStyle = profilePic && profilePic.url ? 
+                                    `style="background-image: url('${profilePic.url}'); background-color: transparent;"` : 
+                                    `style="background-color: #25d366;"`;
+                                
                                 requestDiv.innerHTML = `
-                                    <div class="contact-avatar">
-                                        ${username[0].toUpperCase()}
+                                    <div class="contact-avatar" ${avatarStyle}>
+                                        ${profilePic && profilePic.url ? '' : username[0].toUpperCase()}
                                     </div>
                                     <div class="contact-info">
                                         <div class="contact-name">${escapeHTML(username)}</div>
@@ -2231,7 +2453,7 @@
                 }
                 
                 // Show empty state if no requests
-                if (totalRequests === 0) {
+                if (totalRequests === 0 && requestsContent.innerHTML.includes('loading')) {
                     requestsContent.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-user-plus"></i>
@@ -2262,16 +2484,21 @@
             }
         }
         
-        // Remove contact
+        // Remove contact with master key
         async function removeContact(contactId, username) {
             if (confirm(`Remove ${username} from contacts?`)) {
                 try {
-                    const Contact = Parse.Object.extend('Contact');
-                    const contact = Parse.Object.createWithoutData('Contact', contactId);
-                    await contact.destroy();
+                    showNotification('Removing contact...', 'info');
                     
-                    showNotification(`${username} removed from contacts`, 'info');
-                    await loadContacts();
+                    const response = await makeRequestWithMasterKey('DELETE', `classes/Contact/${contactId}`);
+                    
+                    if (response.ok) {
+                        showNotification(`${username} removed from contacts`, 'info');
+                        await loadContacts();
+                    } else {
+                        const error = await response.json();
+                        showNotification('Failed to remove contact', 'error');
+                    }
                     
                 } catch (error) {
                     console.error('Remove contact error:', error);
@@ -2280,16 +2507,21 @@
             }
         }
         
-        // Reject contact request
+        // Reject contact request with master key
         async function rejectContactRequest(contactId, username) {
             if (confirm(`Reject contact request from ${username}?`)) {
                 try {
-                    const Contact = Parse.Object.extend('Contact');
-                    const contact = Parse.Object.createWithoutData('Contact', contactId);
-                    await contact.destroy();
+                    showNotification('Rejecting request...', 'info');
                     
-                    showNotification(`Request from ${username} rejected`, 'info');
-                    await loadRequests();
+                    const response = await makeRequestWithMasterKey('DELETE', `classes/Contact/${contactId}`);
+                    
+                    if (response.ok) {
+                        showNotification(`Request from ${username} rejected`, 'info');
+                        await loadRequests();
+                    } else {
+                        const error = await response.json();
+                        showNotification('Failed to reject request', 'error');
+                    }
                     
                 } catch (error) {
                     console.error('Reject contact error:', error);
@@ -2340,6 +2572,7 @@
         // Refresh all data
         async function refreshAll() {
             showNotification('Refreshing...', 'info', 2000);
+            await loadUserData(); // Refresh user data including profile picture
             await loadAllData();
             showNotification('Data refreshed!', 'success', 1000);
         }
