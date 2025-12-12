@@ -7,50 +7,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/parse/4.0.1/parse.min.js"></script>
     
-    <!-- MASTER KEY FIX SCRIPT -->
-    <script>
-    // =============== FORCE MASTER KEY FIX ===============
-    (function() {
-        console.log('🔧 Applying master key fix...');
-        
-        // Wait for Parse to be loaded from config.js
-        setTimeout(() => {
-            // Store original request method
-            const originalRequest = Parse._request;
-            
-            // Override to add master key header
-            Parse._request = function(method, path, data, options) {
-                options = options || {};
-                options.headers = options.headers || {};
-                
-                // Add master key header to ALL requests
-                options.headers['X-Parse-Master-Key'] = 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz';
-                
-                // Also add JavaScript key if not present
-                if (!options.headers['X-Parse-JavaScript-Key']) {
-                    options.headers['X-Parse-JavaScript-Key'] = 'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV';
-                }
-                
-                console.log('📤 Request:', method, path.substring(0, 50));
-                return originalRequest.call(this, method, path, data, options);
-            };
-            
-            console.log('✅ Master key fix applied');
-            
-            // Test if it works
-            setTimeout(() => {
-                const testQuery = new Parse.Query(Parse.User);
-                testQuery.limit(5);
-                testQuery.find().then(users => {
-                    console.log(`✅ Test successful! Found ${users.length} users`);
-                }).catch(err => {
-                    console.error('❌ Test failed:', err);
-                });
-            }, 1000);
-        }, 500);
-    })();
-    </script>
-    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -311,12 +267,6 @@
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        
-        .chat-avatar:hover, .contact-avatar:hover {
-            transform: scale(1.1);
         }
         
         .global-avatar {
@@ -498,12 +448,6 @@
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        
-        .chat-header-avatar:hover {
-            transform: scale(1.05);
         }
         
         .chat-header-details h3 {
@@ -572,31 +516,10 @@
             font-weight: 600;
             color: #666;
             margin-bottom: 2px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
         
         .message.sent .message-header {
             text-align: right;
-            justify-content: flex-end;
-        }
-        
-        .message-avatar {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #25d366;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
-            cursor: pointer;
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
         }
         
         .message-content {
@@ -752,7 +675,7 @@
             padding: 0;
             border-radius: 20px;
             width: 90%;
-            max-width: 500px;
+            max-width: 600px;
             max-height: 80%;
             overflow: hidden;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
@@ -805,80 +728,6 @@
             overflow-y: auto;
         }
         
-        /* Profile View Modal */
-        .profile-view-modal .modal-content {
-            max-width: 400px;
-        }
-        
-        .profile-view-avatar {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            background: #25d366;
-            margin: 0 auto 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 36px;
-            color: white;
-            border: 4px solid white;
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-        }
-        
-        .profile-view-name {
-            text-align: center;
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: #333;
-        }
-        
-        .profile-view-username {
-            text-align: center;
-            color: #666;
-            margin-bottom: 20px;
-        }
-        
-        .profile-view-bio {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 12px;
-            margin: 20px 0;
-            font-size: 15px;
-            line-height: 1.5;
-            color: #444;
-        }
-        
-        .profile-view-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            margin: 20px 0;
-        }
-        
-        .profile-view-stat {
-            text-align: center;
-            padding: 12px;
-            background: white;
-            border-radius: 10px;
-            border: 1px solid #e1e5e9;
-        }
-        
-        .profile-view-stat-value {
-            font-size: 20px;
-            font-weight: 600;
-            color: #25d366;
-            margin-bottom: 5px;
-        }
-        
-        .profile-view-stat-label {
-            font-size: 11px;
-            color: #666;
-            text-transform: uppercase;
-        }
-        
         .user-result {
             display: flex;
             align-items: center;
@@ -909,7 +758,6 @@
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
-            cursor: pointer;
         }
         
         .user-result-info {
@@ -1150,10 +998,6 @@
             .modal-body {
                 padding: 15px 20px;
             }
-            
-            .profile-view-stats {
-                grid-template-columns: 1fr;
-            }
         }
         
         @media (min-width: 769px) {
@@ -1185,19 +1029,18 @@
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="user-info">
-                    <div class="user-avatar" id="userAvatar" onclick="showProfile()">
+                    <div class="user-avatar" id="userAvatar" onclick="window.location.href='profile.html'">
                         <div class="online-indicator"></div>
                     </div>
                     <div class="user-details">
                         <h3 id="username-display">User</h3>
-                        <p id="userStatus">Online</p>
+                        <p>Online</p>
                     </div>
                 </div>
                 <div class="header-actions">
                     <button class="action-btn" onclick="showUsersModal()" title="Find People">
                         <i class="fas fa-user-plus"></i>
                     </button>
-                    <!-- Admin Panel button - will be shown/hidden based on user role -->
                     <button class="action-btn" onclick="checkAndOpenAdminPanel()" title="Admin Panel" id="adminPanelBtn" style="display: none;">
                         <i class="fas fa-shield-alt"></i>
                     </button>
@@ -1283,7 +1126,7 @@
                         <i class="fas fa-bars"></i>
                     </button>
                     <div class="chat-header-info">
-                        <div class="chat-header-avatar" id="chatHeaderAvatar" onclick="showProfile(currentChatId, currentChatName)">
+                        <div class="chat-header-avatar" id="chatHeaderAvatar">
                             <div class="online-indicator hidden" id="chatOnlineIndicator"></div>
                         </div>
                         <div class="chat-header-details">
@@ -1335,41 +1178,6 @@
                     <div class="loading">
                         <div class="spinner"></div>
                         Loading users...
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Profile View Modal -->
-    <div id="profileViewModal" class="modal profile-view-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-user"></i> Profile</h3>
-                <button class="close" onclick="hideProfileViewModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="loading" id="profileViewLoading">
-                    <div class="spinner"></div>
-                    Loading profile...
-                </div>
-                <div id="profileViewContent" class="hidden">
-                    <div class="profile-view-avatar" id="profileViewAvatar">
-                        <!-- Avatar will be loaded here -->
-                    </div>
-                    <div class="profile-view-name" id="profileViewName">Loading...</div>
-                    <div class="profile-view-username" id="profileViewUsername">@username</div>
-                    
-                    <div class="profile-view-bio" id="profileViewBio">
-                        No bio yet.
-                    </div>
-                    
-                    <div class="profile-view-stats" id="profileViewStats">
-                        <!-- Stats will be loaded here -->
-                    </div>
-                    
-                    <div class="profile-view-actions" id="profileViewActions">
-                        <!-- Action buttons will be loaded here -->
                     </div>
                 </div>
             </div>
@@ -1469,15 +1277,10 @@
             }, duration);
         }
 
-        // =============== AVATAR & PROFILE FUNCTIONS ===============
+        // =============== SIMPLE PROFILE PICTURE FUNCTION ===============
         async function loadProfilePicture(userId, avatarElement, username = null) {
             try {
-                const currentUser = Parse.User.current();
-                if (!currentUser) {
-                    throw new Error('Not logged in');
-                }
-                
-                // Fetch user data
+                // Get user object
                 const query = new Parse.Query(Parse.User);
                 const user = await query.get(userId, { useMasterKey: true });
                 
@@ -1485,7 +1288,7 @@
                     throw new Error('User not found');
                 }
                 
-                // Get avatar from user object
+                // Get avatar from user object (directly stored like in profile.html)
                 const avatarFile = user.get('avatar');
                 
                 if (avatarFile && avatarFile.url()) {
@@ -1530,9 +1333,6 @@
             try {
                 const currentUser = Parse.User.current();
                 if (currentUser) {
-                    // Fetch fresh user data
-                    await currentUser.fetch();
-                    
                     // Update username display
                     const username = currentUser.get('username') || 'User';
                     document.getElementById('username-display').textContent = username;
@@ -1547,329 +1347,9 @@
             }
         }
 
-        // =============== PROFILE VIEW FUNCTIONS ===============
-        async function showProfile(userId = null, username = null) {
-            console.log('👤 Showing profile for:', userId || 'current user');
-            
-            if (!userId) {
-                // Show current user's profile - redirect to profile.html
-                window.location.href = 'profile.html';
-                return;
-            }
-            
-            // Show other user's profile in modal
-            try {
-                const modal = document.getElementById('profileViewModal');
-                const loading = document.getElementById('profileViewLoading');
-                const content = document.getElementById('profileViewContent');
-                
-                loading.classList.remove('hidden');
-                content.classList.add('hidden');
-                modal.style.display = 'block';
-                
-                // Fetch user data
-                const query = new Parse.Query(Parse.User);
-                const user = await query.get(userId, { useMasterKey: true });
-                
-                if (!user) {
-                    throw new Error('User not found');
-                }
-                
-                const currentUser = Parse.User.current();
-                const isOwnProfile = userId === currentUser.id;
-                const displayName = user.get('username') || 'User';
-                const displayUsername = `@${user.get('username') || 'user'}`;
-                const bio = user.get('bio') || 'No bio yet.';
-                
-                // Load avatar
-                const avatarElement = document.getElementById('profileViewAvatar');
-                await loadProfilePicture(userId, avatarElement, displayName);
-                
-                // Update profile info
-                document.getElementById('profileViewName').textContent = displayName;
-                document.getElementById('profileViewUsername').textContent = displayUsername;
-                document.getElementById('profileViewBio').textContent = bio;
-                
-                // Load stats
-                await loadProfileStats(userId, isOwnProfile);
-                
-                // Load action buttons
-                await loadProfileActions(userId, displayName, isOwnProfile);
-                
-                loading.classList.add('hidden');
-                content.classList.remove('hidden');
-                
-            } catch (error) {
-                console.error('Error loading profile:', error);
-                showNotification('Failed to load profile: ' + error.message, 'error');
-                hideProfileViewModal();
-            }
-        }
-        
-        async function loadProfileStats(userId, isOwnProfile = false) {
-            const statsElement = document.getElementById('profileViewStats');
-            
-            try {
-                let contactsCount = 0;
-                let messagesCount = 0;
-                let status = 'Online';
-                
-                // Get contacts count
-                try {
-                    const contactsQuery = encodeURIComponent(JSON.stringify({
-                        "fromUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": userId
-                        },
-                        "status": "accepted"
-                    }));
-                    
-                    const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${contactsQuery}&count=1&limit=0`);
-                    const result = await response.json();
-                    contactsCount = result.count || 0;
-                } catch (e) {
-                    console.log('Could not load contacts count:', e);
-                }
-                
-                // Get messages count
-                try {
-                    const messagesQuery = encodeURIComponent(JSON.stringify({
-                        "$or": [
-                            {
-                                "sender": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": userId
-                                }
-                            },
-                            {
-                                "receiver": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": userId
-                                }
-                            }
-                        ]
-                    }));
-                    
-                    const response = await makeRequestWithMasterKey('GET', `classes/Message?where=${messagesQuery}&count=1&limit=0`);
-                    const result = await response.json();
-                    messagesCount = result.count || 0;
-                } catch (e) {
-                    console.log('Could not load messages count:', e);
-                }
-                
-                // Check if user is online
-                try {
-                    const userQuery = new Parse.Query(Parse.User);
-                    const user = await userQuery.get(userId, { useMasterKey: true });
-                    status = user.get('isOnline') ? 'Online' : 'Offline';
-                } catch (e) {
-                    console.log('Could not load user status:', e);
-                }
-                
-                const stats = [
-                    { label: 'Contacts', value: contactsCount },
-                    { label: 'Messages', value: messagesCount },
-                    { label: 'Status', value: status }
-                ];
-                
-                statsElement.innerHTML = '';
-                stats.forEach(stat => {
-                    const statItem = document.createElement('div');
-                    statItem.className = 'profile-view-stat';
-                    statItem.innerHTML = `
-                        <div class="profile-view-stat-value">${stat.value}</div>
-                        <div class="profile-view-stat-label">${stat.label}</div>
-                    `;
-                    statsElement.appendChild(statItem);
-                });
-                
-            } catch (error) {
-                console.error('Error loading profile stats:', error);
-                // Fallback to placeholder stats
-                statsElement.innerHTML = '';
-                const fallbackStats = [
-                    { label: 'Contacts', value: '0' },
-                    { label: 'Messages', value: '0' },
-                    { label: 'Status', value: 'Online' }
-                ];
-                
-                fallbackStats.forEach(stat => {
-                    const statItem = document.createElement('div');
-                    statItem.className = 'profile-view-stat';
-                    statItem.innerHTML = `
-                        <div class="profile-view-stat-value">${stat.value}</div>
-                        <div class="profile-view-stat-label">${stat.label}</div>
-                    `;
-                    statsElement.appendChild(statItem);
-                });
-            }
-        }
-        
-        async function loadProfileActions(userId, username, isOwnProfile) {
-            const actionsElement = document.getElementById('profileViewActions');
-            
-            if (isOwnProfile) {
-                actionsElement.innerHTML = `
-                    <button class="save-btn" onclick="window.location.href='profile.html'">
-                        <i class="fas fa-edit"></i> Edit Profile
-                    </button>
-                `;
-                return;
-            }
-            
-            // Check contact status
-            const currentUser = Parse.User.current();
-            let contactStatus = 'none';
-            
-            try {
-                // Check if already in contacts
-                const contactsQuery = encodeURIComponent(JSON.stringify({
-                    "$or": [
-                        {
-                            "fromUser": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": currentUser.id
-                            },
-                            "toUser": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": userId
-                            },
-                            "status": "accepted"
-                        },
-                        {
-                            "fromUser": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": userId
-                            },
-                            "toUser": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": currentUser.id
-                            },
-                            "status": "accepted"
-                        }
-                    ]
-                }));
-                
-                const contactsResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${contactsQuery}`);
-                const contactsResult = await contactsResponse.json();
-                
-                if (contactsResult.results && contactsResult.results.length > 0) {
-                    contactStatus = 'contact';
-                } else {
-                    // Check if pending request sent
-                    const pendingQuery = encodeURIComponent(JSON.stringify({
-                        "fromUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentUser.id
-                        },
-                        "toUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": userId
-                        },
-                        "status": "pending"
-                    }));
-                    
-                    const pendingResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${pendingQuery}`);
-                    const pendingResult = await pendingResponse.json();
-                    
-                    if (pendingResult.results && pendingResult.results.length > 0) {
-                        contactStatus = 'pending';
-                    } else {
-                        // Check if request received
-                        const receivedQuery = encodeURIComponent(JSON.stringify({
-                            "fromUser": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": userId
-                            },
-                            "toUser": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": currentUser.id
-                            },
-                            "status": "pending"
-                        }));
-                        
-                        const receivedResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${receivedQuery}`);
-                        const receivedResult = await receivedResponse.json();
-                        
-                        if (receivedResult.results && receivedResult.results.length > 0) {
-                            contactStatus = 'received';
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error checking contact status:', error);
-            }
-            
-            let actionHTML = '';
-            
-            if (contactStatus === 'contact') {
-                actionHTML = `
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button class="save-btn" style="flex: 1; background: #007bff;" onclick="startDirectChat('${userId}', '${escapeString(username)}'); hideProfileViewModal();">
-                            <i class="fas fa-comment"></i> Message
-                        </button>
-                        <button class="save-btn" style="flex: 1; background: #ff4757;" onclick="removeContact('${userId}', '${escapeString(username)}'); hideProfileViewModal();">
-                            <i class="fas fa-user-times"></i> Remove
-                        </button>
-                    </div>
-                `;
-            } else if (contactStatus === 'pending') {
-                actionHTML = `
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button class="save-btn" style="flex: 1; background: #ffa502; color: white;" disabled>
-                            <i class="fas fa-clock"></i> Request Sent
-                        </button>
-                        <button class="save-btn" style="flex: 1; background: #ff4757;" onclick="cancelRequest('${userId}', '${escapeString(username)}'); hideProfileViewModal();">
-                            <i class="fas fa-times"></i> Cancel
-                        </button>
-                    </div>
-                `;
-            } else if (contactStatus === 'received') {
-                actionHTML = `
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button class="save-btn" style="flex: 1; background: #25d366;" onclick="acceptRequest('${userId}', '${escapeString(username)}'); hideProfileViewModal();">
-                            <i class="fas fa-check"></i> Accept
-                        </button>
-                        <button class="save-btn" style="flex: 1; background: #ff4757;" onclick="cancelRequest('${userId}', '${escapeString(username)}'); hideProfileViewModal();">
-                            <i class="fas fa-times"></i> Reject
-                        </button>
-                    </div>
-                `;
-            } else {
-                actionHTML = `
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button class="save-btn" style="flex: 1;" onclick="sendContactRequest('${userId}', '${escapeString(username)}'); hideProfileViewModal();">
-                            <i class="fas fa-user-plus"></i> Add Friend
-                        </button>
-                        <button class="save-btn" style="flex: 1; background: #007bff;" onclick="startDirectChat('${userId}', '${escapeString(username)}'); hideProfileViewModal();">
-                            <i class="fas fa-comment"></i> Message
-                        </button>
-                    </div>
-                `;
-            }
-            
-            actionsElement.innerHTML = actionHTML;
-        }
-        
-        function hideProfileViewModal() {
-            document.getElementById('profileViewModal').style.display = 'none';
-        }
-
         // =============== MASTER KEY HELPER FUNCTIONS ===============
         function makeRequestWithMasterKey(method, endpoint, data = {}) {
             const url = `https://parseapi.back4app.com/${endpoint}`;
-            console.log(`🔐 Making ${method} request to ${endpoint} with master key`);
             
             return fetch(url, {
                 method: method,
@@ -2370,17 +1850,16 @@
                     const userId = user.objectId;
                     const username = user.username || 'User';
                     
-                    // Create avatar element
+                    // Load avatar
                     const avatarDiv = document.createElement('div');
                     avatarDiv.className = 'user-result-avatar';
                     avatarDiv.id = `avatar-${userId}`;
-                    avatarDiv.onclick = () => showProfile(userId, username);
-                    
-                    await loadProfilePicture(userId, avatarDiv, username);
+                    const avatarUrl = await loadProfilePicture(userId, avatarDiv, username);
                     
                     return {
                         user,
                         avatarDiv,
+                        avatarUrl,
                         username
                     };
                 });
@@ -2388,7 +1867,7 @@
                 const usersWithAvatars = await Promise.all(avatarPromises);
                 
                 // Now display users
-                usersWithAvatars.forEach(({ user, avatarDiv, username }) => {
+                usersWithAvatars.forEach(({ user, avatarDiv, avatarUrl, username }) => {
                     const userId = user.objectId;
                     
                     // Check contact status
@@ -2682,18 +2161,8 @@
                         const messageText = msg.message || '';
                         const timestamp = msg.createdAt;
                         
-                        // Create avatar for received messages
-                        let avatarHTML = '';
-                        if (!isOwn) {
-                            avatarHTML = `
-                                <div class="message-avatar" onclick="showProfile('${sender.objectId}', '${escapeString(displayName)}')" 
-                                    style="background-image: url('${await getAvatarUrl(sender.objectId, displayName)}');">
-                                </div>
-                            `;
-                        }
-                        
                         messageDiv.innerHTML = `
-                            ${!isOwn ? `<div class="message-header">${avatarHTML}${escapeHTML(displayName)}</div>` : ''}
+                            ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
                             <div class="message-content">${escapeHTML(messageText)}</div>
                             <div class="message-time">${formatTime(timestamp)}</div>
                         `;
@@ -2728,23 +2197,6 @@
             }
         }
         
-        async function getAvatarUrl(userId, username) {
-            try {
-                const query = new Parse.Query(Parse.User);
-                const user = await query.get(userId, { useMasterKey: true });
-                
-                if (user) {
-                    const avatarFile = user.get('avatar');
-                    if (avatarFile && avatarFile.url()) {
-                        return avatarFile.url();
-                    }
-                }
-            } catch (error) {
-                console.error('Error getting avatar URL:', error);
-            }
-            return '';
-        }
-        
         // Load global messages
         async function loadGlobalMessages() {
             console.log('📥 Loading global messages...');
@@ -2763,7 +2215,7 @@
                     // Reverse to show oldest first
                     const messages = result.results.reverse();
                     
-                    for (const msg of messages) {
+                    messages.forEach(msg => {
                         const sender = msg.sender;
                         const isOwn = sender && sender.objectId === currentUser.id;
                         
@@ -2778,24 +2230,14 @@
                         const messageText = msg.message || '';
                         const timestamp = msg.createdAt;
                         
-                        // Create avatar for received messages
-                        let avatarHTML = '';
-                        if (!isOwn && sender) {
-                            avatarHTML = `
-                                <div class="message-avatar" onclick="showProfile('${sender.objectId}', '${escapeString(displayName)}')" 
-                                    style="background-image: url('${await getAvatarUrl(sender.objectId, displayName)}');">
-                                </div>
-                            `;
-                        }
-                        
                         messageDiv.innerHTML = `
-                            ${!isOwn ? `<div class="message-header">${avatarHTML}${escapeHTML(displayName)}</div>` : ''}
+                            ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
                             <div class="message-content">${escapeHTML(messageText)}</div>
                             <div class="message-time">${formatTime(timestamp)}</div>
                         `;
                         
                         container.appendChild(messageDiv);
-                    }
+                    });
                     
                     if (wasAtBottom) {
                         setTimeout(() => {
@@ -3079,10 +2521,6 @@
                     const avatarDiv = document.createElement('div');
                     avatarDiv.className = 'chat-avatar';
                     avatarDiv.id = `chat-avatar-${chat.userId}`;
-                    avatarDiv.onclick = (e) => {
-                        e.stopPropagation();
-                        showProfile(chat.userId, chat.username);
-                    };
                     
                     // Load avatar asynchronously
                     loadProfilePicture(chat.userId, avatarDiv, chat.username);
@@ -3173,10 +2611,6 @@
                     const avatarDiv = document.createElement('div');
                     avatarDiv.className = 'contact-avatar';
                     avatarDiv.id = `contact-avatar-${userId}`;
-                    avatarDiv.onclick = (e) => {
-                        e.stopPropagation();
-                        showProfile(userId, username);
-                    };
                     
                     await loadProfilePicture(userId, avatarDiv, username);
                     
@@ -3289,10 +2723,6 @@
                     const avatarDiv = document.createElement('div');
                     avatarDiv.className = 'contact-avatar';
                     avatarDiv.id = `request-avatar-${userId}`;
-                    avatarDiv.onclick = (e) => {
-                        e.stopPropagation();
-                        showProfile(userId, username);
-                    };
                     
                     await loadProfilePicture(userId, avatarDiv, username);
                     
@@ -3310,7 +2740,7 @@
                 requestsWithAvatars.sort((a, b) => new Date(b.requestDate) - new Date(a.requestDate));
                 
                 // Display requests
-                requestsWithAvatars.forEach(({ userId, username, avatarDiv, avatarUrl, requestDate }) => {
+                requestsWithAvatars.forEach(({ userId, username, avatarDiv, requestDate }) => {
                     const requestDiv = document.createElement('div');
                     requestDiv.className = 'contact-item';
                     
@@ -3348,7 +2778,7 @@
         // =============== ONLINE USERS COUNT ===============
         async function updateOnlineUsersCount() {
             try {
-                // Count all users (simplified - in production you'd track online status)
+                // Count all users
                 const response = await makeRequestWithMasterKey('GET', 'classes/_User?count=1&limit=0');
                 const result = await response.json();
                 
@@ -3529,14 +2959,9 @@
         
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const usersModal = document.getElementById('usersModal');
-            const profileModal = document.getElementById('profileViewModal');
-            
-            if (event.target === usersModal) {
+            const modal = document.getElementById('usersModal');
+            if (event.target === modal) {
                 hideUsersModal();
-            }
-            if (event.target === profileModal) {
-                hideProfileViewModal();
             }
         };
     </script>
