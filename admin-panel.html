@@ -507,6 +507,8 @@
         .notification.error { background: #dc3545; }
         .notification.info { background: #17a2b8; }
         
+        .hidden { display: none; }
+        
         .modal {
             display: none;
             position: fixed;
@@ -1053,11 +1055,18 @@
         const usersPerPage = 10;
         const messagesPerPage = 20;
         
+        // SUPER ADMIN USER ID (rk9MDUV7li)
+        const SUPER_ADMIN_ID = 'rk9MDUV7li';
+        
         // =============== HELPER FUNCTIONS ===============
         function escapeHTML(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+        
+        function escapeString(text) {
+            return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
         
         function showNotification(message, type = 'info', duration = 3000) {
@@ -1156,19 +1165,27 @@
             currentAdminRole = userRole;
             
             // Check if user has admin privileges
-            const superAdminId = 'r29'; // Hardcoded super admin ID
-            
-            if (userRole === 'super-admin' || userRole === 'admin' || currentUserId === superAdminId) {
+            // User rk9MDUV7li is automatically super admin
+            // OR any user with admin/super-admin role
+            if (currentUserId === SUPER_ADMIN_ID || userRole === 'super-admin' || userRole === 'admin') {
                 // User has admin access
-                if (currentUserId === superAdminId && userRole !== 'super-admin') {
-                    // Auto-promote r29 to super admin if not already
-                    await makeUserSuperAdmin(superAdminId);
+                // Auto-promote SUPER_ADMIN_ID to super admin if not already
+                if (currentUserId === SUPER_ADMIN_ID && userRole !== 'super-admin') {
+                    await makeUserSuperAdmin(currentUserId);
                 }
                 
                 // Update UI with admin info
                 document.getElementById('adminUsername').textContent = currentUsername;
-                document.getElementById('adminRole').textContent = userRole === 'super-admin' ? 'Super Admin' : 'Admin';
-                document.getElementById('adminRole').className = `user-role ${userRole === 'super-admin' ? 'super-admin' : 'admin'}`;
+                
+                // Check if user is the super admin
+                if (currentUserId === SUPER_ADMIN_ID) {
+                    document.getElementById('adminRole').textContent = 'Super Admin';
+                    document.getElementById('adminRole').className = 'user-role super-admin';
+                    currentAdminRole = 'super-admin';
+                } else {
+                    document.getElementById('adminRole').textContent = userRole === 'super-admin' ? 'Super Admin' : 'Admin';
+                    document.getElementById('adminRole').className = `user-role ${userRole === 'super-admin' ? 'super-admin' : 'admin'}`;
+                }
                 
                 // Load admin avatar
                 await loadProfilePicture(currentUserId, document.getElementById('adminAvatar'), currentUsername);
@@ -1481,7 +1498,7 @@
                 const role = user.role || 'user';
                 const createdAt = new Date(user.createdAt);
                 const isCurrentUser = userId === currentUserId;
-                const isSuperAdmin = role === 'super-admin';
+                const isSuperAdmin = role === 'super-admin' || userId === SUPER_ADMIN_ID;
                 const isAdmin = role === 'admin';
                 
                 // Check permissions
@@ -1506,11 +1523,14 @@
                         <div class="user-name">
                             ${escapeHTML(username)}
                             ${isCurrentUser ? ' (You)' : ''}
+                            ${userId === SUPER_ADMIN_ID ? ' 🔥' : ''}
                         </div>
                         <div class="user-email">${escapeHTML(email)}</div>
                         <div class="user-meta">
                             <span><i class="far fa-calendar"></i> Joined ${createdAt.toLocaleDateString()}</span>
-                            <span class="user-role-badge ${role}">${role.replace('-', ' ')}</span>
+                            <span class="user-role-badge ${isSuperAdmin ? 'super-admin' : role}">
+                                ${isSuperAdmin ? 'super admin' : role.replace('-', ' ')}
+                            </span>
                         </div>
                     </div>
                     <div class="user-actions">
@@ -1597,6 +1617,13 @@
             try {
                 const { userId, username, newRole } = userToChangeRole;
                 
+                // Prevent actions on super admin (rk9MDUV7li)
+                if (userId === SUPER_ADMIN_ID) {
+                    showNotification('Cannot modify the primary super admin (rk9MDUV7li)', 'error');
+                    closeRoleModal();
+                    return;
+                }
+                
                 // Prevent self-demotion if super-admin
                 if (userId === currentUserId && currentAdminRole === 'super-admin' && newRole !== 'super-admin') {
                     showNotification('You cannot demote yourself from super-admin', 'error');
@@ -1641,6 +1668,14 @@
             
             try {
                 const { userId, username } = userToDelete;
+                
+                // Prevent deleting super admin (rk9MDUV7li)
+                if (userId === SUPER_ADMIN_ID) {
+                    showNotification('Cannot delete the primary super admin (rk9MDUV7li)', 'error');
+                    closeDeleteModal();
+                    return;
+                }
+                
                 showNotification(`Deleting user ${username}...`, 'info');
                 
                 // Delete user
@@ -1728,6 +1763,7 @@
                     <div class="message-content">
                         <div class="message-sender">
                             <i class="fas fa-user-circle"></i> ${escapeHTML(senderName)}
+                            ${senderId === SUPER_ADMIN_ID ? ' 🔥' : ''}
                         </div>
                         <div class="message-text">${escapeHTML(messageText)}</div>
                         <div class="message-meta">
@@ -1896,10 +1932,6 @@
         // =============== UTILITY FUNCTIONS ===============
         function goToChat() {
             window.location.href = 'index.html';
-        }
-        
-        function escapeString(text) {
-            return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
     </script>
 </body>
