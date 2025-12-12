@@ -321,6 +321,20 @@
             padding-left: 50px;
         }
         
+        .optional-label {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #888;
+            font-size: 11px;
+            font-style: italic;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 6px;
+            border-radius: 10px;
+            pointer-events: none;
+        }
+        
         /* Responsive */
         @media (max-width: 480px) {
             .login-container {
@@ -336,6 +350,12 @@
                 width: 70px;
                 height: 70px;
                 font-size: 28px;
+            }
+            
+            .optional-label {
+                font-size: 10px;
+                right: 10px;
+                padding: 1px 4px;
             }
         }
     </style>
@@ -391,6 +411,7 @@
                 <i class="fas fa-envelope"></i>
                 <input type="email" id="signupEmail" placeholder="Enter your email (optional)" autocomplete="email">
                 <div class="error-message" id="signupEmailError"></div>
+                <div class="optional-label">Optional</div>
             </div>
             
             <div class="form-group">
@@ -490,12 +511,14 @@
             clearErrors('signup');
             
             // Validate inputs
-            if (!validateSignup(username, password)) return;
+            if (!validateSignup(username, email, password)) return;
             
             setLoading(true, 'signupBtn', 'Creating account...');
             
             try {
-                const result = await Backend.register(username, email, password);
+                // Pass empty string if email is empty
+                const emailToSend = email || '';
+                const result = await Backend.register(username, emailToSend, password);
                 
                 if (result.success) {
                     console.log('✅ Registration successful');
@@ -516,6 +539,8 @@
                         setFieldError('signupUsername', 'Username already taken');
                     } else if (result.error.includes('password')) {
                         setFieldError('signupPassword', 'Password requirements not met');
+                    } else if (result.error.includes('email')) {
+                        setFieldError('signupEmail', 'Email is invalid or already registered');
                     }
                 }
             } catch (error) {
@@ -578,9 +603,10 @@
             return isValid;
         }
 
-        function validateSignup(username, password) {
+        function validateSignup(username, email, password) {
             let isValid = true;
             
+            // Validate username
             if (!username) {
                 setFieldError('signupUsername', 'Username is required');
                 isValid = false;
@@ -592,6 +618,16 @@
                 isValid = false;
             }
             
+            // Validate email (optional but must be valid if provided)
+            if (email && email.trim() !== '') {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    setFieldError('signupEmail', 'Please enter a valid email address');
+                    isValid = false;
+                }
+            }
+            
+            // Validate password
             if (!password) {
                 setFieldError('signupPassword', 'Password is required');
                 isValid = false;
@@ -609,23 +645,27 @@
             const errorDiv = document.getElementById(fieldId + 'Error');
             const formGroup = field.closest('.form-group');
             
-            formGroup.classList.add('error');
-            formGroup.classList.remove('success');
-            
-            if (errorDiv) {
-                errorDiv.textContent = message;
+            if (field && formGroup) {
+                formGroup.classList.add('error');
+                formGroup.classList.remove('success');
+                
+                if (errorDiv) {
+                    errorDiv.textContent = message;
+                }
             }
         }
 
         function clearFieldError(fieldId) {
             const field = document.getElementById(fieldId);
             const errorDiv = document.getElementById(fieldId + 'Error');
-            const formGroup = field.closest('.form-group');
+            const formGroup = field ? field.closest('.form-group') : null;
             
-            formGroup.classList.remove('error');
-            
-            if (errorDiv) {
-                errorDiv.textContent = '';
+            if (formGroup) {
+                formGroup.classList.remove('error');
+                
+                if (errorDiv) {
+                    errorDiv.textContent = '';
+                }
             }
         }
 
@@ -714,9 +754,18 @@
 
         document.getElementById('signupEmail').addEventListener('input', function() {
             const value = this.value.trim();
-            if (value === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            
+            if (value === '') {
+                // Empty is fine - it's optional
                 clearFieldError('signupEmail');
                 this.closest('.form-group').classList.add('success');
+            } else if (emailRegex.test(value)) {
+                clearFieldError('signupEmail');
+                this.closest('.form-group').classList.add('success');
+            } else {
+                // Invalid email format
+                this.closest('.form-group').classList.remove('success');
             }
         });
 
