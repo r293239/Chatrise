@@ -72,8 +72,7 @@ if (typeof Backend !== 'undefined') {
                 console.log('📝 Normalized username:', normalizedUsername);
                 
                 // Check if username already exists (case-insensitive)
-                const User = Parse.User;
-                const query = new User.Query();
+                const query = new Parse.Query(Parse.User);
                 query.equalTo('username', normalizedUsername);
                 const existingUser = await query.first();
                 
@@ -137,8 +136,7 @@ if (typeof Backend !== 'undefined') {
                 console.log('🔐 Looking for normalized username:', normalizedUsername);
                 
                 // We need to manually query since Parse.User.logIn is case-sensitive
-                const User = Parse.User;
-                const query = new User.Query();
+                const query = new Parse.Query(Parse.User);
                 query.equalTo('username', normalizedUsername);
                 const user = await query.first();
                 
@@ -295,26 +293,27 @@ if (typeof Backend !== 'undefined') {
             try {
                 console.log(`🔍 Searching users: "${searchTerm}"`);
                 
-                const User = Parse.User;
                 const normalizedSearch = this.normalizeUsername(searchTerm);
+                let query;
                 
-                // Create two queries - one for originalUsername and one for username
-                const originalUsernameQuery = new Parse.Query(User);
                 if (searchTerm && searchTerm.trim() !== '') {
+                    // Create two queries - one for originalUsername and one for username
+                    const originalUsernameQuery = new Parse.Query(Parse.User);
                     originalUsernameQuery.matches('originalUsername', searchTerm, 'i');
-                }
-                
-                const usernameQuery = new Parse.Query(User);
-                if (searchTerm && searchTerm.trim() !== '') {
+                    
+                    const usernameQuery = new Parse.Query(Parse.User);
                     usernameQuery.matches('username', normalizedSearch, 'i');
+                    
+                    // Combine the queries with OR
+                    query = Parse.Query.or(originalUsernameQuery, usernameQuery);
+                } else {
+                    query = new Parse.Query(Parse.User);
                 }
                 
-                // Combine the queries with OR
-                const combinedQuery = Parse.Query.or(originalUsernameQuery, usernameQuery);
-                combinedQuery.notEqualTo('objectId', this.currentUser.id);
-                combinedQuery.limit(50);
+                query.notEqualTo('objectId', this.currentUser.id);
+                query.limit(50);
                 
-                const users = await combinedQuery.find();
+                const users = await query.find();
                 console.log(`✅ Search found ${users.length} users`);
                 
                 const usersWithStatus = await Promise.all(
@@ -360,8 +359,7 @@ if (typeof Backend !== 'undefined') {
                 console.log('🔍 Starting getUsersWithContactStatus...');
                 console.log('🔍 Current user:', this.currentUser.id, this.currentUser.get('username'));
                 
-                const User = Parse.User;
-                const query = new Parse.Query(User);
+                const query = new Parse.Query(Parse.User);
                 
                 query.notEqualTo('objectId', this.currentUser.id);
                 query.limit(100);
@@ -867,9 +865,7 @@ if (typeof Backend !== 'undefined') {
                     // Fallback to direct method
                 }
 
-                const User = Parse.User;
-                const query = new Parse.Query(User);
-                
+                const query = new Parse.Query(Parse.User);
                 query.equalTo('isOnline', true);
                 const count = await query.count();
                 return { success: true, count: count };
