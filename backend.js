@@ -67,25 +67,37 @@ if (typeof Backend !== 'undefined') {
             try {
                 console.log('🔐 Starting registration process...');
                 
-                // Normalize username to lowercase
-                const normalizedUsername = this.normalizeUsername(username);
-                console.log('📝 Normalized username:', normalizedUsername);
+                const trimmedUsername = username.trim();
+                const normalizedUsername = this.normalizeUsername(trimmedUsername);
+                console.log('📝 Original username:', trimmedUsername, 'Normalized:', normalizedUsername);
                 
-                // Check if username already exists (case-insensitive)
+                // Check if username already exists (case-insensitive check)
                 const query = new Parse.Query(Parse.User);
-                query.equalTo('username', normalizedUsername);
-                const existingUser = await query.first();
                 
-                if (existingUser) {
-                    console.log('❌ Username already exists (case-insensitive check):', normalizedUsername);
+                // First, check if exact username exists (Parse's default is case-sensitive)
+                query.equalTo('username', trimmedUsername);
+                const exactUser = await query.first();
+                
+                if (exactUser) {
+                    console.log('❌ Exact username already exists:', trimmedUsername);
                     return { success: false, error: 'Username already taken' };
                 }
                 
-                // Create new Parse User
+                // Also check case-insensitively using regex (for existing users)
+                const caseInsensitiveQuery = new Parse.Query(Parse.User);
+                caseInsensitiveQuery.matches('username', `^${trimmedUsername}$`, 'i');
+                const caseInsensitiveUser = await caseInsensitiveQuery.first();
+                
+                if (caseInsensitiveUser) {
+                    console.log('❌ Username already exists (case-insensitive):', trimmedUsername);
+                    return { success: false, error: 'Username already taken (case-insensitive)' };
+                }
+                
+                // Create new Parse User with the original case
                 const user = new Parse.User();
-                user.set('username', normalizedUsername); // Store in lowercase
+                user.set('username', trimmedUsername); // Store with original case
                 user.set('password', password);
-                user.set('originalUsername', username.trim()); // Store original for display
+                user.set('usernameLower', normalizedUsername); // Store lowercase version for searching
                 
                 // Only set email if provided and not empty
                 if (email && email.trim() !== '') {
@@ -101,8 +113,7 @@ if (typeof Backend !== 'undefined') {
                 
                 return {
                     success: true,
-                    user: userResult,
-                    displayUsername: username.trim() // Return original case
+                    user: userResult
                 };
 
             } catch (error) {
@@ -131,38 +142,54 @@ if (typeof Backend !== 'undefined') {
             try {
                 console.log('🔐 Attempting login...');
                 
-                // Normalize username for lookup
-                const normalizedUsername = this.normalizeUsername(username);
-                console.log('🔐 Looking for normalized username:', normalizedUsername);
+                const trimmedUsername = username.trim();
+                const normalizedUsername = this.normalizeUsername(trimmedUsername);
                 
-                // We need to manually query since Parse.User.logIn is case-sensitive
-                const query = new Parse.Query(Parse.User);
-                query.equalTo('username', normalizedUsername);
-                const user = await query.first();
-                
-                if (!user) {
-                    console.log('❌ User not found with username:', normalizedUsername);
-                    return { success: false, error: 'Invalid username or password' };
+                // First try exact login (for users who registered with exact case)
+                try {
+                    const loggedInUser = await Parse.User.logIn(trimmedUsername, password);
+                    console.log('✅ Login successful (exact match):', loggedInUser.get('username'));
+                    
+                    this.currentUser = loggedInUser;
+                    this.startActivityTracking();
+                    
+                    return { 
+                        success: true, 
+                        user: loggedInUser
+                    };
+                } catch (exactError) {
+                    console.log('🔐 Exact login failed, trying case-insensitive...');
+                    
+                    // If exact login fails, try case-insensitive search
+                    const query = new Parse.Query(Parse.User);
+                    query.matches('username', `^${trimmedUsername}$`, 'i');
+                    const user = await query.first();
+                    
+                    if (!user) {
+                        console.log('❌ User not found (case-insensitive):', trimmedUsername);
+                        return { success: false, error: 'Invalid username or password' };
+                    }
+                    
+                    // Found user, now try to log in with their actual stored username
+                    const storedUsername = user.get('username');
+                    console.log('🔐 Found user with stored username:', storedUsername);
+                    
+                    try {
+                        const loggedInUser = await Parse.User.logIn(storedUsername, password);
+                        console.log('✅ Login successful (case-insensitive):', loggedInUser.get('username'));
+                        
+                        this.currentUser = loggedInUser;
+                        this.startActivityTracking();
+                        
+                        return { 
+                            success: true, 
+                            user: loggedInUser
+                        };
+                    } catch (loginError) {
+                        console.log('❌ Password incorrect for:', storedUsername);
+                        return { success: false, error: 'Invalid username or password' };
+                    }
                 }
-                
-                // Now try to log in with the actual stored username (which is lowercase)
-                const storedUsername = user.get('username');
-                console.log('🔐 Found user, stored username:', storedUsername);
-                
-                // Use Parse's login with the stored username
-                const loggedInUser = await Parse.User.logIn(storedUsername, password);
-                console.log('✅ Login successful:', loggedInUser.get('username'));
-                
-                this.currentUser = loggedInUser;
-                
-                // Start activity tracking
-                this.startActivityTracking();
-                
-                return { 
-                    success: true, 
-                    user: loggedInUser,
-                    displayUsername: user.get('originalUsername') || loggedInUser.get('username')
-                };
 
             } catch (error) {
                 console.error('❌ Login failed:', error);
@@ -293,21 +320,17 @@ if (typeof Backend !== 'undefined') {
             try {
                 console.log(`🔍 Searching users: "${searchTerm}"`);
                 
-                const normalizedSearch = this.normalizeUsername(searchTerm);
-                let query;
+                const query = new Parse.Query(Parse.User);
                 
                 if (searchTerm && searchTerm.trim() !== '') {
-                    // Create two queries - one for originalUsername and one for username
-                    const originalUsernameQuery = new Parse.Query(Parse.User);
-                    originalUsernameQuery.matches('originalUsername', searchTerm, 'i');
-                    
+                    // Search both username and usernameLower fields
                     const usernameQuery = new Parse.Query(Parse.User);
-                    usernameQuery.matches('username', normalizedSearch, 'i');
+                    usernameQuery.matches('username', searchTerm, 'i');
                     
-                    // Combine the queries with OR
-                    query = Parse.Query.or(originalUsernameQuery, usernameQuery);
-                } else {
-                    query = new Parse.Query(Parse.User);
+                    const usernameLowerQuery = new Parse.Query(Parse.User);
+                    usernameLowerQuery.matches('usernameLower', this.normalizeUsername(searchTerm), 'i');
+                    
+                    query = Parse.Query.or(usernameQuery, usernameLowerQuery);
                 }
                 
                 query.notEqualTo('objectId', this.currentUser.id);
@@ -322,7 +345,7 @@ if (typeof Backend !== 'undefined') {
                             const contactStatus = await this.getContactStatus(user.id);
                             return {
                                 id: user.id,
-                                username: user.get('originalUsername') || user.get('username'),
+                                username: user.get('username'),
                                 email: user.get('email'),
                                 isOnline: user.get('isOnline') || false,
                                 lastSeen: user.get('lastSeen'),
@@ -332,7 +355,7 @@ if (typeof Backend !== 'undefined') {
                             console.error(`❌ Error processing user ${user.id}:`, error);
                             return {
                                 id: user.id,
-                                username: user.get('originalUsername') || user.get('username') || 'Unknown',
+                                username: user.get('username') || 'Unknown',
                                 isOnline: false,
                                 lastSeen: null,
                                 isContact: false,
@@ -376,7 +399,7 @@ if (typeof Backend !== 'undefined') {
                 
                 console.log('🔍 Found users:', users.map(u => ({
                     id: u.id,
-                    username: u.get('originalUsername') || u.get('username'),
+                    username: u.get('username'),
                     email: u.get('email'),
                     isOnline: u.get('isOnline')
                 })));
@@ -387,7 +410,7 @@ if (typeof Backend !== 'undefined') {
                             const contactStatus = await this.getContactStatus(user.id);
                             return {
                                 id: user.id,
-                                username: user.get('originalUsername') || user.get('username'),
+                                username: user.get('username'),
                                 email: user.get('email'),
                                 isOnline: user.get('isOnline') || false,
                                 lastSeen: user.get('lastSeen'),
@@ -397,7 +420,7 @@ if (typeof Backend !== 'undefined') {
                             console.error(`❌ Error processing user ${user.id}:`, error);
                             return {
                                 id: user.id,
-                                username: user.get('originalUsername') || user.get('username') || 'Unknown',
+                                username: user.get('username') || 'Unknown',
                                 isOnline: false,
                                 lastSeen: null,
                                 isContact: false,
@@ -505,7 +528,7 @@ if (typeof Backend !== 'undefined') {
                 
                 const contact = new Contact();
                 contact.set('fromUser', this.currentUser);
-                contact.set('fromUsername', this.currentUser.get('originalUsername') || this.currentUser.get('username'));
+                contact.set('fromUsername', this.currentUser.get('username'));
                 contact.set('toUser', Parse.User.createWithoutData(userId));
                 contact.set('toUsername', username);
                 contact.set('status', 'pending');
@@ -633,7 +656,7 @@ if (typeof Backend !== 'undefined') {
                         return {
                             contactId: contact.id,
                             userId: otherUser.id,
-                            username: otherUsername || otherUser.get('originalUsername') || otherUser.get('username'),
+                            username: otherUsername || otherUser.get('username'),
                             isOnline: otherUser.get('isOnline') || false,
                             lastSeen: otherUser.get('lastSeen')
                         };
@@ -772,7 +795,7 @@ if (typeof Backend !== 'undefined') {
                 const msg = new GlobalMessage();
                 
                 msg.set('sender', this.currentUser);
-                msg.set('senderName', this.currentUser.get('originalUsername') || this.currentUser.get('username'));
+                msg.set('senderName', this.currentUser.get('username'));
                 msg.set('message', message);
                 msg.set('timestamp', new Date());
                 
