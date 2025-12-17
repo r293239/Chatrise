@@ -321,6 +321,15 @@
             padding-left: 50px;
         }
         
+        .info-message {
+            color: #17a2b8;
+            font-size: 12px;
+            margin-top: 4px;
+            text-align: left;
+            padding-left: 50px;
+            font-style: italic;
+        }
+        
         .optional-label {
             position: absolute;
             right: 15px;
@@ -405,6 +414,7 @@
                 <i class="fas fa-user"></i>
                 <input type="text" id="signupUsername" placeholder="Choose a username" autocomplete="username">
                 <div class="error-message" id="signupUsernameError"></div>
+                <div class="info-message" id="signupUsernameInfo"></div>
             </div>
             
             <div class="form-group">
@@ -432,6 +442,11 @@
 
     <script>
         let isLoading = false;
+        
+        // Helper function to normalize username
+        function normalizeUsername(username) {
+            return username ? username.trim().toLowerCase() : '';
+        }
         
         // Check if already logged in
         window.addEventListener('load', function() {
@@ -470,6 +485,7 @@
             setLoading(true, 'loginBtn', 'Signing in...');
             
             try {
+                // Note: Backend.login now handles case-insensitive login internally
                 const result = await Backend.login(username, password);
                 
                 if (result.success) {
@@ -499,7 +515,7 @@
             setLoading(false, 'loginBtn', '<i class="fas fa-sign-in-alt"></i> Sign In');
         }
 
-        // Handle signup - SIMPLIFIED WITHOUT EMAIL VERIFICATION
+        // Handle signup
         async function handleSignup() {
             if (isLoading) return;
             
@@ -536,7 +552,7 @@
                     
                     // Show field-specific errors
                     if (result.error.includes('username')) {
-                        setFieldError('signupUsername', 'Username already taken');
+                        setFieldError('signupUsername', 'Username already taken (case-insensitive)');
                     } else if (result.error.includes('password')) {
                         setFieldError('signupPassword', 'Password requirements not met');
                     } else if (result.error.includes('email')) {
@@ -616,6 +632,9 @@
             } else if (!/^[a-zA-Z0-9_]+$/.test(username)) {
                 setFieldError('signupUsername', 'Username can only contain letters, numbers, and underscores');
                 isValid = false;
+            } else {
+                // Show info about case-insensitivity
+                showCaseInsensitivityInfo(username);
             }
             
             // Validate email (optional but must be valid if provided)
@@ -637,6 +656,18 @@
             }
             
             return isValid;
+        }
+
+        // Show case-insensitivity info
+        function showCaseInsensitivityInfo(username) {
+            const normalized = normalizeUsername(username);
+            const infoDiv = document.getElementById('signupUsernameInfo');
+            
+            if (username !== normalized) {
+                infoDiv.textContent = `Note: Username will be stored as "${normalized}" (case-insensitive)`;
+            } else {
+                infoDiv.textContent = '';
+            }
         }
 
         // UI Helper functions
@@ -675,6 +706,11 @@
                           ['username', 'password', 'signupUsername', 'signupEmail', 'signupPassword'];
             
             fields.forEach(fieldId => clearFieldError(fieldId));
+            
+            // Also clear info messages
+            if (type === 'signup' || type === 'both') {
+                document.getElementById('signupUsernameInfo').textContent = '';
+            }
         }
 
         function setLoading(loading, buttonId, text) {
@@ -749,6 +785,9 @@
             if (value.length >= 3 && /^[a-zA-Z0-9_]+$/.test(value)) {
                 clearFieldError('signupUsername');
                 this.closest('.form-group').classList.add('success');
+                showCaseInsensitivityInfo(value);
+            } else {
+                document.getElementById('signupUsernameInfo').textContent = '';
             }
         });
 
@@ -759,7 +798,7 @@
             if (value === '') {
                 // Empty is fine - it's optional
                 clearFieldError('signupEmail');
-                this.closest('.form-group').classList.add('success');
+                this.closest('.formGroup').classList.add('success');
             } else if (emailRegex.test(value)) {
                 clearFieldError('signupEmail');
                 this.closest('.form-group').classList.add('success');
