@@ -443,7 +443,7 @@
     <script>
         let isLoading = false;
         
-        // Helper function to normalize username
+        // Helper function to normalize username to lowercase
         function normalizeUsername(username) {
             return username ? username.trim().toLowerCase() : '';
         }
@@ -485,7 +485,7 @@
             setLoading(true, 'loginBtn', 'Signing in...');
             
             try {
-                // Note: Backend.login now handles case-insensitive login internally
+                // Backend.login now handles case-insensitive login internally
                 const result = await Backend.login(username, password);
                 
                 if (result.success) {
@@ -502,9 +502,9 @@
                     
                     // Show field-specific errors
                     if (result.error.includes('username') || result.error.includes('User')) {
-                        setFieldError('username', 'Username not found');
+                        setFieldError('username', 'Invalid username or password');
                     } else if (result.error.includes('password')) {
-                        setFieldError('password', 'Incorrect password');
+                        setFieldError('password', 'Invalid username or password');
                     }
                 }
             } catch (error) {
@@ -523,7 +523,7 @@
             const email = document.getElementById('signupEmail').value.trim();
             const password = document.getElementById('signupPassword').value;
             
-            // Clear previous errors
+            // Clear previous errors and info
             clearErrors('signup');
             
             // Validate inputs
@@ -551,12 +551,19 @@
                     showNotification(result.error || 'Registration failed', 'error');
                     
                     // Show field-specific errors
-                    if (result.error.includes('username')) {
-                        setFieldError('signupUsername', 'Username already taken (case-insensitive)');
+                    if (result.error.includes('username') || result.error.includes('taken')) {
+                        const normalized = normalizeUsername(username);
+                        setFieldError('signupUsername', 'Username already taken');
+                        // Show info about case-insensitivity
+                        document.getElementById('signupUsernameInfo').textContent = 
+                            `Note: Usernames are case-insensitive. "${normalized}" is already taken.`;
                     } else if (result.error.includes('password')) {
                         setFieldError('signupPassword', 'Password requirements not met');
                     } else if (result.error.includes('email')) {
                         setFieldError('signupEmail', 'Email is invalid or already registered');
+                    } else {
+                        // Generic error for other issues
+                        setFieldError('signupUsername', 'Registration failed');
                     }
                 }
             } catch (error) {
@@ -634,7 +641,13 @@
                 isValid = false;
             } else {
                 // Show info about case-insensitivity
-                showCaseInsensitivityInfo(username);
+                const normalized = normalizeUsername(username);
+                const infoDiv = document.getElementById('signupUsernameInfo');
+                if (username !== normalized) {
+                    infoDiv.textContent = `Note: Username will be treated as "${normalized}" (case-insensitive)`;
+                } else {
+                    infoDiv.textContent = '';
+                }
             }
             
             // Validate email (optional but must be valid if provided)
@@ -656,18 +669,6 @@
             }
             
             return isValid;
-        }
-
-        // Show case-insensitivity info
-        function showCaseInsensitivityInfo(username) {
-            const normalized = normalizeUsername(username);
-            const infoDiv = document.getElementById('signupUsernameInfo');
-            
-            if (username !== normalized) {
-                infoDiv.textContent = `Note: Username will be stored as "${normalized}" (case-insensitive)`;
-            } else {
-                infoDiv.textContent = '';
-            }
         }
 
         // UI Helper functions
@@ -782,12 +783,21 @@
 
         document.getElementById('signupUsername').addEventListener('input', function() {
             const value = this.value.trim();
+            const infoDiv = document.getElementById('signupUsernameInfo');
+            
             if (value.length >= 3 && /^[a-zA-Z0-9_]+$/.test(value)) {
                 clearFieldError('signupUsername');
                 this.closest('.form-group').classList.add('success');
-                showCaseInsensitivityInfo(value);
+                
+                // Show case-insensitivity info
+                const normalized = normalizeUsername(value);
+                if (value !== normalized) {
+                    infoDiv.textContent = `Note: Username will be treated as "${normalized}" (case-insensitive)`;
+                } else {
+                    infoDiv.textContent = '';
+                }
             } else {
-                document.getElementById('signupUsernameInfo').textContent = '';
+                infoDiv.textContent = '';
             }
         });
 
@@ -798,7 +808,7 @@
             if (value === '') {
                 // Empty is fine - it's optional
                 clearFieldError('signupEmail');
-                this.closest('.formGroup').classList.add('success');
+                this.closest('.form-group').classList.add('success');
             } else if (emailRegex.test(value)) {
                 clearFieldError('signupEmail');
                 this.closest('.form-group').classList.add('success');
