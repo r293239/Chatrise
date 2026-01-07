@@ -2455,6 +2455,12 @@
                 const contactChats = [];
                 
                 for (const contact of contactsResult.results) {
+                    // FIX: Check if toUser exists and has objectId
+                    if (!contact.toUser || !contact.toUser.objectId) {
+                        console.warn('Skipping contact with invalid toUser:', contact);
+                        continue;
+                    }
+                    
                     const userId = contact.toUser.objectId;
                     const username = contact.toUsername || contact.toUser.username || 'User';
                     
@@ -2605,6 +2611,12 @@
                 
                 // Load avatars and display contacts
                 const avatarPromises = result.results.map(async (contact) => {
+                    // FIX: Check if toUser exists
+                    if (!contact.toUser || !contact.toUser.objectId) {
+                        console.warn('Skipping contact with invalid toUser:', contact);
+                        return null;
+                    }
+                    
                     const userId = contact.toUser.objectId;
                     const username = contact.toUsername || contact.toUser.username || 'User';
                     
@@ -2624,11 +2636,14 @@
                 
                 const contactsWithAvatars = await Promise.all(avatarPromises);
                 
+                // Filter out null results
+                const validContacts = contactsWithAvatars.filter(contact => contact !== null);
+                
                 // Sort by username
-                contactsWithAvatars.sort((a, b) => a.username.localeCompare(b.username));
+                validContacts.sort((a, b) => a.username.localeCompare(b.username));
                 
                 // Display contacts
-                contactsWithAvatars.forEach(({ userId, username, avatarDiv, contactDate }) => {
+                validContacts.forEach(({ userId, username, avatarDiv, contactDate }) => {
                     const contactDiv = document.createElement('div');
                     contactDiv.className = 'contact-item';
                     
@@ -2675,7 +2690,7 @@
                             <i class="fas fa-exclamation-triangle"></i>
                             <h3>Not logged in</h3>
                             <p>Please refresh the page</p>
-                        </div>
+                    </div>
                     `;
                     return;
                 }
@@ -2717,6 +2732,12 @@
                 
                 // Load avatars and display requests
                 const avatarPromises = result.results.map(async (contact) => {
+                    // FIX: Check if fromUser exists
+                    if (!contact.fromUser || !contact.fromUser.objectId) {
+                        console.warn('Skipping contact with invalid fromUser:', contact);
+                        return null;
+                    }
+                    
                     const userId = contact.fromUser.objectId;
                     const username = contact.fromUsername || contact.fromUser.username || 'User';
                     
@@ -2736,11 +2757,14 @@
                 
                 const requestsWithAvatars = await Promise.all(avatarPromises);
                 
+                // Filter out null results
+                const validRequests = requestsWithAvatars.filter(request => request !== null);
+                
                 // Sort by request date (newest first)
-                requestsWithAvatars.sort((a, b) => new Date(b.requestDate) - new Date(a.requestDate));
+                validRequests.sort((a, b) => new Date(b.requestDate) - new Date(a.requestDate));
                 
                 // Display requests
-                requestsWithAvatars.forEach(({ userId, username, avatarDiv, requestDate }) => {
+                validRequests.forEach(({ userId, username, avatarDiv, requestDate }) => {
                     const requestDiv = document.createElement('div');
                     requestDiv.className = 'contact-item';
                     
