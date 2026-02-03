@@ -575,6 +575,7 @@
             width: 100%;
             height: auto;
             display: block;
+            border-radius: 8px;
         }
         
         .image-caption {
@@ -1048,6 +1049,35 @@
             transition: width 0.3s ease;
         }
         
+        /* Image Upload Button */
+        .image-upload-container {
+            position: fixed;
+            bottom: 90px;
+            right: 30px;
+            z-index: 100;
+        }
+        
+        .image-upload-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .image-upload-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+        }
+        
         /* Mobile Responsive */
         @media (max-width: 768px) {
             body {
@@ -1153,6 +1183,17 @@
             .image-message {
                 max-width: 250px;
                 max-height: 300px;
+            }
+            
+            .image-upload-container {
+                bottom: 100px;
+                right: 20px;
+            }
+            
+            .image-upload-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
             }
         }
         
@@ -1345,18 +1386,13 @@
         </div>
     </div>
     
-    <!-- Image Preview Modal -->
-    <div id="imagePreviewModal" class="image-preview-modal" onclick="closeImagePreview()">
-        <div class="image-preview-content" onclick="event.stopPropagation()">
-            <button class="image-preview-close" onclick="closeImagePreview()">×</button>
-            <img id="previewImage" src="" alt="Preview">
-            <div class="image-info">
-                <span id="imageSender"></span>
-                <span id="imageTime"></span>
-            </div>
-        </div>
+    <!-- Image Upload Button -->
+    <div class="image-upload-container" id="imageUploadContainer" style="display: none;">
+        <button class="image-upload-btn" onclick="openImagePicker()" title="Send Image">
+            <i class="fas fa-camera"></i>
+        </button>
     </div>
-    
+
     <!-- Hidden file input for image upload -->
     <input type="file" id="imageFileInput" accept="image/*" style="display: none;" onchange="handleImageUpload(event)">
     
@@ -1378,7 +1414,7 @@
         // =============== PARSE INITIALIZATION ===============
         Parse.initialize(
             'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
-            'QNQTH3G4VuLA5gkPIiCtoXZjJJMcPJ5zYsETOPV'
+            'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV'
         );
         Parse.serverURL = 'https://parseapi.back4app.com/';
 
@@ -1390,9 +1426,8 @@
         let dataRefreshInterval = null;
         let currentTab = 'chats';
         let userSearchDebounce = null;
-        let currentUploadAbortController = null;
         
-        // SUPER ADMIN USER ID (rk9MDUV7li)
+        // SUPER ADMIN USER ID
         const SUPER_ADMIN_ID = 'rk9MDUV7li';
 
         // =============== HELPER FUNCTIONS ===============
@@ -1513,85 +1548,71 @@
                 // Show upload progress
                 showUploadProgress(file.name);
                 
-                // Create abort controller for upload cancellation
-                currentUploadAbortController = new AbortController();
-                
-                // Create Parse file
+                // Create Parse file using standard SDK
                 const parseFile = new Parse.File(file.name, file);
                 
-                // Upload file with progress tracking
-                parseFile.save({
+                // Upload file with progress using standard SDK
+                await parseFile.save({
                     progress: (progress) => {
                         updateUploadProgress(progress);
                     }
-                }).then(async () => {
-                    console.log('✅ Image uploaded:', parseFile.url());
-                    
-                    // Create image message object
-                    const imageMessageData = {
-                        type: 'image',
-                        sender: {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentUser.id
-                        },
-                        image: {
-                            "__type": "File",
-                            "name": parseFile.name(),
-                            "url": parseFile.url()
-                        },
-                        fileName: file.name,
-                        fileSize: file.size,
-                        mimeType: file.type,
-                        senderName: currentUser.get('username') || 'User',
-                        createdAt: {
-                            "__type": "Date",
-                            "iso": new Date().toISOString()
-                        }
-                    };
-                    
-                    // Add receiver for private chats
-                    if (!isGlobalChat) {
-                        imageMessageData.receiver = {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentChatId
-                        };
-                    }
-                    
-                    // Save message to appropriate class
-                    const endpoint = isGlobalChat ? 'GlobalMessage' : 'Message';
-                    const response = await makeRequestWithMasterKey('POST', `classes/${endpoint}`, imageMessageData);
-                    
-                    if (response.ok) {
-                        hideUploadProgress();
-                        
-                        // Reload messages to show the new image
-                        if (isGlobalChat) {
-                            await loadGlobalMessages();
-                        } else {
-                            await loadMessages(true);
-                        }
-                        
-                        // Scroll to bottom
-                        const container = document.getElementById('messagesContainer');
-                        setTimeout(() => {
-                            container.scrollTop = container.scrollHeight;
-                        }, 100);
-                        
-                        showNotification('Image sent successfully!', 'success');
-                    } else {
-                        const error = await response.json();
-                        throw new Error(error.error || 'Failed to save image message');
-                    }
-                    
-                }).catch(error => {
-                    hideUploadProgress();
-                    if (error.message !== 'Upload cancelled') {
-                        console.error('❌ Error uploading image:', error);
-                        showNotification(`Failed to upload image: ${error.message}`, 'error');
-                    }
                 });
+                
+                console.log('✅ Image uploaded:', parseFile.url());
+                
+                // Create message data
+                const messageData = {
+                    type: 'image',
+                    sender: currentUser,
+                    image: parseFile,
+                    fileName: file.name,
+                    fileSize: file.size,
+                    mimeType: file.type,
+                    senderName: currentUser.get('username') || 'User'
+                };
+                
+                // Add text if there is any in the input
+                const messageInput = document.getElementById('messageInput');
+                if (messageInput.value.trim()) {
+                    messageData.message = messageInput.value.trim();
+                    messageInput.value = '';
+                    adjustTextareaHeight(messageInput);
+                }
+                
+                // Add receiver for private chats
+                if (!isGlobalChat) {
+                    const User = Parse.User;
+                    const receiver = User.createWithoutData(currentChatId);
+                    messageData.receiver = receiver;
+                }
+                
+                // Save message using Parse SDK
+                const MessageClass = Parse.Object.extend(isGlobalChat ? 'GlobalMessage' : 'Message');
+                const message = new MessageClass();
+                
+                // Set all fields
+                Object.keys(messageData).forEach(key => {
+                    message.set(key, messageData[key]);
+                });
+                
+                await message.save();
+                
+                hideUploadProgress();
+                
+                // Reload messages to show the new image
+                if (isGlobalChat) {
+                    await loadGlobalMessages();
+                } else {
+                    await loadMessages(true);
+                }
+                
+                // Scroll to bottom
+                const container = document.getElementById('messagesContainer');
+                setTimeout(() => {
+                    container.scrollTop = container.scrollHeight;
+                }, 100);
+                
+                showNotification('Image sent successfully!', 'success');
                 
             } catch (error) {
                 hideUploadProgress();
@@ -1624,39 +1645,65 @@
         function hideUploadProgress() {
             const progressDiv = document.getElementById('uploadProgress');
             progressDiv.classList.add('hidden');
-            currentUploadAbortController = null;
         }
         
         function cancelUpload() {
-            if (currentUploadAbortController) {
-                currentUploadAbortController.abort();
-                showNotification('Upload cancelled', 'info');
-                hideUploadProgress();
-            }
+            hideUploadProgress();
+            showNotification('Upload cancelled', 'info');
         }
         
         function previewImage(imageUrl, senderName, timestamp) {
-            const modal = document.getElementById('imagePreviewModal');
-            const previewImg = document.getElementById('previewImage');
-            const senderEl = document.getElementById('imageSender');
-            const timeEl = document.getElementById('imageTime');
+            const modal = document.createElement('div');
+            modal.className = 'image-preview-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.95);
+                z-index: 2000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
             
-            previewImg.src = imageUrl;
-            senderEl.textContent = `From: ${senderName}`;
-            timeEl.textContent = ` • ${formatTime(timestamp)}`;
+            modal.innerHTML = `
+                <div style="position: relative; max-width: 90%; max-height: 90%;">
+                    <button onclick="this.parentElement.parentElement.remove()" style="
+                        position: absolute;
+                        top: -50px;
+                        right: 0;
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 50%;
+                        background: rgba(255,255,255,0.2);
+                        color: white;
+                        border: none;
+                        font-size: 20px;
+                        cursor: pointer;
+                    ">×</button>
+                    <img src="${imageUrl}" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
+                    <div style="color: white; text-align: center; margin-top: 10px;">
+                        <div>From: ${senderName}</div>
+                        <div style="font-size: 12px; opacity: 0.8;">${formatTime(timestamp)}</div>
+                    </div>
+                </div>
+            `;
             
-            modal.style.display = 'block';
+            document.body.appendChild(modal);
+            
+            // Close on click outside image
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
         }
         
-        function closeImagePreview() {
-            const modal = document.getElementById('imagePreviewModal');
-            modal.style.display = 'none';
-        }
-        
-        // =============== SIMPLE PROFILE PICTURE FUNCTION ===============
+        // =============== PROFILE PICTURE FUNCTION ===============
         async function loadProfilePicture(userId, avatarElement, username = null) {
             try {
-                // Get user object
                 const query = new Parse.Query(Parse.User);
                 const user = await query.get(userId, { useMasterKey: true });
                 
@@ -1664,16 +1711,13 @@
                     throw new Error('User not found');
                 }
                 
-                // Get avatar from user object (directly stored like in profile.html)
                 const avatarFile = user.get('avatar');
                 
                 if (avatarFile && avatarFile.url()) {
-                    // Set the profile picture
                     avatarElement.style.backgroundImage = `url('${avatarFile.url()}')`;
                     avatarElement.textContent = '';
                     return avatarFile.url();
                 } else {
-                    // If no avatar found, show initial letter
                     const displayName = user.get('username') || username || 'User';
                     avatarElement.textContent = displayName[0].toUpperCase();
                     avatarElement.style.backgroundImage = 'none';
@@ -1709,11 +1753,9 @@
             try {
                 const currentUser = Parse.User.current();
                 if (currentUser) {
-                    // Update username display
                     const username = currentUser.get('username') || 'User';
                     document.getElementById('username-display').textContent = username;
                     
-                    // Update avatar
                     await loadUserProfilePicture();
                     
                     console.log('✅ User loaded:', username);
@@ -1738,7 +1780,7 @@
             });
         }
 
-        // =============== ADMIN BUTTON VISIBILITY ===============
+        // =============== ADMIN FUNCTIONS ===============
         async function checkAndShowAdminButton() {
             try {
                 const currentUser = Parse.User.current();
@@ -1748,12 +1790,9 @@
                 const userId = currentUser.id;
                 const userRole = currentUser.get('role') || 'user';
                 
-                // Check if user is admin or super admin (or is user rk9MDUV7li)
                 if (userId === SUPER_ADMIN_ID || userRole === 'admin' || userRole === 'super-admin') {
-                    // Show admin panel button
                     document.getElementById('adminPanelBtn').style.display = 'flex';
                     
-                    // Add admin badge to username if super admin
                     if (userId === SUPER_ADMIN_ID || userRole === 'super-admin') {
                         const usernameDisplay = document.getElementById('username-display');
                         const currentName = usernameDisplay.textContent;
@@ -1769,7 +1808,6 @@
             }
         }
 
-        // =============== ADMIN PANEL FUNCTION ===============
         async function checkAndOpenAdminPanel() {
             try {
                 const currentUser = Parse.User.current();
@@ -1782,11 +1820,9 @@
                 const userId = currentUser.id;
                 const userRole = currentUser.get('role') || 'user';
                 
-                // Check if user is admin or super admin (or is user rk9MDUV7li)
                 if (userId === SUPER_ADMIN_ID || userRole === 'admin' || userRole === 'super-admin') {
                     window.location.href = 'admin-panel.html';
                 } else {
-                    // This shouldn't happen since button is hidden, but just in case
                     showNotification('Admin privileges required', 'error');
                 }
             } catch (error) {
@@ -1804,51 +1840,31 @@
                 
                 const currentUser = Parse.User.current();
                 
-                // Use REST API with master key to create contact
-                const contactData = {
-                    fromUser: {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": currentUser.id
-                    },
-                    toUser: {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": userId
-                    },
-                    status: "pending",
-                    fromUsername: currentUser.get('username') || 'User',
-                    toUsername: username,
-                    createdAt: {
-                        "__type": "Date",
-                        "iso": new Date().toISOString()
-                    }
-                };
+                // Use standard Parse SDK for contacts
+                const Contact = Parse.Object.extend('Contact');
+                const contact = new Contact();
                 
-                console.log('Creating contact request with data:', contactData);
+                contact.set('fromUser', currentUser);
+                contact.set('toUser', Parse.User.createWithoutData(userId));
+                contact.set('status', 'pending');
+                contact.set('fromUsername', currentUser.get('username') || 'User');
+                contact.set('toUsername', username);
                 
-                const response = await makeRequestWithMasterKey('POST', 'classes/Contact', contactData);
-                const result = await response.json();
+                await contact.save();
                 
-                if (response.ok) {
-                    console.log('✅ Contact request saved successfully!', result);
-                    showNotification(`Contact request sent to ${username}!`, 'success');
-                    
-                    // Refresh users list and requests
-                    await loadAllUsers();
-                    await loadRequests();
-                } else {
-                    console.error('❌ Failed to save contact request:', result);
-                    if (result.code === 137) {
-                        showNotification(`You already sent a request to ${username}`, 'info');
-                    } else {
-                        showNotification(`Failed to send request: ${result.error || 'Unknown error'}`, 'error');
-                    }
-                }
+                console.log('✅ Contact request saved successfully!');
+                showNotification(`Contact request sent to ${username}!`, 'success');
+                
+                await loadAllUsers();
+                await loadRequests();
                 
             } catch (error) {
                 console.error('❌ Error sending contact request:', error);
-                showNotification(`Failed to send request: ${error.message}`, 'error');
+                if (error.code === 137) {
+                    showNotification(`You already sent a request to ${username}`, 'info');
+                } else {
+                    showNotification(`Failed to send request: ${error.message}`, 'error');
+                }
             }
         }
         
@@ -1857,39 +1873,21 @@
                 try {
                     showNotification('Cancelling request...', 'info');
                     
-                    // First find the request ID
                     const currentUser = Parse.User.current();
-                    const query = encodeURIComponent(JSON.stringify({
-                        "fromUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentUser.id
-                        },
-                        "toUser": {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": userId
-                        },
-                        "status": "pending"
-                    }));
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
                     
-                    const findResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
-                    const findResult = await findResponse.json();
+                    query.equalTo('fromUser', currentUser);
+                    query.equalTo('toUser', Parse.User.createWithoutData(userId));
+                    query.equalTo('status', 'pending');
                     
-                    if (findResult.results && findResult.results.length > 0) {
-                        const contactId = findResult.results[0].objectId;
-                        
-                        // Delete the contact request
-                        const deleteResponse = await makeRequestWithMasterKey('DELETE', `classes/Contact/${contactId}`);
-                        
-                        if (deleteResponse.ok) {
-                            showNotification(`Request to ${username} cancelled`, 'info');
-                            await loadAllUsers();
-                            await loadRequests();
-                        } else {
-                            const error = await deleteResponse.json();
-                            showNotification('Failed to cancel request', 'error');
-                        }
+                    const request = await query.first();
+                    
+                    if (request) {
+                        await request.destroy();
+                        showNotification(`Request to ${username} cancelled`, 'info');
+                        await loadAllUsers();
+                        await loadRequests();
                     } else {
                         showNotification('Request not found', 'error');
                     }
@@ -1905,55 +1903,30 @@
             try {
                 showNotification('Accepting request...', 'info');
                 
-                // Find the request ID
                 const currentUser = Parse.User.current();
-                const query = encodeURIComponent(JSON.stringify({
-                    "fromUser": {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": userId
-                    },
-                    "toUser": {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": currentUser.id
-                    },
-                    "status": "pending"
-                }));
+                const Contact = Parse.Object.extend('Contact');
+                const query = new Parse.Query(Contact);
                 
-                const findResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
-                const findResult = await findResponse.json();
+                query.equalTo('fromUser', Parse.User.createWithoutData(userId));
+                query.equalTo('toUser', currentUser);
+                query.equalTo('status', 'pending');
                 
-                if (findResult.results && findResult.results.length > 0) {
-                    const contactId = findResult.results[0].objectId;
+                const request = await query.first();
+                
+                if (request) {
+                    request.set('status', 'accepted');
+                    await request.save();
                     
-                    // Update the contact status to accepted with CORRECT date format
-                    const updateData = {
-                        status: "accepted",
-                        updatedAt: {
-                            "__type": "Date",
-                            "iso": new Date().toISOString()
-                        }
-                    };
+                    // Create reverse contact
+                    await createReverseContact(userId, username);
                     
-                    const updateResponse = await makeRequestWithMasterKey('PUT', `classes/Contact/${contactId}`, updateData);
+                    showNotification(`${username} added to contacts!`, 'success');
                     
-                    if (updateResponse.ok) {
-                        // Also create the reverse contact (so they appear in both users' contacts)
-                        await createReverseContact(userId, username);
-                        
-                        showNotification(`${username} added to contacts!`, 'success');
-                        
-                        // Refresh all data
-                        await Promise.all([
-                            loadAllUsers(),
-                            loadContacts(),
-                            loadRequests()
-                        ]);
-                    } else {
-                        const error = await updateResponse.json();
-                        showNotification('Failed to accept request', 'error');
-                    }
+                    await Promise.all([
+                        loadAllUsers(),
+                        loadContacts(),
+                        loadRequests()
+                    ]);
                 } else {
                     showNotification('Request not found', 'error');
                 }
@@ -1967,37 +1940,20 @@
         async function createReverseContact(userId, username) {
             try {
                 const currentUser = Parse.User.current();
+                const Contact = Parse.Object.extend('Contact');
+                const contact = new Contact();
                 
-                const reverseContactData = {
-                    fromUser: {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": currentUser.id
-                    },
-                    toUser: {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": userId
-                    },
-                    status: "accepted",
-                    fromUsername: currentUser.get('username') || 'User',
-                    toUsername: username,
-                    createdAt: {
-                        "__type": "Date",
-                        "iso": new Date().toISOString()
-                    },
-                    updatedAt: {
-                        "__type": "Date",
-                        "iso": new Date().toISOString()
-                    }
-                };
+                contact.set('fromUser', currentUser);
+                contact.set('toUser', Parse.User.createWithoutData(userId));
+                contact.set('status', 'accepted');
+                contact.set('fromUsername', currentUser.get('username') || 'User');
+                contact.set('toUsername', username);
                 
-                await makeRequestWithMasterKey('POST', 'classes/Contact', reverseContactData);
+                await contact.save();
                 console.log('✅ Reverse contact created');
                 
             } catch (error) {
                 console.log('⚠️ Reverse contact may already exist or error:', error.message);
-                // It's okay if this fails - contact might already exist
             }
         }
         
@@ -2007,57 +1963,26 @@
                     showNotification('Removing contact...', 'info');
                     
                     const currentUser = Parse.User.current();
+                    const Contact = Parse.Object.extend('Contact');
+                    const query = new Parse.Query(Contact);
                     
-                    // Find both directions of contact
-                    const query = encodeURIComponent(JSON.stringify({
-                        "$or": [
-                            {
-                                "fromUser": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": currentUser.id
-                                },
-                                "toUser": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": userId
-                                },
-                                "status": "accepted"
-                            },
-                            {
-                                "fromUser": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": userId
-                                },
-                                "toUser": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": currentUser.id
-                                },
-                                "status": "accepted"
-                            }
-                        ]
-                    }));
+                    query._orQuery([
+                        query.equalTo('fromUser', currentUser).equalTo('toUser', Parse.User.createWithoutData(userId)).equalTo('status', 'accepted'),
+                        query.equalTo('fromUser', Parse.User.createWithoutData(userId)).equalTo('toUser', currentUser).equalTo('status', 'accepted')
+                    ]);
                     
-                    const findResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
-                    const findResult = await findResponse.json();
+                    const contacts = await query.find();
                     
-                    if (findResult.results && findResult.results.length > 0) {
-                        // Delete all found contacts
-                        const deletePromises = findResult.results.map(contact => 
-                            makeRequestWithMasterKey('DELETE', `classes/Contact/${contact.objectId}`)
-                        );
-                        
-                        await Promise.all(deletePromises);
+                    if (contacts.length > 0) {
+                        await Parse.Object.destroyAll(contacts);
                         showNotification(`${username} removed from contacts`, 'info');
                         await loadContacts();
                         
-                        // If we're currently chatting with this user, switch to welcome screen
                         if (currentChatId === userId) {
                             currentChatId = null;
                             document.getElementById('welcomeScreen').classList.remove('hidden');
                             document.getElementById('chatContent').classList.add('hidden');
+                            hideImageUploadButton();
                         }
                     } else {
                         showNotification('Contact not found', 'error');
@@ -2073,22 +1998,16 @@
         async function getExistingContacts() {
             try {
                 const currentUser = Parse.User.current();
-                const query = encodeURIComponent(JSON.stringify({
-                    "fromUser": {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": currentUser.id
-                    },
-                    "status": "accepted"
-                }));
+                const Contact = Parse.Object.extend('Contact');
+                const query = new Parse.Query(Contact);
                 
-                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
-                const result = await response.json();
+                query.equalTo('fromUser', currentUser);
+                query.equalTo('status', 'accepted');
+                query.include('toUser');
                 
-                if (result.results) {
-                    return result.results.map(contact => contact.toUser.objectId);
-                }
-                return [];
+                const contacts = await query.find();
+                
+                return contacts.map(contact => contact.get('toUser').id);
                 
             } catch (error) {
                 console.log('No contacts found:', error);
@@ -2099,22 +2018,16 @@
         async function getPendingRequests() {
             try {
                 const currentUser = Parse.User.current();
-                const query = encodeURIComponent(JSON.stringify({
-                    "fromUser": {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": currentUser.id
-                    },
-                    "status": "pending"
-                }));
+                const Contact = Parse.Object.extend('Contact');
+                const query = new Parse.Query(Contact);
                 
-                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
-                const result = await response.json();
+                query.equalTo('fromUser', currentUser);
+                query.equalTo('status', 'pending');
+                query.include('toUser');
                 
-                if (result.results) {
-                    return result.results.map(contact => contact.toUser.objectId);
-                }
-                return [];
+                const requests = await query.find();
+                
+                return requests.map(request => request.get('toUser').id);
                 
             } catch (error) {
                 console.log('No pending requests:', error);
@@ -2125,22 +2038,16 @@
         async function getReceivedRequests() {
             try {
                 const currentUser = Parse.User.current();
-                const query = encodeURIComponent(JSON.stringify({
-                    "toUser": {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": currentUser.id
-                    },
-                    "status": "pending"
-                }));
+                const Contact = Parse.Object.extend('Contact');
+                const query = new Parse.Query(Contact);
                 
-                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}`);
-                const result = await response.json();
+                query.equalTo('toUser', currentUser);
+                query.equalTo('status', 'pending');
+                query.include('fromUser');
                 
-                if (result.results) {
-                    return result.results.map(contact => contact.fromUser.objectId);
-                }
-                return [];
+                const requests = await query.find();
+                
+                return requests.map(request => request.get('fromUser').id);
                 
             } catch (error) {
                 console.log('No received requests:', error);
@@ -2176,7 +2083,6 @@
             try {
                 usersList.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
                 
-                // Get current user
                 const currentUser = Parse.User.current();
                 if (!currentUser) {
                     usersList.innerHTML = `
@@ -2189,20 +2095,19 @@
                     return;
                 }
                 
-                // Query all users using master key
-                const query = searchTerm ? 
-                    encodeURIComponent(JSON.stringify({
-                        "username": {"$regex": searchTerm, "$options": "i"},
-                        "objectId": {"$ne": currentUser.id}
-                    })) : 
-                    encodeURIComponent(JSON.stringify({
-                        "objectId": {"$ne": currentUser.id}
-                    }));
+                const query = new Parse.Query(Parse.User);
+                query.notEqualTo('objectId', currentUser.id);
                 
-                const response = await makeRequestWithMasterKey('GET', `classes/_User?where=${query}&order=username&limit=50`);
-                const result = await response.json();
+                if (searchTerm) {
+                    query.matches('username', searchTerm, 'i');
+                }
                 
-                if (!result.results || result.results.length === 0) {
+                query.limit(50);
+                query.ascending('username');
+                
+                const users = await query.find();
+                
+                if (users.length === 0) {
                     usersList.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-user-slash"></i>
@@ -2218,35 +2123,30 @@
                 const pendingRequests = await getPendingRequests();
                 const receivedRequests = await getReceivedRequests();
                 
-                // Display users
                 usersList.innerHTML = '';
                 
-                // Load avatars for all users first
-                const avatarPromises = result.results.map(async (user) => {
-                    const userId = user.objectId;
-                    const username = user.username || 'User';
+                const avatarPromises = users.map(async (user) => {
+                    const userId = user.id;
+                    const username = user.get('username') || 'User';
                     
-                    // Load avatar
                     const avatarDiv = document.createElement('div');
                     avatarDiv.className = 'user-result-avatar';
                     avatarDiv.id = `avatar-${userId}`;
-                    const avatarUrl = await loadProfilePicture(userId, avatarDiv, username);
+                    
+                    await loadProfilePicture(userId, avatarDiv, username);
                     
                     return {
                         user,
                         avatarDiv,
-                        avatarUrl,
                         username
                     };
                 });
                 
                 const usersWithAvatars = await Promise.all(avatarPromises);
                 
-                // Now display users
-                usersWithAvatars.forEach(({ user, avatarDiv, avatarUrl, username }) => {
-                    const userId = user.objectId;
+                usersWithAvatars.forEach(({ user, avatarDiv, username }) => {
+                    const userId = user.id;
                     
-                    // Check contact status
                     let status = 'none';
                     let buttonHtml = '';
                     let buttonClass = '';
@@ -2325,19 +2225,15 @@
         }
 
         // =============== CORE FUNCTIONS ===============
-        // Tab switching
         function switchTab(tabName) {
             currentTab = tabName;
             
-            // Update tab buttons
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(tabName + 'Tab').classList.add('active');
             
-            // Update tab content
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             document.getElementById(tabName + 'Content').classList.add('active');
             
-            // Load appropriate data
             switch(tabName) {
                 case 'chats':
                     loadChats();
@@ -2351,7 +2247,6 @@
             }
         }
         
-        // Load all data
         async function loadAllData() {
             await Promise.all([
                 loadChats(),
@@ -2361,9 +2256,7 @@
             ]);
         }
         
-        // Start auto-refresh
         function startAutoRefresh() {
-            // Clear any existing intervals
             if (dataRefreshInterval) clearInterval(dataRefreshInterval);
             if (messageRefreshInterval) clearInterval(messageRefreshInterval);
             
@@ -2388,7 +2281,6 @@
         }
         
         // =============== CHAT FUNCTIONS ===============
-        // Select global chat
         window.selectGlobalChat = async function() {
             console.log('🌍 Selecting global chat...');
             
@@ -2401,7 +2293,6 @@
             currentChatName = 'Global Chat';
             isGlobalChat = true;
             
-            // Update UI
             document.querySelectorAll('.chat-item, .global-chat-item, .contact-item').forEach(item => {
                 item.classList.remove('active');
             });
@@ -2419,7 +2310,9 @@
             await loadGlobalMessages();
             document.getElementById('messageInput').focus();
             
-            // Close sidebar on mobile
+            // Show image upload button
+            showImageUploadButton();
+            
             if (window.innerWidth <= 768) {
                 document.getElementById('sidebar').classList.remove('show');
             }
@@ -2427,14 +2320,8 @@
             console.log('✅ Global chat selected');
         };
         
-        // Start direct chat from users list
         function startDirectChat(userId, username) {
-            console.log(`💬 Starting direct chat with ${username}`);
-            
-            // Close the users modal
             hideUsersModal();
-            
-            // Switch to chats tab and start the chat
             switchTab('chats');
             setTimeout(() => {
                 selectChat(userId, username);
@@ -2442,7 +2329,6 @@
             }, 300);
         }
         
-        // Select private chat
         async function selectChat(userId, username) {
             currentChatId = userId;
             currentChatName = username;
@@ -2458,71 +2344,51 @@
             document.getElementById('currentChatName').textContent = username;
             document.getElementById('chatStatus').textContent = 'online';
             
-            // Load user profile picture
             const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
             await loadProfilePicture(userId, chatHeaderAvatar, username);
             
             await loadMessages();
             document.getElementById('messageInput').focus();
             
-            // Close sidebar on mobile
+            // Show image upload button
+            showImageUploadButton();
+            
             if (window.innerWidth <= 768) {
                 document.getElementById('sidebar').classList.remove('show');
             }
         }
         
-        // Start chat from contacts
         function startChat(userId, username) {
             startDirectChat(userId, username);
         }
         
         // =============== MESSAGE FUNCTIONS ===============
-        // Load private messages
         async function loadMessages(scrollToBottom = true) {
             if (!currentChatId || currentChatId === 'global') return;
             
             try {
-                // Query messages between current user and selected user
                 const currentUser = Parse.User.current();
-                const query = encodeURIComponent(JSON.stringify({
-                    "$or": [
-                        {
-                            "sender": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": currentUser.id
-                            },
-                            "receiver": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": currentChatId
-                            }
-                        },
-                        {
-                            "sender": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": currentChatId
-                            },
-                            "receiver": {
-                                "__type": "Pointer",
-                                "className": "_User",
-                                "objectId": currentUser.id
-                            }
-                        }
-                    ]
-                }));
+                const Message = Parse.Object.extend('Message');
+                const query = new Parse.Query(Message);
                 
-                const response = await makeRequestWithMasterKey('GET', `classes/Message?where=${query}&include=sender,receiver&order=createdAt&limit=50`);
-                const result = await response.json();
+                query._orQuery([
+                    query.equalTo('sender', currentUser).equalTo('receiver', Parse.User.createWithoutData(currentChatId)),
+                    query.equalTo('sender', Parse.User.createWithoutData(currentChatId)).equalTo('receiver', currentUser)
+                ]);
                 
+                query.include('sender');
+                query.include('receiver');
+                query.ascending('createdAt');
+                query.limit(50);
+                
+                const messages = await query.find();
                 const container = document.getElementById('messagesContainer');
                 const wasAtBottom = isScrolledToBottom(container);
                 
-                if (result.results && result.results.length > 0) {
+                if (messages.length > 0) {
                     container.innerHTML = '';
                     
-                    result.results.forEach(msg => {
+                    messages.forEach(msg => {
                         addMessageToContainer(msg, container);
                     });
                     
@@ -2553,25 +2419,25 @@
             }
         }
         
-        // Load global messages
         async function loadGlobalMessages() {
             console.log('📥 Loading global messages...');
             
             try {
-                const response = await makeRequestWithMasterKey('GET', 'classes/GlobalMessage?include=sender&order=-createdAt&limit=50');
-                const result = await response.json();
+                const GlobalMessage = Parse.Object.extend('GlobalMessage');
+                const query = new Parse.Query(GlobalMessage);
                 
+                query.include('sender');
+                query.descending('createdAt');
+                query.limit(50);
+                
+                const messages = await query.find();
                 const container = document.getElementById('messagesContainer');
                 const wasAtBottom = isScrolledToBottom(container);
                 
-                if (result.results && result.results.length > 0) {
+                if (messages.length > 0) {
                     container.innerHTML = '';
-                    const currentUser = Parse.User.current();
                     
-                    // Reverse to show oldest first
-                    const messages = result.results.reverse();
-                    
-                    messages.forEach(msg => {
+                    messages.reverse().forEach(msg => {
                         addMessageToContainer(msg, container);
                     });
                     
@@ -2602,40 +2468,53 @@
             }
         }
         
-        // Add message to container (supports both text and image messages)
         function addMessageToContainer(msg, container) {
             const currentUser = Parse.User.current();
-            const sender = msg.sender;
-            const isOwn = sender && sender.objectId === currentUser.id;
+            const sender = msg.get('sender');
+            const isOwn = sender && sender.id === currentUser.id;
             
             let displayName = 'Unknown User';
-            if (sender && sender.username) {
-                displayName = sender.username;
+            if (sender && sender.get('username')) {
+                displayName = sender.get('username');
             }
             
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
             
-            const messageText = msg.message || '';
-            const timestamp = msg.createdAt;
+            const messageText = msg.get('message') || '';
+            const timestamp = msg.get('createdAt');
             
             // Check if it's an image message
-            if (msg.type === 'image' && msg.image && msg.image.url) {
-                const imageUrl = msg.image.url;
-                const fileName = msg.fileName || 'image.jpg';
-                
-                messageDiv.innerHTML = `
-                    ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
-                    <div class="message-content">
-                        <div class="image-message" onclick="previewImage('${imageUrl}', '${escapeString(displayName)}', '${timestamp}')">
-                            <img src="${imageUrl}" alt="${escapeHTML(fileName)}" loading="lazy">
+            if (msg.get('type') === 'image') {
+                const imageFile = msg.get('image');
+                if (imageFile && imageFile.url()) {
+                    const imageUrl = imageFile.url();
+                    const fileName = msg.get('fileName') || 'image.jpg';
+                    
+                    messageDiv.innerHTML = `
+                        ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
+                        <div class="message-content">
+                            <div class="image-message" onclick="previewImage('${imageUrl}', '${escapeString(displayName)}', '${timestamp}')">
+                                <img src="${imageUrl}" alt="${escapeHTML(fileName)}" loading="lazy">
+                            </div>
+                            ${messageText ? `<div class="image-caption">${escapeHTML(messageText)}</div>` : ''}
                         </div>
-                        ${messageText ? `<div class="image-caption">${escapeHTML(messageText)}</div>` : ''}
-                    </div>
-                    <div class="message-time">${formatTime(timestamp)}</div>
-                `;
+                        <div class="message-time">${formatTime(timestamp)}</div>
+                    `;
+                } else {
+                    messageDiv.innerHTML = `
+                        ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
+                        <div class="message-content">
+                            <div class="image-message">
+                                <i class="fas fa-image" style="font-size: 40px; color: #666;"></i>
+                                <p style="margin-top: 10px; color: #666;">Image not available</p>
+                            </div>
+                            ${messageText ? `<div class="image-caption">${escapeHTML(messageText)}</div>` : ''}
+                        </div>
+                        <div class="message-time">${formatTime(timestamp)}</div>
+                    `;
+                }
             } else {
-                // Regular text message
                 messageDiv.innerHTML = `
                     ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
                     <div class="message-content">${escapeHTML(messageText)}</div>
@@ -2646,7 +2525,6 @@
             container.appendChild(messageDiv);
         }
         
-        // Send message
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
@@ -2670,98 +2548,61 @@
             try {
                 const currentUser = Parse.User.current();
                 
-                // Disable send button and show loading
                 const sendBtn = document.getElementById('sendBtn');
                 sendBtn.disabled = true;
                 sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
                 
                 if (isGlobalChat) {
-                    // Send global message
-                    const messageData = {
-                        sender: {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentUser.id
-                        },
-                        message: message,
-                        senderName: currentUser.get('username') || 'User',
-                        createdAt: {
-                            "__type": "Date",
-                            "iso": new Date().toISOString()
-                        }
-                    };
+                    const GlobalMessage = Parse.Object.extend('GlobalMessage');
+                    const globalMessage = new GlobalMessage();
                     
-                    const response = await makeRequestWithMasterKey('POST', 'classes/GlobalMessage', messageData);
+                    globalMessage.set('sender', currentUser);
+                    globalMessage.set('message', message);
+                    globalMessage.set('senderName', currentUser.get('username') || 'User');
                     
-                    if (response.ok) {
-                        // Clear input
-                        input.value = '';
-                        input.style.height = 'auto';
-                        
-                        // Reload messages
-                        await loadGlobalMessages();
-                        
-                        // Scroll to bottom
-                        const container = document.getElementById('messagesContainer');
-                        setTimeout(() => {
-                            container.scrollTop = container.scrollHeight;
-                        }, 100);
-                        
-                        console.log('✅ Global message sent');
-                    } else {
-                        const error = await response.json();
-                        throw new Error(error.error || 'Failed to send message');
-                    }
+                    await globalMessage.save();
+                    
+                    input.value = '';
+                    input.style.height = 'auto';
+                    
+                    await loadGlobalMessages();
+                    
+                    const container = document.getElementById('messagesContainer');
+                    setTimeout(() => {
+                        container.scrollTop = container.scrollHeight;
+                    }, 100);
+                    
+                    console.log('✅ Global message sent');
                 } else {
-                    // Send private message
-                    const messageData = {
-                        sender: {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentUser.id
-                        },
-                        receiver: {
-                            "__type": "Pointer",
-                            "className": "_User",
-                            "objectId": currentChatId
-                        },
-                        message: message,
-                        createdAt: {
-                            "__type": "Date",
-                            "iso": new Date().toISOString()
-                        }
-                    };
+                    const Message = Parse.Object.extend('Message');
+                    const privateMessage = new Message();
                     
-                    const response = await makeRequestWithMasterKey('POST', 'classes/Message', messageData);
+                    privateMessage.set('sender', currentUser);
+                    privateMessage.set('receiver', Parse.User.createWithoutData(currentChatId));
+                    privateMessage.set('message', message);
                     
-                    if (response.ok) {
-                        // Clear input
-                        input.value = '';
-                        input.style.height = 'auto';
-                        
-                        // Reload messages
-                        await loadMessages(true);
-                        
-                        console.log('✅ Private message sent');
-                    } else {
-                        const error = await response.json();
-                        throw new Error(error.error || 'Failed to send message');
-                    }
+                    await privateMessage.save();
+                    
+                    input.value = '';
+                    input.style.height = 'auto';
+                    
+                    await loadMessages(true);
+                    
+                    console.log('✅ Private message sent');
                 }
                 
             } catch (error) {
                 console.error('❌ Error sending message:', error);
                 showNotification(`Failed to send message: ${error.message}`, 'error');
             } finally {
-                // Re-enable send button
                 const sendBtn = document.getElementById('sendBtn');
+                const input = document.getElementById('messageInput');
                 sendBtn.disabled = input.value.trim() === '';
                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
                 sendBtn.style.background = input.value.trim() ? '#25d366' : '#ccc';
             }
         }
         
-        // Handle Enter key press
         function handleKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
@@ -2787,20 +2628,15 @@
                     return;
                 }
                 
-                // Get user's contacts
-                const contactsQuery = encodeURIComponent(JSON.stringify({
-                    "fromUser": {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": currentUser.id
-                    },
-                    "status": "accepted"
-                }));
+                const Contact = Parse.Object.extend('Contact');
+                const query = new Parse.Query(Contact);
                 
-                const contactsResponse = await makeRequestWithMasterKey('GET', `classes/Contact?where=${contactsQuery}&include=toUser`);
-                const contactsResult = await contactsResponse.json();
+                query.equalTo('fromUser', currentUser);
+                query.equalTo('status', 'accepted');
+                query.include('toUser');
                 
-                // Show chats loading
+                const contacts = await query.find();
+                
                 chatsContent.innerHTML = `
                     <div class="global-chat-item" onclick="selectGlobalChat()" id="globalChatItem">
                         <div class="global-avatar">
@@ -2820,7 +2656,7 @@
                     </div>
                 `;
                 
-                if (!contactsResult.results || contactsResult.results.length === 0) {
+                if (contacts.length === 0) {
                     document.getElementById('chatsLoading').innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-comments"></i>
@@ -2831,88 +2667,57 @@
                     return;
                 }
                 
-                // Get last messages for each contact
                 const contactChats = [];
                 
-                for (const contact of contactsResult.results) {
-                    // FIX: Check if toUser exists and has objectId
-                    if (!contact.toUser || !contact.toUser.objectId) {
-                        console.warn('Skipping contact with invalid toUser:', contact);
-                        continue;
-                    }
+                for (const contact of contacts) {
+                    const toUser = contact.get('toUser');
+                    if (!toUser) continue;
                     
-                    const userId = contact.toUser.objectId;
-                    const username = contact.toUsername || contact.toUser.username || 'User';
+                    const userId = toUser.id;
+                    const username = contact.get('toUsername') || toUser.get('username') || 'User';
                     
-                    // Get last message between users
-                    const messageQuery = encodeURIComponent(JSON.stringify({
-                        "$or": [
-                            {
-                                "sender": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": currentUser.id
-                                },
-                                "receiver": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": userId
-                                }
-                            },
-                            {
-                                "sender": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": userId
-                                },
-                                "receiver": {
-                                    "__type": "Pointer",
-                                    "className": "_User",
-                                    "objectId": currentUser.id
-                                }
-                            }
-                        ]
-                    }));
+                    const Message = Parse.Object.extend('Message');
+                    const messageQuery = new Parse.Query(Message);
                     
-                    const messagesResponse = await makeRequestWithMasterKey('GET', `classes/Message?where=${messageQuery}&order=-createdAt&limit=1`);
-                    const messagesResult = await messagesResponse.json();
+                    messageQuery._orQuery([
+                        messageQuery.equalTo('sender', currentUser).equalTo('receiver', toUser),
+                        messageQuery.equalTo('sender', toUser).equalTo('receiver', currentUser)
+                    ]);
                     
-                    let lastMessage = "No messages yet";
-                    let lastMessageTime = contact.createdAt;
+                    messageQuery.descending('createdAt');
+                    messageQuery.limit(1);
                     
-                    if (messagesResult.results && messagesResult.results.length > 0) {
-                        const msg = messagesResult.results[0];
-                        if (msg.type === 'image') {
-                            lastMessage = "📷 Image";
+                    const lastMessage = await messageQuery.first();
+                    
+                    let lastMessageText = "No messages yet";
+                    let lastMessageTime = contact.get('createdAt');
+                    
+                    if (lastMessage) {
+                        if (lastMessage.get('type') === 'image') {
+                            lastMessageText = "📷 Image";
                         } else {
-                            lastMessage = msg.message || "No messages yet";
+                            lastMessageText = lastMessage.get('message') || "No messages yet";
                         }
-                        lastMessageTime = msg.createdAt;
+                        lastMessageTime = lastMessage.get('createdAt');
                     }
                     
                     contactChats.push({
                         userId,
                         username,
-                        lastMessage,
+                        lastMessage: lastMessageText,
                         lastMessageTime
                     });
                 }
                 
-                // Sort by last message time
                 contactChats.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
                 
-                // Display chats
                 let chatsHTML = '';
                 
-                // Global chat is already added at the top
-                
-                // Add contact chats
                 for (const chat of contactChats) {
                     const avatarDiv = document.createElement('div');
                     avatarDiv.className = 'chat-avatar';
                     avatarDiv.id = `chat-avatar-${chat.userId}`;
                     
-                    // Load avatar asynchronously
                     loadProfilePicture(chat.userId, avatarDiv, chat.username);
                     
                     chatsHTML += `
@@ -2930,7 +2735,6 @@
                 document.getElementById('chatsLoading').remove();
                 chatsContent.insertAdjacentHTML('beforeend', chatsHTML);
                 
-                // Mark active chat if any
                 if (currentChatId && currentChatId !== 'global') {
                     const activeChat = document.getElementById(`chat-${currentChatId}`);
                     if (activeChat) {
@@ -2967,20 +2771,16 @@
                     return;
                 }
                 
-                // Get accepted contacts
-                const query = encodeURIComponent(JSON.stringify({
-                    "fromUser": {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": currentUser.id
-                    },
-                    "status": "accepted"
-                }));
+                const Contact = Parse.Object.extend('Contact');
+                const query = new Parse.Query(Contact);
                 
-                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}&include=toUser`);
-                const result = await response.json();
+                query.equalTo('fromUser', currentUser);
+                query.equalTo('status', 'accepted');
+                query.include('toUser');
                 
-                if (!result.results || result.results.length === 0) {
+                const contacts = await query.find();
+                
+                if (contacts.length === 0) {
                     contactsContent.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-user-friends"></i>
@@ -2993,16 +2793,12 @@
                 
                 contactsContent.innerHTML = '';
                 
-                // Load avatars and display contacts
-                const avatarPromises = result.results.map(async (contact) => {
-                    // FIX: Check if toUser exists
-                    if (!contact.toUser || !contact.toUser.objectId) {
-                        console.warn('Skipping contact with invalid toUser:', contact);
-                        return null;
-                    }
+                const avatarPromises = contacts.map(async (contact) => {
+                    const toUser = contact.get('toUser');
+                    if (!toUser) return null;
                     
-                    const userId = contact.toUser.objectId;
-                    const username = contact.toUsername || contact.toUser.username || 'User';
+                    const userId = toUser.id;
+                    const username = contact.get('toUsername') || toUser.get('username') || 'User';
                     
                     const avatarDiv = document.createElement('div');
                     avatarDiv.className = 'contact-avatar';
@@ -3013,21 +2809,16 @@
                     return {
                         userId,
                         username,
-                        avatarDiv,
-                        contactDate: contact.createdAt
+                        avatarDiv
                     };
                 });
                 
                 const contactsWithAvatars = await Promise.all(avatarPromises);
-                
-                // Filter out null results
                 const validContacts = contactsWithAvatars.filter(contact => contact !== null);
                 
-                // Sort by username
                 validContacts.sort((a, b) => a.username.localeCompare(b.username));
                 
-                // Display contacts
-                validContacts.forEach(({ userId, username, avatarDiv, contactDate }) => {
+                validContacts.forEach(({ userId, username, avatarDiv }) => {
                     const contactDiv = document.createElement('div');
                     contactDiv.className = 'contact-item';
                     
@@ -3074,25 +2865,21 @@
                             <i class="fas fa-exclamation-triangle"></i>
                             <h3>Not logged in</h3>
                             <p>Please refresh the page</p>
-                    </div>
+                        </div>
                     `;
                     return;
                 }
                 
-                // Get received requests
-                const query = encodeURIComponent(JSON.stringify({
-                    "toUser": {
-                        "__type": "Pointer",
-                        "className": "_User",
-                        "objectId": currentUser.id
-                    },
-                    "status": "pending"
-                }));
+                const Contact = Parse.Object.extend('Contact');
+                const query = new Parse.Query(Contact);
                 
-                const response = await makeRequestWithMasterKey('GET', `classes/Contact?where=${query}&include=fromUser`);
-                const result = await response.json();
+                query.equalTo('toUser', currentUser);
+                query.equalTo('status', 'pending');
+                query.include('fromUser');
                 
-                if (!result.results || result.results.length === 0) {
+                const requests = await query.find();
+                
+                if (requests.length === 0) {
                     requestsContent.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-user-plus"></i>
@@ -3101,7 +2888,6 @@
                         </div>
                     `;
                     
-                    // Update badge
                     document.getElementById('requestsBadge').classList.add('hidden');
                     document.getElementById('requestsBadge').textContent = '0';
                     return;
@@ -3109,21 +2895,16 @@
                 
                 requestsContent.innerHTML = '';
                 
-                // Update badge
                 const requestsBadge = document.getElementById('requestsBadge');
                 requestsBadge.classList.remove('hidden');
-                requestsBadge.textContent = result.results.length;
+                requestsBadge.textContent = requests.length;
                 
-                // Load avatars and display requests
-                const avatarPromises = result.results.map(async (contact) => {
-                    // FIX: Check if fromUser exists
-                    if (!contact.fromUser || !contact.fromUser.objectId) {
-                        console.warn('Skipping contact with invalid fromUser:', contact);
-                        return null;
-                    }
+                const avatarPromises = requests.map(async (contact) => {
+                    const fromUser = contact.get('fromUser');
+                    if (!fromUser) return null;
                     
-                    const userId = contact.fromUser.objectId;
-                    const username = contact.fromUsername || contact.fromUser.username || 'User';
+                    const userId = fromUser.id;
+                    const username = contact.get('fromUsername') || fromUser.get('username') || 'User';
                     
                     const avatarDiv = document.createElement('div');
                     avatarDiv.className = 'contact-avatar';
@@ -3134,21 +2915,16 @@
                     return {
                         userId,
                         username,
-                        avatarDiv,
-                        requestDate: contact.createdAt
+                        avatarDiv
                     };
                 });
                 
                 const requestsWithAvatars = await Promise.all(avatarPromises);
-                
-                // Filter out null results
                 const validRequests = requestsWithAvatars.filter(request => request !== null);
                 
-                // Sort by request date (newest first)
-                validRequests.sort((a, b) => new Date(b.requestDate) - new Date(a.requestDate));
+                validRequests.sort((a, b) => b.username.localeCompare(a.username));
                 
-                // Display requests
-                validRequests.forEach(({ userId, username, avatarDiv, requestDate }) => {
+                validRequests.forEach(({ userId, username, avatarDiv }) => {
                     const requestDiv = document.createElement('div');
                     requestDiv.className = 'contact-item';
                     
@@ -3186,13 +2962,9 @@
         // =============== ONLINE USERS COUNT ===============
         async function updateOnlineUsersCount() {
             try {
-                // Count all users
-                const response = await makeRequestWithMasterKey('GET', 'classes/_User?count=1&limit=0');
-                const result = await response.json();
-                
-                const count = result.count || 0;
+                const query = new Parse.Query(Parse.User);
+                const count = await query.count();
                 document.getElementById('globalUserCount').textContent = count;
-                
             } catch (error) {
                 console.error('Error updating online count:', error);
             }
@@ -3203,14 +2975,12 @@
             const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
             
             if (!searchTerm) {
-                // Show all items
                 document.querySelectorAll('.chat-item, .contact-item, .global-chat-item').forEach(item => {
                     item.style.display = 'flex';
                 });
                 return;
             }
             
-            // Search in current tab
             const currentTabContent = document.getElementById(currentTab + 'Content');
             const items = currentTabContent.querySelectorAll('.chat-item, .contact-item, .global-chat-item');
             
@@ -3248,10 +3018,8 @@
         async function refreshAll() {
             showNotification('Refreshing...', 'info');
             
-            // Update user data
             await loadUserData();
             
-            // Refresh current tab
             switch(currentTab) {
                 case 'chats':
                     await loadChats();
@@ -3264,7 +3032,6 @@
                     break;
             }
             
-            // Refresh messages if in a chat
             if (currentChatId) {
                 if (isGlobalChat) {
                     await loadGlobalMessages();
@@ -3282,11 +3049,20 @@
             sidebar.classList.toggle('show');
         }
         
+        function showImageUploadButton() {
+            const uploadContainer = document.getElementById('imageUploadContainer');
+            uploadContainer.style.display = currentChatId ? 'block' : 'none';
+        }
+        
+        function hideImageUploadButton() {
+            const uploadContainer = document.getElementById('imageUploadContainer');
+            uploadContainer.style.display = 'none';
+        }
+        
         // =============== INITIALIZATION ===============
         async function initializeApp() {
             console.log('🚀 Initializing ChatRise Messenger...');
             
-            // Check if user is logged in
             const currentUser = Parse.User.current();
             if (!currentUser) {
                 console.log('❌ No user logged in, redirecting to login...');
@@ -3296,7 +3072,6 @@
             
             console.log('✅ User is logged in:', currentUser.get('username'));
             
-            // Load initial data
             await Promise.all([
                 loadUserData(),
                 checkAndShowAdminButton(),
@@ -3304,32 +3079,27 @@
                 updateOnlineUsersCount()
             ]);
             
-            // Set up message input auto-resize
             const messageInput = document.getElementById('messageInput');
             messageInput.addEventListener('input', function() {
                 adjustTextareaHeight(this);
             });
             
-            // Set up page visibility listener
             document.addEventListener('visibilitychange', function() {
                 if (!document.hidden) {
                     loadAllData();
                 }
             });
             
-            // Set up window resize for mobile
             window.addEventListener('resize', function() {
                 if (window.innerWidth > 768) {
                     document.getElementById('sidebar').classList.remove('show');
                 }
             });
             
-            // Start auto-refresh
             startAutoRefresh();
             
             console.log('✅ App initialized successfully');
             
-            // Show welcome notification
             showNotification(`Welcome back, ${currentUser.get('username')}! 👋`, 'success', 3000);
         }
         
@@ -3350,9 +3120,7 @@
         }
         
         // =============== START THE APP ===============
-        // Wait for DOM to be ready
         document.addEventListener('DOMContentLoaded', function() {
-            // Fix mobile viewport height
             function setVH() {
                 const vh = window.innerHeight * 0.01;
                 document.documentElement.style.setProperty('--vh', `${vh}px`);
@@ -3361,20 +3129,13 @@
             setVH();
             window.addEventListener('resize', setVH);
             
-            // Initialize the app
             setTimeout(initializeApp, 100);
         });
         
-        // Close modal when clicking outside
         window.onclick = function(event) {
             const modal = document.getElementById('usersModal');
-            const imageModal = document.getElementById('imagePreviewModal');
-            
             if (event.target === modal) {
                 hideUsersModal();
-            }
-            if (event.target === imageModal) {
-                closeImagePreview();
             }
         };
     </script>
