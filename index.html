@@ -496,6 +496,7 @@
             display: flex;
             flex-direction: column;
             animation: messageSlide 0.3s ease;
+            position: relative;
         }
         
         @keyframes messageSlide {
@@ -557,6 +558,71 @@
             text-align: left;
         }
         
+        /* Message Actions */
+        .message-actions {
+            position: absolute;
+            top: -10px;
+            right: 10px;
+            display: none;
+            gap: 5px;
+            background: white;
+            padding: 5px;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        
+        .message.sent .message-actions {
+            right: 10px;
+            left: auto;
+        }
+        
+        .message.received .message-actions {
+            left: 10px;
+            right: auto;
+        }
+        
+        .message:hover .message-actions {
+            display: flex;
+        }
+        
+        .message-action-btn {
+            width: 30px;
+            height: 30px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.2s;
+            background: #f8f9fa;
+            color: #666;
+        }
+        
+        .message-action-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        .message-action-btn.delete {
+            color: #ff4757;
+        }
+        
+        .message-action-btn.delete:hover {
+            background: #ff4757;
+            color: white;
+        }
+        
+        .message-action-btn.info {
+            color: #007bff;
+        }
+        
+        .message-action-btn.info:hover {
+            background: #007bff;
+            color: white;
+        }
+        
         /* Image message styles */
         .image-message {
             max-width: 300px;
@@ -600,7 +666,7 @@
         
         .message-input {
             width: 100%;
-            padding: 12px 50px 12px 45px;
+            padding: 12px 100px 12px 45px;
             border: 1px solid #e1e5e9;
             border-radius: 25px;
             outline: none;
@@ -646,9 +712,18 @@
             color: #25d366;
         }
         
+        .send-actions {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            gap: 8px;
+        }
+        
         .send-btn {
-            width: 50px;
-            height: 50px;
+            width: 36px;
+            height: 36px;
             border: none;
             border-radius: 50%;
             background: #ccc;
@@ -657,7 +732,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            font-size: 16px;
             transition: all 0.2s;
         }
         
@@ -668,6 +743,31 @@
         .send-btn:disabled {
             cursor: not-allowed;
             transform: none;
+        }
+        
+        .send-btn.ready {
+            background: #25d366;
+        }
+        
+        .confirm-send-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 50%;
+            background: #25d366;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+            display: none;
+        }
+        
+        .confirm-send-btn:hover {
+            background: #1ea952;
+            transform: scale(1.05);
         }
         
         .welcome-screen {
@@ -1049,35 +1149,6 @@
             transition: width 0.3s ease;
         }
         
-        /* Image Upload Button */
-        .image-upload-container {
-            position: fixed;
-            bottom: 90px;
-            right: 30px;
-            z-index: 100;
-        }
-        
-        .image-upload-btn {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #25d366, #128c7e);
-            border: none;
-            color: white;
-            font-size: 24px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .image-upload-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
-        }
-        
         /* Mobile Responsive */
         @media (max-width: 768px) {
             body {
@@ -1185,15 +1256,15 @@
                 max-height: 300px;
             }
             
-            .image-upload-container {
-                bottom: 100px;
-                right: 20px;
+            .message-actions {
+                padding: 3px;
+                gap: 3px;
             }
             
-            .image-upload-btn {
-                width: 50px;
-                height: 50px;
-                font-size: 20px;
+            .message-action-btn {
+                width: 25px;
+                height: 25px;
+                font-size: 10px;
             }
         }
         
@@ -1355,11 +1426,17 @@
                             placeholder="Type a message..." 
                             rows="1"
                             onkeypress="handleKeyPress(event)"
+                            oninput="handleMessageInput()"
                         ></textarea>
+                        <div class="send-actions">
+                            <button class="send-btn" id="sendBtn" disabled>
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                            <button class="confirm-send-btn" id="confirmSendBtn" onclick="confirmSendMessage()">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </div>
                     </div>
-                    <button class="send-btn" onclick="sendMessage()" id="sendBtn" disabled>
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
                 </div>
             </div>
         </div>
@@ -1384,13 +1461,6 @@
                 </div>
             </div>
         </div>
-    </div>
-    
-    <!-- Image Upload Button -->
-    <div class="image-upload-container" id="imageUploadContainer" style="display: none;">
-        <button class="image-upload-btn" onclick="openImagePicker()" title="Send Image">
-            <i class="fas fa-camera"></i>
-        </button>
     </div>
 
     <!-- Hidden file input for image upload -->
@@ -1426,6 +1496,8 @@
         let dataRefreshInterval = null;
         let currentTab = 'chats';
         let userSearchDebounce = null;
+        let pendingMessage = '';
+        let currentUser = null;
         
         // SUPER ADMIN USER ID
         const SUPER_ADMIN_ID = 'rk9MDUV7li';
@@ -1475,10 +1547,6 @@
         function adjustTextareaHeight(textarea) {
             textarea.style.height = 'auto';
             textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-            
-            const sendBtn = document.getElementById('sendBtn');
-            sendBtn.disabled = textarea.value.trim() === '';
-            sendBtn.style.background = textarea.value.trim() ? '#25d366' : '#ccc';
         }
 
         function isScrolledToBottom(element) {
@@ -1537,14 +1605,12 @@
                 return;
             }
             
-            if (!Parse.User.current()) {
+            if (!currentUser) {
                 window.location.href = 'login.html';
                 return;
             }
             
             try {
-                const currentUser = Parse.User.current();
-                
                 // Show upload progress
                 showUploadProgress(file.name);
                 
@@ -1576,7 +1642,7 @@
                 if (messageInput.value.trim()) {
                     messageData.message = messageInput.value.trim();
                     messageInput.value = '';
-                    adjustTextareaHeight(messageInput);
+                    handleMessageInput();
                 }
                 
                 // Add receiver for private chats
@@ -1701,6 +1767,151 @@
             });
         }
         
+        // =============== MESSAGE SENDING WITH CONFIRMATION ===============
+        function handleMessageInput() {
+            const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const confirmBtn = document.getElementById('confirmSendBtn');
+            const message = input.value.trim();
+            
+            adjustTextareaHeight(input);
+            
+            if (message.length > 0) {
+                sendBtn.disabled = false;
+                sendBtn.classList.add('ready');
+                pendingMessage = message;
+            } else {
+                sendBtn.disabled = true;
+                sendBtn.classList.remove('ready');
+                pendingMessage = '';
+                confirmBtn.style.display = 'none';
+                sendBtn.style.display = 'flex';
+            }
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                if (pendingMessage) {
+                    showConfirmButton();
+                }
+            }
+        }
+        
+        function showConfirmButton() {
+            const sendBtn = document.getElementById('sendBtn');
+            const confirmBtn = document.getElementById('confirmSendBtn');
+            
+            sendBtn.style.display = 'none';
+            confirmBtn.style.display = 'flex';
+        }
+        
+        async function confirmSendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            const MAX_MESSAGE_LENGTH = 1000;
+            if (message.length > MAX_MESSAGE_LENGTH) {
+                showNotification(`Message too long! Maximum ${MAX_MESSAGE_LENGTH} characters allowed.`, 'error');
+                return;
+            }
+            
+            if (!message || !currentChatId) {
+                showNotification('Please enter a message', 'error');
+                return;
+            }
+            
+            if (!currentUser) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            try {
+                const sendBtn = document.getElementById('sendBtn');
+                const confirmBtn = document.getElementById('confirmSendBtn');
+                
+                sendBtn.style.display = 'flex';
+                confirmBtn.style.display = 'none';
+                
+                if (isGlobalChat) {
+                    const GlobalMessage = Parse.Object.extend('GlobalMessage');
+                    const globalMessage = new GlobalMessage();
+                    
+                    globalMessage.set('sender', currentUser);
+                    globalMessage.set('message', message);
+                    globalMessage.set('senderName', currentUser.get('username') || 'User');
+                    
+                    await globalMessage.save();
+                    
+                    input.value = '';
+                    input.style.height = 'auto';
+                    
+                    await loadGlobalMessages();
+                    
+                    const container = document.getElementById('messagesContainer');
+                    setTimeout(() => {
+                        container.scrollTop = container.scrollHeight;
+                    }, 100);
+                    
+                    console.log('✅ Global message sent');
+                } else {
+                    const Message = Parse.Object.extend('Message');
+                    const privateMessage = new Message();
+                    
+                    privateMessage.set('sender', currentUser);
+                    privateMessage.set('receiver', Parse.User.createWithoutData(currentChatId));
+                    privateMessage.set('message', message);
+                    
+                    await privateMessage.save();
+                    
+                    input.value = '';
+                    input.style.height = 'auto';
+                    
+                    await loadMessages(true);
+                    
+                    console.log('✅ Private message sent');
+                }
+                
+                handleMessageInput();
+                
+            } catch (error) {
+                console.error('❌ Error sending message:', error);
+                showNotification(`Failed to send message: ${error.message}`, 'error');
+            }
+        }
+        
+        // =============== DELETE MESSAGE FUNCTION ===============
+        async function deleteMessage(messageId, isGlobal = false) {
+            if (confirm('Are you sure you want to delete this message?')) {
+                try {
+                    const MessageClass = Parse.Object.extend(isGlobal ? 'GlobalMessage' : 'Message');
+                    const query = new Parse.Query(MessageClass);
+                    
+                    const message = await query.get(messageId);
+                    
+                    if (message) {
+                        const sender = message.get('sender');
+                        if (sender && sender.id === currentUser.id) {
+                            await message.destroy();
+                            showNotification('Message deleted', 'success');
+                            
+                            // Reload messages
+                            if (isGlobalChat) {
+                                await loadGlobalMessages();
+                            } else {
+                                await loadMessages(true);
+                            }
+                        } else {
+                            showNotification('You can only delete your own messages', 'error');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error deleting message:', error);
+                    showNotification('Failed to delete message', 'error');
+                }
+            }
+        }
+        
         // =============== PROFILE PICTURE FUNCTION ===============
         async function loadProfilePicture(userId, avatarElement, username = null) {
             try {
@@ -1738,7 +1949,6 @@
         
         async function loadUserProfilePicture() {
             try {
-                const currentUser = Parse.User.current();
                 if (!currentUser) return;
                 
                 const userAvatar = document.getElementById('userAvatar');
@@ -1751,7 +1961,7 @@
         
         async function loadUserData() {
             try {
-                const currentUser = Parse.User.current();
+                currentUser = Parse.User.current();
                 if (currentUser) {
                     const username = currentUser.get('username') || 'User';
                     document.getElementById('username-display').textContent = username;
@@ -1765,25 +1975,9 @@
             }
         }
 
-        // =============== MASTER KEY HELPER FUNCTIONS ===============
-        function makeRequestWithMasterKey(method, endpoint, data = {}) {
-            const url = `https://parseapi.back4app.com/${endpoint}`;
-            
-            return fetch(url, {
-                method: method,
-                headers: {
-                    'X-Parse-Application-Id': 'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
-                    'X-Parse-Master-Key': 'SQPqpYpZ0UeXFvwWujyAz3wq1EFGSMwxYRcXlPWz',
-                    'Content-Type': 'application/json'
-                },
-                body: method !== 'GET' ? JSON.stringify(data) : undefined
-            });
-        }
-
         // =============== ADMIN FUNCTIONS ===============
         async function checkAndShowAdminButton() {
             try {
-                const currentUser = Parse.User.current();
                 if (!currentUser) return;
                 
                 await currentUser.fetch();
@@ -1810,7 +2004,6 @@
 
         async function checkAndOpenAdminPanel() {
             try {
-                const currentUser = Parse.User.current();
                 if (!currentUser) {
                     showNotification('Please login first', 'error');
                     return;
@@ -1831,19 +2024,28 @@
             }
         }
 
-        // =============== CONTACT FUNCTIONS ===============
+        // =============== FIXED CONTACT FUNCTIONS ===============
         async function sendContactRequest(userId, username) {
             console.log(`📤 Sending contact request to ${username} (${userId})...`);
             
             try {
                 showNotification(`Sending request to ${username}...`, 'info');
                 
-                const currentUser = Parse.User.current();
-                
-                // Use standard Parse SDK for contacts
+                // Check if request already exists
                 const Contact = Parse.Object.extend('Contact');
-                const contact = new Contact();
+                const checkQuery = new Parse.Query(Contact);
+                checkQuery.equalTo('fromUser', currentUser);
+                checkQuery.equalTo('toUser', Parse.User.createWithoutData(userId));
+                checkQuery.equalTo('status', 'pending');
                 
+                const existingRequest = await checkQuery.first();
+                if (existingRequest) {
+                    showNotification(`You already sent a request to ${username}`, 'info');
+                    return;
+                }
+                
+                // Create new contact request
+                const contact = new Contact();
                 contact.set('fromUser', currentUser);
                 contact.set('toUser', Parse.User.createWithoutData(userId));
                 contact.set('status', 'pending');
@@ -1860,11 +2062,7 @@
                 
             } catch (error) {
                 console.error('❌ Error sending contact request:', error);
-                if (error.code === 137) {
-                    showNotification(`You already sent a request to ${username}`, 'info');
-                } else {
-                    showNotification(`Failed to send request: ${error.message}`, 'error');
-                }
+                showNotification(`Failed to send request: ${error.message}`, 'error');
             }
         }
         
@@ -1873,7 +2071,6 @@
                 try {
                     showNotification('Cancelling request...', 'info');
                     
-                    const currentUser = Parse.User.current();
                     const Contact = Parse.Object.extend('Contact');
                     const query = new Parse.Query(Contact);
                     
@@ -1903,7 +2100,6 @@
             try {
                 showNotification('Accepting request...', 'info');
                 
-                const currentUser = Parse.User.current();
                 const Contact = Parse.Object.extend('Contact');
                 const query = new Parse.Query(Contact);
                 
@@ -1914,11 +2110,19 @@
                 const request = await query.first();
                 
                 if (request) {
+                    // Update the request to accepted
                     request.set('status', 'accepted');
                     await request.save();
                     
-                    // Create reverse contact
-                    await createReverseContact(userId, username);
+                    // Create reverse contact (so both users see each other)
+                    const reverseContact = new Contact();
+                    reverseContact.set('fromUser', currentUser);
+                    reverseContact.set('toUser', Parse.User.createWithoutData(userId));
+                    reverseContact.set('status', 'accepted');
+                    reverseContact.set('fromUsername', currentUser.get('username') || 'User');
+                    reverseContact.set('toUsername', username);
+                    
+                    await reverseContact.save();
                     
                     showNotification(`${username} added to contacts!`, 'success');
                     
@@ -1937,41 +2141,26 @@
             }
         }
         
-        async function createReverseContact(userId, username) {
-            try {
-                const currentUser = Parse.User.current();
-                const Contact = Parse.Object.extend('Contact');
-                const contact = new Contact();
-                
-                contact.set('fromUser', currentUser);
-                contact.set('toUser', Parse.User.createWithoutData(userId));
-                contact.set('status', 'accepted');
-                contact.set('fromUsername', currentUser.get('username') || 'User');
-                contact.set('toUsername', username);
-                
-                await contact.save();
-                console.log('✅ Reverse contact created');
-                
-            } catch (error) {
-                console.log('⚠️ Reverse contact may already exist or error:', error.message);
-            }
-        }
-        
         async function removeContact(userId, username) {
             if (confirm(`Remove ${username} from contacts?`)) {
                 try {
                     showNotification('Removing contact...', 'info');
                     
-                    const currentUser = Parse.User.current();
                     const Contact = Parse.Object.extend('Contact');
-                    const query = new Parse.Query(Contact);
                     
-                    query._orQuery([
-                        query.equalTo('fromUser', currentUser).equalTo('toUser', Parse.User.createWithoutData(userId)).equalTo('status', 'accepted'),
-                        query.equalTo('fromUser', Parse.User.createWithoutData(userId)).equalTo('toUser', currentUser).equalTo('status', 'accepted')
-                    ]);
+                    // Find and delete both directions of the contact
+                    const query1 = new Parse.Query(Contact);
+                    query1.equalTo('fromUser', currentUser);
+                    query1.equalTo('toUser', Parse.User.createWithoutData(userId));
+                    query1.equalTo('status', 'accepted');
                     
-                    const contacts = await query.find();
+                    const query2 = new Parse.Query(Contact);
+                    query2.equalTo('fromUser', Parse.User.createWithoutData(userId));
+                    query2.equalTo('toUser', currentUser);
+                    query2.equalTo('status', 'accepted');
+                    
+                    const orQuery = Parse.Query.or(query1, query2);
+                    const contacts = await orQuery.find();
                     
                     if (contacts.length > 0) {
                         await Parse.Object.destroyAll(contacts);
@@ -1982,7 +2171,6 @@
                             currentChatId = null;
                             document.getElementById('welcomeScreen').classList.remove('hidden');
                             document.getElementById('chatContent').classList.add('hidden');
-                            hideImageUploadButton();
                         }
                     } else {
                         showNotification('Contact not found', 'error');
@@ -1997,7 +2185,6 @@
         
         async function getExistingContacts() {
             try {
-                const currentUser = Parse.User.current();
                 const Contact = Parse.Object.extend('Contact');
                 const query = new Parse.Query(Contact);
                 
@@ -2017,7 +2204,6 @@
         
         async function getPendingRequests() {
             try {
-                const currentUser = Parse.User.current();
                 const Contact = Parse.Object.extend('Contact');
                 const query = new Parse.Query(Contact);
                 
@@ -2037,7 +2223,6 @@
         
         async function getReceivedRequests() {
             try {
-                const currentUser = Parse.User.current();
                 const Contact = Parse.Object.extend('Contact');
                 const query = new Parse.Query(Contact);
                 
@@ -2083,7 +2268,6 @@
             try {
                 usersList.innerHTML = '<div class="loading"><div class="spinner"></div>Loading users...</div>';
                 
-                const currentUser = Parse.User.current();
                 if (!currentUser) {
                     usersList.innerHTML = `
                         <div class="empty-state">
@@ -2284,7 +2468,7 @@
         window.selectGlobalChat = async function() {
             console.log('🌍 Selecting global chat...');
             
-            if (!Parse.User.current()) {
+            if (!currentUser) {
                 window.location.href = 'login.html';
                 return;
             }
@@ -2309,9 +2493,6 @@
             
             await loadGlobalMessages();
             document.getElementById('messageInput').focus();
-            
-            // Show image upload button
-            showImageUploadButton();
             
             if (window.innerWidth <= 768) {
                 document.getElementById('sidebar').classList.remove('show');
@@ -2350,9 +2531,6 @@
             await loadMessages();
             document.getElementById('messageInput').focus();
             
-            // Show image upload button
-            showImageUploadButton();
-            
             if (window.innerWidth <= 768) {
                 document.getElementById('sidebar').classList.remove('show');
             }
@@ -2362,26 +2540,30 @@
             startDirectChat(userId, username);
         }
         
-        // =============== MESSAGE FUNCTIONS ===============
+        // =============== MESSAGE LOADING WITH DELETE BUTTONS ===============
         async function loadMessages(scrollToBottom = true) {
             if (!currentChatId || currentChatId === 'global') return;
             
             try {
-                const currentUser = Parse.User.current();
                 const Message = Parse.Object.extend('Message');
-                const query = new Parse.Query(Message);
                 
-                query._orQuery([
-                    query.equalTo('sender', currentUser).equalTo('receiver', Parse.User.createWithoutData(currentChatId)),
-                    query.equalTo('sender', Parse.User.createWithoutData(currentChatId)).equalTo('receiver', currentUser)
-                ]);
+                // Create two separate queries and combine them
+                const query1 = new Parse.Query(Message);
+                query1.equalTo('sender', currentUser);
+                query1.equalTo('receiver', Parse.User.createWithoutData(currentChatId));
                 
-                query.include('sender');
-                query.include('receiver');
-                query.ascending('createdAt');
-                query.limit(50);
+                const query2 = new Parse.Query(Message);
+                query2.equalTo('sender', Parse.User.createWithoutData(currentChatId));
+                query2.equalTo('receiver', currentUser);
                 
-                const messages = await query.find();
+                // Combine queries using OR
+                const mainQuery = Parse.Query.or(query1, query2);
+                mainQuery.include('sender');
+                mainQuery.include('receiver');
+                mainQuery.ascending('createdAt');
+                mainQuery.limit(50);
+                
+                const messages = await mainQuery.find();
                 const container = document.getElementById('messagesContainer');
                 const wasAtBottom = isScrolledToBottom(container);
                 
@@ -2389,7 +2571,7 @@
                     container.innerHTML = '';
                     
                     messages.forEach(msg => {
-                        addMessageToContainer(msg, container);
+                        addMessageToContainer(msg, container, false);
                     });
                     
                     if (scrollToBottom || wasAtBottom) {
@@ -2438,7 +2620,7 @@
                     container.innerHTML = '';
                     
                     messages.reverse().forEach(msg => {
-                        addMessageToContainer(msg, container);
+                        addMessageToContainer(msg, container, true);
                     });
                     
                     if (wasAtBottom) {
@@ -2468,8 +2650,7 @@
             }
         }
         
-        function addMessageToContainer(msg, container) {
-            const currentUser = Parse.User.current();
+        function addMessageToContainer(msg, container, isGlobal = false) {
             const sender = msg.get('sender');
             const isOwn = sender && sender.id === currentUser.id;
             
@@ -2480,6 +2661,7 @@
             
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+            messageDiv.id = `message-${msg.id}`;
             
             const messageText = msg.get('message') || '';
             const timestamp = msg.get('createdAt');
@@ -2500,6 +2682,13 @@
                             ${messageText ? `<div class="image-caption">${escapeHTML(messageText)}</div>` : ''}
                         </div>
                         <div class="message-time">${formatTime(timestamp)}</div>
+                        ${isOwn ? `
+                            <div class="message-actions">
+                                <button class="message-action-btn delete" onclick="deleteMessage('${msg.id}', ${isGlobal})" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        ` : ''}
                     `;
                 } else {
                     messageDiv.innerHTML = `
@@ -2512,246 +2701,32 @@
                             ${messageText ? `<div class="image-caption">${escapeHTML(messageText)}</div>` : ''}
                         </div>
                         <div class="message-time">${formatTime(timestamp)}</div>
+                        ${isOwn ? `
+                            <div class="message-actions">
+                                <button class="message-action-btn delete" onclick="deleteMessage('${msg.id}', ${isGlobal})" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        ` : ''}
                     `;
                 }
             } else {
+                // Regular text message
                 messageDiv.innerHTML = `
                     ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
                     <div class="message-content">${escapeHTML(messageText)}</div>
                     <div class="message-time">${formatTime(timestamp)}</div>
+                    ${isOwn ? `
+                        <div class="message-actions">
+                            <button class="message-action-btn delete" onclick="deleteMessage('${msg.id}', ${isGlobal})" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    ` : ''}
                 `;
             }
             
             container.appendChild(messageDiv);
-        }
-        
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-            
-            const MAX_MESSAGE_LENGTH = 1000;
-            if (message.length > MAX_MESSAGE_LENGTH) {
-                showNotification(`Message too long! Maximum ${MAX_MESSAGE_LENGTH} characters allowed.`, 'error');
-                return;
-            }
-            
-            if (!message || !currentChatId) {
-                showNotification('Please enter a message', 'error');
-                return;
-            }
-            
-            if (!Parse.User.current()) {
-                window.location.href = 'login.html';
-                return;
-            }
-            
-            try {
-                const currentUser = Parse.User.current();
-                
-                const sendBtn = document.getElementById('sendBtn');
-                sendBtn.disabled = true;
-                sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                
-                if (isGlobalChat) {
-                    const GlobalMessage = Parse.Object.extend('GlobalMessage');
-                    const globalMessage = new GlobalMessage();
-                    
-                    globalMessage.set('sender', currentUser);
-                    globalMessage.set('message', message);
-                    globalMessage.set('senderName', currentUser.get('username') || 'User');
-                    
-                    await globalMessage.save();
-                    
-                    input.value = '';
-                    input.style.height = 'auto';
-                    
-                    await loadGlobalMessages();
-                    
-                    const container = document.getElementById('messagesContainer');
-                    setTimeout(() => {
-                        container.scrollTop = container.scrollHeight;
-                    }, 100);
-                    
-                    console.log('✅ Global message sent');
-                } else {
-                    const Message = Parse.Object.extend('Message');
-                    const privateMessage = new Message();
-                    
-                    privateMessage.set('sender', currentUser);
-                    privateMessage.set('receiver', Parse.User.createWithoutData(currentChatId));
-                    privateMessage.set('message', message);
-                    
-                    await privateMessage.save();
-                    
-                    input.value = '';
-                    input.style.height = 'auto';
-                    
-                    await loadMessages(true);
-                    
-                    console.log('✅ Private message sent');
-                }
-                
-            } catch (error) {
-                console.error('❌ Error sending message:', error);
-                showNotification(`Failed to send message: ${error.message}`, 'error');
-            } finally {
-                const sendBtn = document.getElementById('sendBtn');
-                const input = document.getElementById('messageInput');
-                sendBtn.disabled = input.value.trim() === '';
-                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
-                sendBtn.style.background = input.value.trim() ? '#25d366' : '#ccc';
-            }
-        }
-        
-        function handleKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-            setTimeout(() => adjustTextareaHeight(event.target), 0);
-        }
-        
-        // =============== CHATS TAB FUNCTIONS ===============
-        async function loadChats() {
-            const chatsContent = document.getElementById('chatsContent');
-            
-            try {
-                const currentUser = Parse.User.current();
-                if (!currentUser) {
-                    chatsContent.innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <h3>Not logged in</h3>
-                            <p>Please refresh the page</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                const Contact = Parse.Object.extend('Contact');
-                const query = new Parse.Query(Contact);
-                
-                query.equalTo('fromUser', currentUser);
-                query.equalTo('status', 'accepted');
-                query.include('toUser');
-                
-                const contacts = await query.find();
-                
-                chatsContent.innerHTML = `
-                    <div class="global-chat-item" onclick="selectGlobalChat()" id="globalChatItem">
-                        <div class="global-avatar">
-                            <i class="fas fa-globe"></i>
-                        </div>
-                        <div class="chat-info">
-                            <div class="chat-name">🌍 Global Chat</div>
-                            <div class="chat-preview">Join the worldwide conversation</div>
-                        </div>
-                        <div class="chat-time">
-                            <span id="globalUserCount">0</span> online
-                        </div>
-                    </div>
-                    <div class="loading" id="chatsLoading">
-                        <div class="spinner"></div>
-                        Loading chats...
-                    </div>
-                `;
-                
-                if (contacts.length === 0) {
-                    document.getElementById('chatsLoading').innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-comments"></i>
-                            <h3>No chats yet</h3>
-                            <p>Add contacts to start chatting!</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                const contactChats = [];
-                
-                for (const contact of contacts) {
-                    const toUser = contact.get('toUser');
-                    if (!toUser) continue;
-                    
-                    const userId = toUser.id;
-                    const username = contact.get('toUsername') || toUser.get('username') || 'User';
-                    
-                    const Message = Parse.Object.extend('Message');
-                    const messageQuery = new Parse.Query(Message);
-                    
-                    messageQuery._orQuery([
-                        messageQuery.equalTo('sender', currentUser).equalTo('receiver', toUser),
-                        messageQuery.equalTo('sender', toUser).equalTo('receiver', currentUser)
-                    ]);
-                    
-                    messageQuery.descending('createdAt');
-                    messageQuery.limit(1);
-                    
-                    const lastMessage = await messageQuery.first();
-                    
-                    let lastMessageText = "No messages yet";
-                    let lastMessageTime = contact.get('createdAt');
-                    
-                    if (lastMessage) {
-                        if (lastMessage.get('type') === 'image') {
-                            lastMessageText = "📷 Image";
-                        } else {
-                            lastMessageText = lastMessage.get('message') || "No messages yet";
-                        }
-                        lastMessageTime = lastMessage.get('createdAt');
-                    }
-                    
-                    contactChats.push({
-                        userId,
-                        username,
-                        lastMessage: lastMessageText,
-                        lastMessageTime
-                    });
-                }
-                
-                contactChats.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
-                
-                let chatsHTML = '';
-                
-                for (const chat of contactChats) {
-                    const avatarDiv = document.createElement('div');
-                    avatarDiv.className = 'chat-avatar';
-                    avatarDiv.id = `chat-avatar-${chat.userId}`;
-                    
-                    loadProfilePicture(chat.userId, avatarDiv, chat.username);
-                    
-                    chatsHTML += `
-                        <div class="chat-item" onclick="selectChat('${chat.userId}', '${escapeString(chat.username)}')" id="chat-${chat.userId}">
-                            ${avatarDiv.outerHTML}
-                            <div class="chat-info">
-                                <div class="chat-name">${escapeHTML(chat.username)}</div>
-                                <div class="chat-preview">${escapeHTML(chat.lastMessage.substring(0, 50))}${chat.lastMessage.length > 50 ? '...' : ''}</div>
-                            </div>
-                            <div class="chat-time">${formatTime(chat.lastMessageTime)}</div>
-                        </div>
-                    `;
-                }
-                
-                document.getElementById('chatsLoading').remove();
-                chatsContent.insertAdjacentHTML('beforeend', chatsHTML);
-                
-                if (currentChatId && currentChatId !== 'global') {
-                    const activeChat = document.getElementById(`chat-${currentChatId}`);
-                    if (activeChat) {
-                        activeChat.classList.add('active');
-                    }
-                }
-                
-            } catch (error) {
-                console.error('Error loading chats:', error);
-                document.getElementById('chatsLoading').innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <h3>Error loading chats</h3>
-                        <p>${error.message}</p>
-                    </div>
-                `;
-            }
         }
         
         // =============== CONTACTS TAB FUNCTIONS ===============
@@ -2759,7 +2734,6 @@
             const contactsContent = document.getElementById('contactsContent');
             
             try {
-                const currentUser = Parse.User.current();
                 if (!currentUser) {
                     contactsContent.innerHTML = `
                         <div class="empty-state">
@@ -2858,7 +2832,6 @@
             const requestsContent = document.getElementById('requestsContent');
             
             try {
-                const currentUser = Parse.User.current();
                 if (!currentUser) {
                     requestsContent.innerHTML = `
                         <div class="empty-state">
@@ -2959,6 +2932,153 @@
             }
         }
         
+        // =============== CHATS TAB FUNCTIONS ===============
+        async function loadChats() {
+            const chatsContent = document.getElementById('chatsContent');
+            
+            try {
+                if (!currentUser) {
+                    chatsContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Not logged in</h3>
+                            <p>Please refresh the page</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const Contact = Parse.Object.extend('Contact');
+                const query = new Parse.Query(Contact);
+                
+                query.equalTo('fromUser', currentUser);
+                query.equalTo('status', 'accepted');
+                query.include('toUser');
+                
+                const contacts = await query.find();
+                
+                chatsContent.innerHTML = `
+                    <div class="global-chat-item" onclick="selectGlobalChat()" id="globalChatItem">
+                        <div class="global-avatar">
+                            <i class="fas fa-globe"></i>
+                        </div>
+                        <div class="chat-info">
+                            <div class="chat-name">🌍 Global Chat</div>
+                            <div class="chat-preview">Join the worldwide conversation</div>
+                        </div>
+                        <div class="chat-time">
+                            <span id="globalUserCount">0</span> online
+                        </div>
+                    </div>
+                    <div class="loading" id="chatsLoading">
+                        <div class="spinner"></div>
+                        Loading chats...
+                    </div>
+                `;
+                
+                if (contacts.length === 0) {
+                    document.getElementById('chatsLoading').innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-comments"></i>
+                            <h3>No chats yet</h3>
+                            <p>Add contacts to start chatting!</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const contactChats = [];
+                
+                for (const contact of contacts) {
+                    const toUser = contact.get('toUser');
+                    if (!toUser) continue;
+                    
+                    const userId = toUser.id;
+                    const username = contact.get('toUsername') || toUser.get('username') || 'User';
+                    
+                    const Message = Parse.Object.extend('Message');
+                    
+                    // Create two queries for messages
+                    const query1 = new Parse.Query(Message);
+                    query1.equalTo('sender', currentUser);
+                    query1.equalTo('receiver', toUser);
+                    
+                    const query2 = new Parse.Query(Message);
+                    query2.equalTo('sender', toUser);
+                    query2.equalTo('receiver', currentUser);
+                    
+                    // Combine queries
+                    const messageQuery = Parse.Query.or(query1, query2);
+                    messageQuery.descending('createdAt');
+                    messageQuery.limit(1);
+                    
+                    const lastMessage = await messageQuery.first();
+                    
+                    let lastMessageText = "No messages yet";
+                    let lastMessageTime = contact.get('createdAt');
+                    
+                    if (lastMessage) {
+                        if (lastMessage.get('type') === 'image') {
+                            lastMessageText = "📷 Image";
+                        } else {
+                            lastMessageText = lastMessage.get('message') || "No messages yet";
+                        }
+                        lastMessageTime = lastMessage.get('createdAt');
+                    }
+                    
+                    contactChats.push({
+                        userId,
+                        username,
+                        lastMessage: lastMessageText,
+                        lastMessageTime
+                    });
+                }
+                
+                contactChats.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+                
+                let chatsHTML = '';
+                
+                for (const chat of contactChats) {
+                    const avatarDiv = document.createElement('div');
+                    avatarDiv.className = 'chat-avatar';
+                    avatarDiv.id = `chat-avatar-${chat.userId}`;
+                    
+                    loadProfilePicture(chat.userId, avatarDiv, chat.username);
+                    
+                    chatsHTML += `
+                        <div class="chat-item" onclick="selectChat('${chat.userId}', '${escapeString(chat.username)}')" id="chat-${chat.userId}">
+                            ${avatarDiv.outerHTML}
+                            <div class="chat-info">
+                                <div class="chat-name">${escapeHTML(chat.username)}</div>
+                                <div class="chat-preview">${escapeHTML(chat.lastMessage.substring(0, 50))}${chat.lastMessage.length > 50 ? '...' : ''}</div>
+                            </div>
+                            <div class="chat-time">${formatTime(chat.lastMessageTime)}</div>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('chatsLoading').remove();
+                chatsContent.insertAdjacentHTML('beforeend', chatsHTML);
+                
+                if (currentChatId && currentChatId !== 'global') {
+                    const activeChat = document.getElementById(`chat-${currentChatId}`);
+                    if (activeChat) {
+                        activeChat.classList.add('active');
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error loading chats:', error);
+                document.getElementById('chatsLoading').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Error loading chats</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
         // =============== ONLINE USERS COUNT ===============
         async function updateOnlineUsersCount() {
             try {
@@ -3049,21 +3169,11 @@
             sidebar.classList.toggle('show');
         }
         
-        function showImageUploadButton() {
-            const uploadContainer = document.getElementById('imageUploadContainer');
-            uploadContainer.style.display = currentChatId ? 'block' : 'none';
-        }
-        
-        function hideImageUploadButton() {
-            const uploadContainer = document.getElementById('imageUploadContainer');
-            uploadContainer.style.display = 'none';
-        }
-        
         // =============== INITIALIZATION ===============
         async function initializeApp() {
             console.log('🚀 Initializing ChatRise Messenger...');
             
-            const currentUser = Parse.User.current();
+            currentUser = Parse.User.current();
             if (!currentUser) {
                 console.log('❌ No user logged in, redirecting to login...');
                 window.location.href = 'login.html';
