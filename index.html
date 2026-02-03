@@ -557,6 +557,32 @@
             text-align: left;
         }
         
+        /* Image message styles */
+        .image-message {
+            max-width: 300px;
+            max-height: 400px;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .image-message:hover {
+            transform: scale(1.02);
+        }
+        
+        .image-message img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .image-caption {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #333;
+        }
+        
         .message-input-area {
             padding: 20px;
             background: white;
@@ -573,7 +599,7 @@
         
         .message-input {
             width: 100%;
-            padding: 12px 50px 12px 20px;
+            padding: 12px 50px 12px 45px;
             border: 1px solid #e1e5e9;
             border-radius: 25px;
             outline: none;
@@ -588,6 +614,35 @@
         .message-input:focus {
             border-color: #25d366;
             box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
+        }
+        
+        .input-actions {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            gap: 8px;
+        }
+        
+        .input-action-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 50%;
+            background: transparent;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+        
+        .input-action-btn:hover {
+            background: #f0f2f5;
+            color: #25d366;
         }
         
         .send-btn {
@@ -897,6 +952,102 @@
             margin-bottom: 16px;
         }
         
+        /* Image Preview Modal */
+        .image-preview-modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.95);
+            backdrop-filter: blur(5px);
+        }
+        
+        .image-preview-content {
+            position: relative;
+            margin: 5% auto;
+            width: 90%;
+            height: 90%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .image-preview-content img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+        
+        .image-preview-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .image-preview-close:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.1);
+        }
+        
+        .image-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            color: white;
+            text-align: center;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 8px;
+        }
+        
+        /* Upload Progress */
+        .upload-progress {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            z-index: 1500;
+            text-align: center;
+            min-width: 300px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #f0f0f0;
+            border-radius: 3px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #25d366, #128c7e);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
         /* Mobile Responsive */
         @media (max-width: 768px) {
             body {
@@ -997,6 +1148,11 @@
             
             .modal-body {
                 padding: 15px 20px;
+            }
+            
+            .image-message {
+                max-width: 250px;
+                max-height: 300px;
             }
         }
         
@@ -1147,6 +1303,11 @@
                 
                 <div class="message-input-area">
                     <div class="message-input-container">
+                        <div class="input-actions">
+                            <button class="input-action-btn" onclick="openImagePicker()" title="Send Image" id="imageUploadBtn">
+                                <i class="fas fa-image"></i>
+                            </button>
+                        </div>
                         <textarea 
                             class="message-input" 
                             id="messageInput" 
@@ -1183,12 +1344,41 @@
             </div>
         </div>
     </div>
+    
+    <!-- Image Preview Modal -->
+    <div id="imagePreviewModal" class="image-preview-modal" onclick="closeImagePreview()">
+        <div class="image-preview-content" onclick="event.stopPropagation()">
+            <button class="image-preview-close" onclick="closeImagePreview()">×</button>
+            <img id="previewImage" src="" alt="Preview">
+            <div class="image-info">
+                <span id="imageSender"></span>
+                <span id="imageTime"></span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden file input for image upload -->
+    <input type="file" id="imageFileInput" accept="image/*" style="display: none;" onchange="handleImageUpload(event)">
+    
+    <!-- Upload Progress Modal -->
+    <div id="uploadProgress" class="upload-progress hidden">
+        <div class="spinner" style="margin: 0 auto 20px;"></div>
+        <h3>Uploading Image...</h3>
+        <p id="uploadFileName"></p>
+        <div class="progress-bar">
+            <div class="progress-fill" id="uploadProgressBar"></div>
+        </div>
+        <p id="uploadPercentage">0%</p>
+        <button class="input-action-btn" onclick="cancelUpload()" style="margin-top: 20px;" title="Cancel">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
 
     <script>
         // =============== PARSE INITIALIZATION ===============
         Parse.initialize(
             'z5FgipCE12ScJNuYMbJ19EY2c7AXCxp5nWX7BWHT',
-            'QNQTH3G4VuLA5gkPIiCtoXZjJJMcP7P5zYsETOPV'
+            'QNQTH3G4VuLA5gkPIiCtoXZjJJMcPJ5zYsETOPV'
         );
         Parse.serverURL = 'https://parseapi.back4app.com/';
 
@@ -1200,6 +1390,7 @@
         let dataRefreshInterval = null;
         let currentTab = 'chats';
         let userSearchDebounce = null;
+        let currentUploadAbortController = null;
         
         // SUPER ADMIN USER ID (rk9MDUV7li)
         const SUPER_ADMIN_ID = 'rk9MDUV7li';
@@ -1277,6 +1468,191 @@
             }, duration);
         }
 
+        // =============== IMAGE FUNCTIONS ===============
+        function openImagePicker() {
+            document.getElementById('imageFileInput').click();
+        }
+        
+        async function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Check file size (max 10MB)
+            const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+            if (file.size > MAX_SIZE) {
+                showNotification('Image too large! Maximum size is 10MB.', 'error');
+                return;
+            }
+            
+            // Check file type
+            if (!file.type.startsWith('image/')) {
+                showNotification('Please select an image file.', 'error');
+                return;
+            }
+            
+            // Reset file input
+            event.target.value = '';
+            
+            await sendImageMessage(file);
+        }
+        
+        async function sendImageMessage(file) {
+            if (!currentChatId) {
+                showNotification('Please select a chat first', 'error');
+                return;
+            }
+            
+            if (!Parse.User.current()) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            try {
+                const currentUser = Parse.User.current();
+                
+                // Show upload progress
+                showUploadProgress(file.name);
+                
+                // Create abort controller for upload cancellation
+                currentUploadAbortController = new AbortController();
+                
+                // Create Parse file
+                const parseFile = new Parse.File(file.name, file);
+                
+                // Upload file with progress tracking
+                parseFile.save({
+                    progress: (progress) => {
+                        updateUploadProgress(progress);
+                    }
+                }).then(async () => {
+                    console.log('✅ Image uploaded:', parseFile.url());
+                    
+                    // Create image message object
+                    const imageMessageData = {
+                        type: 'image',
+                        sender: {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentUser.id
+                        },
+                        image: {
+                            "__type": "File",
+                            "name": parseFile.name(),
+                            "url": parseFile.url()
+                        },
+                        fileName: file.name,
+                        fileSize: file.size,
+                        mimeType: file.type,
+                        senderName: currentUser.get('username') || 'User',
+                        createdAt: {
+                            "__type": "Date",
+                            "iso": new Date().toISOString()
+                        }
+                    };
+                    
+                    // Add receiver for private chats
+                    if (!isGlobalChat) {
+                        imageMessageData.receiver = {
+                            "__type": "Pointer",
+                            "className": "_User",
+                            "objectId": currentChatId
+                        };
+                    }
+                    
+                    // Save message to appropriate class
+                    const endpoint = isGlobalChat ? 'GlobalMessage' : 'Message';
+                    const response = await makeRequestWithMasterKey('POST', `classes/${endpoint}`, imageMessageData);
+                    
+                    if (response.ok) {
+                        hideUploadProgress();
+                        
+                        // Reload messages to show the new image
+                        if (isGlobalChat) {
+                            await loadGlobalMessages();
+                        } else {
+                            await loadMessages(true);
+                        }
+                        
+                        // Scroll to bottom
+                        const container = document.getElementById('messagesContainer');
+                        setTimeout(() => {
+                            container.scrollTop = container.scrollHeight;
+                        }, 100);
+                        
+                        showNotification('Image sent successfully!', 'success');
+                    } else {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Failed to save image message');
+                    }
+                    
+                }).catch(error => {
+                    hideUploadProgress();
+                    if (error.message !== 'Upload cancelled') {
+                        console.error('❌ Error uploading image:', error);
+                        showNotification(`Failed to upload image: ${error.message}`, 'error');
+                    }
+                });
+                
+            } catch (error) {
+                hideUploadProgress();
+                console.error('❌ Error sending image:', error);
+                showNotification(`Failed to send image: ${error.message}`, 'error');
+            }
+        }
+        
+        function showUploadProgress(fileName) {
+            const progressDiv = document.getElementById('uploadProgress');
+            const fileNameEl = document.getElementById('uploadFileName');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const percentageEl = document.getElementById('uploadPercentage');
+            
+            fileNameEl.textContent = `Uploading: ${fileName}`;
+            progressBar.style.width = '0%';
+            percentageEl.textContent = '0%';
+            progressDiv.classList.remove('hidden');
+        }
+        
+        function updateUploadProgress(progress) {
+            const progressBar = document.getElementById('uploadProgressBar');
+            const percentageEl = document.getElementById('uploadPercentage');
+            
+            const percentage = Math.round(progress);
+            progressBar.style.width = `${percentage}%`;
+            percentageEl.textContent = `${percentage}%`;
+        }
+        
+        function hideUploadProgress() {
+            const progressDiv = document.getElementById('uploadProgress');
+            progressDiv.classList.add('hidden');
+            currentUploadAbortController = null;
+        }
+        
+        function cancelUpload() {
+            if (currentUploadAbortController) {
+                currentUploadAbortController.abort();
+                showNotification('Upload cancelled', 'info');
+                hideUploadProgress();
+            }
+        }
+        
+        function previewImage(imageUrl, senderName, timestamp) {
+            const modal = document.getElementById('imagePreviewModal');
+            const previewImg = document.getElementById('previewImage');
+            const senderEl = document.getElementById('imageSender');
+            const timeEl = document.getElementById('imageTime');
+            
+            previewImg.src = imageUrl;
+            senderEl.textContent = `From: ${senderName}`;
+            timeEl.textContent = ` • ${formatTime(timestamp)}`;
+            
+            modal.style.display = 'block';
+        }
+        
+        function closeImagePreview() {
+            const modal = document.getElementById('imagePreviewModal');
+            modal.style.display = 'none';
+        }
+        
         // =============== SIMPLE PROFILE PICTURE FUNCTION ===============
         async function loadProfilePicture(userId, avatarElement, username = null) {
             try {
@@ -2147,27 +2523,7 @@
                     container.innerHTML = '';
                     
                     result.results.forEach(msg => {
-                        const sender = msg.sender;
-                        const isOwn = sender.objectId === currentUser.id;
-                        
-                        let displayName = 'Unknown User';
-                        if (sender && sender.username) {
-                            displayName = sender.username;
-                        }
-                        
-                        const messageDiv = document.createElement('div');
-                        messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
-                        
-                        const messageText = msg.message || '';
-                        const timestamp = msg.createdAt;
-                        
-                        messageDiv.innerHTML = `
-                            ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
-                            <div class="message-content">${escapeHTML(messageText)}</div>
-                            <div class="message-time">${formatTime(timestamp)}</div>
-                        `;
-                        
-                        container.appendChild(messageDiv);
+                        addMessageToContainer(msg, container);
                     });
                     
                     if (scrollToBottom || wasAtBottom) {
@@ -2216,27 +2572,7 @@
                     const messages = result.results.reverse();
                     
                     messages.forEach(msg => {
-                        const sender = msg.sender;
-                        const isOwn = sender && sender.objectId === currentUser.id;
-                        
-                        let displayName = 'Unknown User';
-                        if (sender && sender.username) {
-                            displayName = sender.username;
-                        }
-                        
-                        const messageDiv = document.createElement('div');
-                        messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
-                        
-                        const messageText = msg.message || '';
-                        const timestamp = msg.createdAt;
-                        
-                        messageDiv.innerHTML = `
-                            ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
-                            <div class="message-content">${escapeHTML(messageText)}</div>
-                            <div class="message-time">${formatTime(timestamp)}</div>
-                        `;
-                        
-                        container.appendChild(messageDiv);
+                        addMessageToContainer(msg, container);
                     });
                     
                     if (wasAtBottom) {
@@ -2264,6 +2600,50 @@
                     </div>
                 `;
             }
+        }
+        
+        // Add message to container (supports both text and image messages)
+        function addMessageToContainer(msg, container) {
+            const currentUser = Parse.User.current();
+            const sender = msg.sender;
+            const isOwn = sender && sender.objectId === currentUser.id;
+            
+            let displayName = 'Unknown User';
+            if (sender && sender.username) {
+                displayName = sender.username;
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+            
+            const messageText = msg.message || '';
+            const timestamp = msg.createdAt;
+            
+            // Check if it's an image message
+            if (msg.type === 'image' && msg.image && msg.image.url) {
+                const imageUrl = msg.image.url;
+                const fileName = msg.fileName || 'image.jpg';
+                
+                messageDiv.innerHTML = `
+                    ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
+                    <div class="message-content">
+                        <div class="image-message" onclick="previewImage('${imageUrl}', '${escapeString(displayName)}', '${timestamp}')">
+                            <img src="${imageUrl}" alt="${escapeHTML(fileName)}" loading="lazy">
+                        </div>
+                        ${messageText ? `<div class="image-caption">${escapeHTML(messageText)}</div>` : ''}
+                    </div>
+                    <div class="message-time">${formatTime(timestamp)}</div>
+                `;
+            } else {
+                // Regular text message
+                messageDiv.innerHTML = `
+                    ${!isOwn ? `<div class="message-header">${escapeHTML(displayName)}</div>` : ''}
+                    <div class="message-content">${escapeHTML(messageText)}</div>
+                    <div class="message-time">${formatTime(timestamp)}</div>
+                `;
+            }
+            
+            container.appendChild(messageDiv);
         }
         
         // Send message
@@ -2502,7 +2882,11 @@
                     
                     if (messagesResult.results && messagesResult.results.length > 0) {
                         const msg = messagesResult.results[0];
-                        lastMessage = msg.message || "No messages yet";
+                        if (msg.type === 'image') {
+                            lastMessage = "📷 Image";
+                        } else {
+                            lastMessage = msg.message || "No messages yet";
+                        }
                         lastMessageTime = msg.createdAt;
                     }
                     
@@ -2984,8 +3368,13 @@
         // Close modal when clicking outside
         window.onclick = function(event) {
             const modal = document.getElementById('usersModal');
+            const imageModal = document.getElementById('imagePreviewModal');
+            
             if (event.target === modal) {
                 hideUsersModal();
+            }
+            if (event.target === imageModal) {
+                closeImagePreview();
             }
         };
     </script>
